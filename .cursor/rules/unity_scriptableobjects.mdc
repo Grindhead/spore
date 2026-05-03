@@ -1,0 +1,19 @@
+---
+description: Data in ScriptableObjects and JSON
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity ScriptableObject Data
+
+All game data (creature parts, biomes, tech trees, weapon stats, catalogs) lives in ScriptableObjects or JSON — no hardcoded gameplay values in code.
+
+**Locations:**
+
+- `RoobsWorld/Assets/Data/` — ScriptableObject assets (CreatureParts, Biomes, TechTrees, Configs).
+- Runtime-created catalogs (e.g. CreaturePartCatalog) may create ScriptableObject instances in code; persist to Assets when appropriate.
+
+**Rules:**
+
+- Use ScriptableObjects for design-time config and catalogs; use JSON for save data, creature DNA, and serialized state.
+- Reference ScriptableObjects by asset or by instance; avoid duplicating data in code.

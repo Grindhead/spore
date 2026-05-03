@@ -1,0 +1,283 @@
+﻿using System.Collections.Generic;
+using UnityEngine;
+
+namespace RoobsWorld.Core
+{
+    /// <summary>
+    /// Key-based string lookup for UI. Default language is EN; replace _strings to add locales.
+    /// </summary>
+    public static class Localization
+    {
+        public const string DefaultLocale = "EN";
+
+        private static string _currentLocale = DefaultLocale;
+        private static readonly Dictionary<string, Dictionary<string, string>> _strings = new Dictionary<string, Dictionary<string, string>>();
+
+        static Localization()
+        {
+            _strings[DefaultLocale] = new Dictionary<string, string>
+            {
+                { "menu.new_game", "Play Cell Stage" },
+                { "menu.load_game", "Load Game" },
+                { "menu.settings", "Settings" },
+                { "menu.achievements", "Achievements" },
+                { "menu.quit", "Quit" },
+                { "menu.no_save", "No save file found." },
+                { "menu.version_suffix", "Pre-Alpha" },
+                { "menu.title", "ROOB'S WORLD" },
+                { "menu.subtitle", "Cell Stage Survival" },
+                { "settings.title", "SETTINGS" },
+                { "settings.graphics", "Graphics" },
+                { "settings.audio", "Audio" },
+                { "settings.controls", "Controls" },
+                { "settings.apply", "Apply" },
+                { "settings.reset", "Reset to Defaults" },
+                { "settings.back", "Back" },
+                { "settings.resolution", "Resolution" },
+                { "settings.quality", "Quality" },
+                { "settings.fullscreen", "Fullscreen" },
+                { "settings.show_fps", "Show FPS" },
+                { "settings.volume_master", "Master Volume" },
+                { "settings.volume_music", "Music" },
+                { "settings.volume_sfx", "Sound Effects" },
+                { "settings.volume_ambient", "Ambient Volume" },
+                { "settings.camera_sensitivity", "Camera Sensitivity" },
+                { "settings.invert_y", "Invert Y-Axis" },
+                { "pause.title", "Paused" },
+                { "pause.resume", "Resume" },
+                { "pause.settings", "Settings" },
+                { "pause.save_game", "Save Game" },
+                { "pause.saved", "Saved!" },
+                { "pause.main_menu", "New Run" },
+                { "pause.quit", "Quit to Menu" },
+                { "stage.cell", "Cell Stage" },
+                { "stage.creature", "Creature Stage" },
+                { "hud.health", "Health" },
+                { "hud.dna", "DNA" },
+                { "hud.mass", "Mass" },
+                { "hud.population", "Population" },
+                { "hud.resources", "Resources" },
+                { "hud.diplomacy", "Diplomacy" },
+                { "hud.spice", "Spice" },
+                { "hud.gold", "Gold" },
+                { "hud.production", "Production" },
+                { "hud.hull", "Hull" },
+                { "hud.shield", "Shield" },
+                { "hud.energy", "Energy" },
+                { "tutorial.skip", "Skip" },
+                { "tutorial.skip_hint", "Press Space or Esc to skip" },
+                { "achievement.unlocked", "Achievement Unlocked!" },
+                { "character.improved", "Character Improved" },
+                { "character.improved.cell", "Your cell adapted without breaking your flow." },
+                { "character.improved.creature", "Your creature adapted without breaking your flow." },
+                { "character.improved.cell_stats", "+{0:0.##} Size   +{1:0.##} Speed" },
+                { "character.improved.creature_stats", "{0:+0;-0;0} HP   {1:+0.0;-0.0;0.0} Speed" },
+                { "settings.subtitles", "Subtitles" },
+                { "settings.ui_text_scale", "UI Text Size" },
+                { "settings.colorblind_mode", "Colour-Blind Mode" },
+                { "settings.colorblind_none", "None" },
+                { "settings.colorblind_deuteranopia", "Deuteranopia" },
+                { "settings.colorblind_protanopia", "Protanopia" },
+                { "settings.colorblind_tritanopia", "Tritanopia" },
+                { "settings.high_contrast", "High Contrast" },
+                { "settings.quality_low", "Low" },
+                { "settings.quality_medium", "Medium" },
+                { "settings.quality_high", "High" },
+                { "settings.quality_ultra", "Ultra" },
+                { "settings.vsync", "VSync" },
+                { "settings.target_fps", "Frame Rate Limit" },
+                { "settings.fullscreen_mode", "Window Mode" },
+                { "settings.fullscreen_exclusive", "Fullscreen" },
+                { "settings.fullscreen_borderless", "Borderless" },
+                { "settings.fullscreen_maximized", "Maximized" },
+                { "settings.fullscreen_windowed", "Windowed" },
+                { "settings.fps_default", "Default" },
+                { "settings.fps_60", "60 FPS" },
+                { "settings.fps_120", "120 FPS" },
+                { "settings.fps_unlimited", "Unlimited" },
+                // Tutorial steps (per-stage step index)
+                { "tutorial.cell.0", "Welcome to the primordial ocean! Use WASD or the left stick to swim." },
+                { "tutorial.cell.1", "Eat the green food particles to grow larger." },
+                { "tutorial.cell.2", "Avoid larger predator cells â€” they will try to eat you!" },
+                { "tutorial.cell.3", "Collect glowing pickups to gain new abilities like spikes and jets." },
+                { "tutorial.cell.4", "Reach the evolution threshold to grow and unlock new parts." },
+                { "tutorial.cell.5", "Complete goals (eat algae, escape predators) to earn DNA. Check the HUD for your current goal." },
+                { "tutorial.cell.6", "Press ] to speed up time and watch the ecosystem evolve." },
+                { "tutorial.creature.0", "Welcome to Creature Stage. Use WASD or the left stick to move." },
+                { "tutorial.creature.1", "Move the camera with mouse or right stick to look around your habitat." },
+                { "tutorial.creature.2", "Your creature's speed and survivability come from the parts in its DNA build." },
+                { "tutorial.creature.3", "Explore, adapt, and prepare for tougher encounters as your creature evolves." },
+                { "creature.controls.hint", "Move: WASD/Left Stick   Look: Mouse/Right Stick   Attack: LMB/RT   Kills restore health   Pause: Esc" },
+                { "creature.encounter.progress", "Rivals Defeated: {0}/{1}   Active Rivals: {2}/{3}   Streak: x{4}" },
+                { "creature.encounter.complete", "Pack broken! Objective complete: +20 DNA and progress saved." },
+                { "creature.player.down", "You were downed. Regenerating body..." },
+                { "creature.player.shielded", "Respawn shield active. Re-engage!" },
+                { "creature.player.safe_respawn", "Respawned at a safer location." },
+                { "creature.player.low_health", "Critical health. Avoid damage and recover." },
+                { "creature.streak.bonus.tip", "Streak bonus! Extra DNA earned." },
+                { "creature.upgrade.applied", "Adaptation locked in. Your health and speed changed permanently." },
+                { "creature.status.hunt", "Status: Hunt and survive." },
+                { "creature.status.shielded", "Status: Shielded after respawn." },
+                { "creature.status.low_health", "Status: Critical health." },
+                { "creature.status.objective_done", "Status: Objective complete." },
+                // Contextual tips (one-off, event-driven â€” shown mid-play)
+                { "tutorial.cell.tip.first_eat",       "Goal: eat algae to grow. Watch the goal bar top-left." },
+                { "tutorial.cell.tip.first_evolution", "Evolution! Pick a part that fits your play style." },
+                { "tutorial.cell.tip.first_reproduction", "Upgrade unlocked! Each upgrade now improves your core cell stats." },
+                { "tutorial.cell.tip.predator_warning", "Predator nearby! Swim away to survive â€” and complete the escape goal." },
+                { "tutorial.cell.tip.first_speciation", "A new species just branched in the ecosystem!" },
+                { "tutorial.cell.tip.first_extinction", "A species has gone extinct â€” the ecosystem is shifting." },
+                { "tutorial.cell.tip.ten_species", "10 species now inhabit this ocean! Evolution is accelerating." },
+                { "tutorial.reset", "Reset Tutorial" },
+                { "tutorial.cell.goal_intro", "See the goal in the top-left HUD. Eat algae to complete it and earn DNA points!" },
+                // Cell-stage micro goals
+                { "cell.goal.task", "Eat {0} {1}" },
+                { "cell.goal.progress", " ({0}/{1})" },
+                { "cell.goal.food_plant", "algae" },
+                { "cell.goal.food_meat", "dead cells" },
+                { "cell.goal.food_toxin", "toxin" },
+                { "cell.goal.escape_predator_task", "Escape {0} predator(s)" },
+                { "cell.goal.reproduce_task", "Upgrade {0} time(s)" },
+                { "cell.goal.survive_toxic_task", "Survive {0}s in the Toxic Zone" },
+                { "cell.goal.survive_toxic_progress", " ({0:F0}/{1}s)" },
+                { "cell.goal.bloom_eat_task", "Eat {0} food during a Nutrient Bloom" },
+                { "cell.goal.eat_larger_task", "Eat {0} prey larger than yourself" },
+                { "cell.goal.complete_message", "Goal complete! +{0} DNA" },
+                { "cell.symbiosis.label", "Organelle Levels" },
+                { "cell.current.indicator", "Current \u2192" },
+                { "newgame.start", "Start Game" },
+                { "newgame.cancel", "Cancel" },
+                // Environment events
+                { "cell.env.nutrient_bloom", "Nutrient Bloom! Extra food has appeared." },
+                { "cell.env.virus_outbreak", "Virus Outbreak! Metabolism increased." },
+                { "cell.env.temperature_change", "Temperature Shift! Movement speed affected." },
+                { "cell.env.radiation_surge", "Radiation Surge! Choose a bonus mutation." },
+                { "cell.env.radiation_surge_title", "Radiation Surge" },
+                { "cell.env.radiation_surge_subtitle", "Intense radiation has accelerated your mutation rate â€” pick one adaptation." },
+                { "cell.env.oxygen_surge", "Oxygen Surge! Photosynthetic cells gain extra energy." },
+                { "cell.env.oxygen_surge_title", "Oxygen Surge" },
+                { "cell.env.oxygen_surge_subtitle", "Oxygen-rich waters boost photosynthesis across the ecosystem." },
+                { "cell.endosymbiosis.acquired", "Endosymbiosis! A new organelle trait has been absorbed." },
+                { "cell.endosymbiosis.acquired.photosynthetic", "Endosymbiosis! Chloroplast-like organelles now boost your passive growth." },
+                { "cell.endosymbiosis.acquired.toxic", "Endosymbiosis! You absorbed toxic chemistry and now secrete harmful compounds." },
+                { "cell.endosymbiosis.acquired.armoured", "Endosymbiosis! Your membrane has hardened with protective armour layers." },
+                { "cell.endosymbiosis.acquired.regenerative", "Endosymbiosis! You gained regenerative organelles that repair and restore mass." },
+                { "cell.endosymbiosis.acquired.electric", "Endosymbiosis! Bioelectric organelles now let you emit disruptive pulses." },
+                { "cell.endosymbiosis.upgraded", "Endosymbiosis reinforced! Existing organelles became more efficient." },
+                // Run Summary
+                { "cell.summary.title",    "Run Complete" },
+                { "cell.summary.time",     "Time Survived" },
+                { "cell.summary.peak_mass","Peak Mass" },
+                { "cell.summary.dna",      "DNA Earned" },
+                { "cell.summary.species",  "Species Created" },
+                { "cell.summary.traits",   "Active Traits" },
+                { "cell.summary.restart",  "Play Again" },
+                { "cell.summary.menu",     "Main Menu" },
+                { "cell.summary.new_best", "â˜… New Best!" },
+                { "cell.summary.run_count","Run {0}" },
+                // Meta-progression
+                { "meta.discovery.hint",   "Known trait: {0} â€” guaranteed in at least one choice" },
+                { "meta.discovery.none",   "No prior discoveries yet â€” all options are fresh mutations" },
+                // NPC archetypes
+                { "npc.filter_feeder.name",    "Filter Feeder" },
+                { "npc.filter_feeder.tooltip", "Drifts on cilia and passively absorbs nearby food â€” harmless but efficient." },
+                { "npc.scavenger.name",        "Scavenger" },
+                { "npc.scavenger.tooltip",     "Hunts dead cells left by predators â€” fast and efficient, but not aggressive." },
+                { "npc.bacteria.name",         "Bacteria" },
+                { "npc.bacteria.tooltip",      "Tiny swarming organisms that sweep the arena in coordinated groups." },
+                { "npc.parasite.name",         "Parasite" },
+                { "npc.parasite.tooltip",      "Latches onto larger cells and drains them over time before searching for a new host." },
+                { "npc.photosynthetic.name",   "Photosynthetic Cell" },
+                { "npc.photosynthetic.tooltip","Slow light-seekers that gain passive energy and thrive in algae-rich zones." },
+                { "npc.colonial.name",         "Colonial Cell" },
+                { "npc.colonial.tooltip",      "Cooperates with nearby colony members, sharing direction and energy to survive as a cluster." },
+                // Biome zone labels (shown in HUD bottom-left)
+                { "cell.biome.openwater",      "Open Water" },
+                { "cell.biome.algaeforest",    "Algae Forest" },
+                { "cell.biome.deepzone",       "Deep Zone" },
+                { "cell.biome.toxiczone",      "Toxic Zone" },
+                // Virus Outbreak
+                { "cell.virus.infected",       "âš  Infected!" },
+                { "cell.virus.armoured_resist","Armour reduced viral damage" },
+                // Leviathan
+                { "cell.leviathan.warning",    "âš  A Leviathan approaches!" },
+                { "cell.leviathan.defeated",   "Leviathan defeated!" },
+                { "cell.leviathan.tutorial",   "A massive ancient predator has emerged. Survive or defeat it for rare rewards." },
+                { "cell.stage.complete",       "Evolution complete. Entering Creature Stage." },
+                { "cell.feel.switched",        "Cell feel profile: {0}" },
+                { "cell.feel.classic",         "Classic" },
+                { "cell.feel.arcade",          "Arcade" },
+                { "cell.feel.documentary",     "Documentary" },
+                { "cell.feel.survival",        "Survival" },
+                // Multiplayer
+                // Profile modal
+                { "profile.title",                 "Profile" },
+                { "profile.stats_header",          "Run Records" },
+                { "profile.achievements_header",   "Achievements" },
+                { "profile.runs_completed",        "Runs Completed" },
+                { "profile.best_time",             "Best Time" },
+                { "profile.best_mass",             "Best Mass" },
+                { "profile.best_dna",              "Best DNA" },
+                { "profile.best_species",          "Most Species" },
+                { "profile.best_traits",           "Most Traits" },
+                { "profile.leviathans_survived",   "Leviathans Survived" },
+                { "profile.leviathans_defeated",   "Leviathans Defeated" },
+                // Multiplayer
+                { "multiplayer.host_button",       "Host Session" },
+                { "multiplayer.join_button",       "Join Session" },
+                { "multiplayer.enter_code",        "Enter session code:" },
+                { "multiplayer.session_code_label","Session Code:" },
+                { "multiplayer.players_connected", "Players: {0}/{1}" },
+                { "multiplayer.session_full",      "Session full." },
+                { "multiplayer.host_migrated",     "Host left â€” migrating session..." },
+                { "multiplayer.leave_button",      "Leave Session" },
+                { "multiplayer.invalid_code",      "Invalid session code." },
+                { "multiplayer.clan_create",       "Create Clan" },
+                { "multiplayer.clan_none",         "Clan: none" },
+                { "multiplayer.clan_current",      "Clan: [{0}] {1}" },
+                { "multiplayer.clan_created",      "Clan [{0}] created." },
+                { "multiplayer.clan_invalid",      "Clan name or tag is invalid." },
+                { "multiplayer.clan_already_in",   "You are already in a clan." },
+                { "multiplayer.ready",             "Ready" },
+                { "multiplayer.not_ready",         "Not Ready" },
+                { "multiplayer.start_game",        "Start Game" },
+                { "multiplayer.waiting_ready",     "Waiting for every player to ready up." },
+            };
+
+            // Placeholder tables: same keys as EN; replace via Set(locale, key, value) or external tables.
+            foreach (string locale in new[] { "ES", "FR", "DE", "JA", "ZH" })
+            {
+                _strings[locale] = new Dictionary<string, string>(_strings[DefaultLocale]);
+            }
+        }
+
+        public static string Locale
+        {
+            get => _currentLocale;
+            set => _currentLocale = value ?? DefaultLocale;
+        }
+
+        public static string Get(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return key;
+            if (_strings.TryGetValue(_currentLocale, out var table) && table.TryGetValue(key, out string value))
+                return NormalizeCommonGlyphMojibake(value);
+            if (_strings.TryGetValue(DefaultLocale, out var defaultTable) && defaultTable.TryGetValue(key, out string defaultVal))
+                return NormalizeCommonGlyphMojibake(defaultVal);
+            return key;
+        }
+
+        public static void Set(string locale, string key, string value)
+        {
+            if (!_strings.ContainsKey(locale))
+                _strings[locale] = new Dictionary<string, string>();
+            _strings[locale][key] = value;
+        }
+
+        private static string NormalizeCommonGlyphMojibake(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            return value.Replace("â†’", "\u2192");
+        }
+    }
+}

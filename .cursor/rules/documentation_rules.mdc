@@ -1,0 +1,11 @@
+---
+description: XML docs and memory-bank updates
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Documentation Rules
+
+- **XML comments**: Add for public APIs, especially for systems and data types used across stages; keep summaries concise.
+- **Memory bank**: When changing architecture, patterns, or folder structure, update `memory-bank/systemPatterns.md`, `activeContext.md`, and `progress.md` so the single source of truth stays current.
+- **Rules/agents/skills**: When adding or changing Cursor rules, agents, or skills under `.cursor/`, ensure they reference memory-bank where appropriate and do not contradict it.

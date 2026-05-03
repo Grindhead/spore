@@ -1,0 +1,19 @@
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# IDE / editor
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+
+# Blender
+*.blend1
+*.blend2
+
+# Keep RoobsWorld-specific ignores in RoobsWorld/.gitignore

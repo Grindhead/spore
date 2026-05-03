@@ -1,0 +1,22 @@
+---
+description: Blender to Unity asset pipeline
+globs: ["**/*.py", "**/tools/blender_scripts/**", "**/Assets/Editor/**", "**/Assets/Art/**"]
+---
+
+# Asset pipeline (Blender → Unity)
+
+## Blender
+
+- **Export collection**: Name a collection `"Export"`. Scripts in `tools/blender_scripts/` export its mesh objects to Unity.
+- **Export path**: FBX files go to `RoobsWorld/Assets/Art/Models` (relative from repo root: `../RoobsWorld/Assets/Art/Models` when running from `tools/blender_scripts/`).
+- **Options**: Apply unit scale, bake space transform; optionally triangulate and apply modifiers before export.
+- **Naming**: `*_VIS` = visible mesh; `*_COL` = collider-only mesh. Unity post-processor adds MeshCollider to `_COL` children and can disable their renderer.
+- **LOD**: Name LOD meshes e.g. `Model_LOD0`, `Model_LOD1`. Blender script can generate LODs via Decimate; Unity Editor tool (CreateLODGroups) builds LODGroup from _LOD* naming.
+
+## Unity
+
+- **Import**: ModelImporter (AssetPostprocessor) sets globalScale=1, importMaterials=true, importAnimation=false for consistent FBX import.
+- **Prefabs**: Post-processor creates prefabs from models under `Assets/Art/Models` at `Assets/Prefabs/{name}.prefab`.
+- **Colliders**: In post-process, for any child with name containing `_COL`, add MeshCollider; optionally disable MeshRenderer.
+
+All pipeline scripts live in `RoobsWorld/Assets/Editor/` (C#) and `tools/blender_scripts/` (Python).

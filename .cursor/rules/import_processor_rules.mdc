@@ -1,0 +1,11 @@
+---
+description: Unity import and post-process for FBX
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Import Processor Rules
+
+- **FBX import**: Set globalScale=1, import materials as needed; disable animation import when only mesh is used.
+- **AssetPostprocessor**: Use to apply consistent settings (e.g. ModelImportSettings) for FBX under Art/Models.
+- **Post-process**: After import, scripts can add MeshCollider to objects with _COL in name, or create prefabs in Assets/Prefabs/; do not modify source assets destructively without user intent.

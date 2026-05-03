@@ -1,0 +1,18 @@
+---
+description: Stateless systems and EventBus communication
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity System Patterns
+
+**Systems:**
+
+- Stateless processors that operate on data or components; avoid storing mutable global state.
+- Systems subscribe to EventBus for input and publish events for output; no direct coupling between systems.
+- Heavy logic (pathfinding, terrain gen, AI) can use Burst/Jobs where appropriate; see `memory-bank/techContext.md`.
+
+**Anti-patterns:**
+
+- Do not use `FindObjectOfType` (or similar) in gameplay hot paths; resolve references at init and cache.
+- Do not put per-frame allocation in Update (e.g. new list every frame); use pooled or reused collections.

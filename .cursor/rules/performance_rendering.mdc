@@ -1,0 +1,12 @@
+---
+description: Rendering and frame budget
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Performance — Rendering
+
+- **Frame budget**: 16.6 ms (60 FPS) on all target platforms; profile and optimize hot paths.
+- **URP**: Use Universal Render Pipeline for cross-platform; GPU instancing for foliage, particles, repeated meshes.
+- **LOD**: Use LOD groups for large or distant meshes (creatures, terrain, space objects); see `lod_generation_rules.mdc`.
+- **Shaders**: Must compile on DX12, Vulkan, and console; test on all build targets.

@@ -1,0 +1,25 @@
+---
+description: Unity performance and architecture best practices
+globs: ["**/*.cs"]
+---
+
+# Unity best practices
+
+## Performance
+
+- Prefer object pooling for any object that is spawned and destroyed frequently.
+- Avoid garbage allocations in Update/FixedUpdate; reuse collections, avoid boxing.
+- Cache references (transforms, components) in Awake/Start.
+- Use Burst-compatible math (Unity.Mathematics) where heavy per-frame math is needed (see techContext).
+
+## Architecture
+
+- ScriptableObjects for data: weapon stats, item definitions, biome configs, creature part defs.
+- Events over polling: use EventBus (Subscribe/Publish) for stage transitions, damage, spawns, UI updates.
+- Keep systems small and single-purpose; folder structure: Core, Systems, Data, UI, Editor (see systemPatterns.md).
+
+## Gameplay code
+
+- No FindObjectOfType in gameplay loops; resolve at init or via events.
+- Heavy logic in dedicated systems or coroutines, not in Update.
+- Prefer RequireComponent and SerializeField for dependencies and inspector config.

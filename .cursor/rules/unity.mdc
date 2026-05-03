@@ -1,0 +1,44 @@
+---
+description: Unity C# coding conventions and patterns for RoobsWorld
+globs: ["**/*.cs"]
+---
+
+# Unity development rules
+
+## General
+
+- Use C# and Unity coding conventions.
+- Prefer composition over inheritance.
+- Avoid `Update()` unless required; use events or coroutines when possible.
+
+## API surface
+
+- Use `[SerializeField]` instead of public fields for inspector-only data.
+- Use `[RequireComponent]` when a script depends on another component.
+- Cache component references in `Awake()`; do not use `GetComponent` in hot paths.
+
+## Performance
+
+- Use object pooling for frequently spawned objects (projectiles, particles, pooled managers).
+- Avoid `FindObjectOfType` and similar in gameplay code; resolve references at init or via dependency injection / events.
+- Avoid allocations in `Update()` and fixed timestep.
+
+## Architecture
+
+- Use ScriptableObjects for configuration and data (items, biomes, part definitions).
+- Use events (EventBus) instead of polling for cross-system communication.
+- Separate gameplay logic from UI logic.
+
+## Naming
+
+- Classes: PascalCase.
+- Variables and parameters: camelCase.
+- Private fields: _camelCase (or camelCase with [SerializeField]).
+
+## Scene structure
+
+Scenes should organize: Environment, Gameplay, UI, Managers (or per memory-bank/systemPatterns.md).
+
+## Editor
+
+- Prefer creating editor tools for repetitive or batch tasks; menu under RoobsWorld/.

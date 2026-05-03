@@ -1,0 +1,17 @@
+---
+description: Naming for classes, assets, and scenes
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Naming Conventions
+
+**C#:** Classes/types PascalCase; variables/parameters camelCase; private fields _camelCase.
+
+**Scenes:** PascalCase descriptive names (MainMenu, CellStage, CreatureStage, TribalStage, CivStage, SpaceStage, CreatureEditor).
+
+**Prefabs:** PascalCase; match purpose (e.g. CreaturePart prefabs by part type).
+
+**Assets (Blender/Unity):** _VIS (visible), _COL (collider), _LOD0/_LOD1/_LOD2 for LOD meshes.
+
+**Events:** Descriptive past tense or noun (StageTransitionEvent, CreatureEvolved, DNAPointsChanged).

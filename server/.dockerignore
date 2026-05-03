@@ -1,0 +1,7 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+fly.toml
+*.test.js
+unity-mcp-adapter.js

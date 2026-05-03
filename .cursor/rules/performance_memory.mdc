@@ -1,0 +1,12 @@
+---
+description: Memory and allocation discipline
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Performance — Memory
+
+- **Cache** component and object references in Awake/Start; do not call GetComponent or Find in Update.
+- **No allocations in Update**: avoid `new` for collections, strings, or boxed values in hot paths; use pooled or reused buffers.
+- **Object pooling**: use `PoolManager` for frequently spawned/despawned objects (cells, projectiles, VFX, etc.); see `memory-bank/systemPatterns.md`.
+- Target memory budget ~4 GB on console; prefer streaming and pooling over loading everything at once.

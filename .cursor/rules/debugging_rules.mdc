@@ -1,0 +1,11 @@
+---
+description: Logging and debugging
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Debugging Rules
+
+- **Logging**: Use Unity Debug.Log for development; avoid excessive logging in hot paths or ship builds; consider conditional compilation or log levels.
+- **Assertions**: Use assertions for invariants (e.g. non-null, valid state); fail fast in development.
+- **Profiler**: Use Unity Profiler for frame time, memory, allocations; optimize only after measuring.

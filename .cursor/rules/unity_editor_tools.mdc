@@ -1,0 +1,20 @@
+---
+description: Unity Editor tool placement and behavior
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Editor Tool Rules
+
+Editor tools automate repetitive tasks and live under:
+
+- `RoobsWorld/Assets/Editor/` — project-wide tools (e.g. RoobsWorldProjectSetup, RoobsWorldBuildSettingsSetup)
+- `RoobsWorld/Assets/Scripts/Creature/Editor/` — creature editor runtime (scene/UI), not Editor-only
+
+**Editor tools should:**
+
+- Use `EditorWindow` when a UI is required.
+- Use `[MenuItem("...")]` for menu access.
+- Support batch processing of selected objects where applicable.
+- Avoid modifying scenes or assets unless explicitly requested by the user.
+- Be in assemblies that compile only in the Editor (e.g. under `Assets/Editor` or `#if UNITY_EDITOR`).

@@ -1,0 +1,27 @@
+---
+description: Unity Editor tools and menus
+globs: ["**/Assets/Editor/**", "**/Editor/**"]
+---
+
+# Editor tools
+
+## Menu and namespace
+
+- Place editor scripts in `RoobsWorld/Assets/Editor/`.
+- Use namespace `RoobsWorld.Editor` and `#if UNITY_EDITOR`.
+- Menu items under **RoobsWorld/** or **RoobsWorld/Tools/** (e.g. RoobsWorld/Tools/Validate Project, RoobsWorld/Create LOD Groups for Selected).
+
+## APIs
+
+- Use `AssetDatabase` for finding assets, loading by path/GUID, and refreshing.
+- Use `PrefabUtility` for saving/instantiating prefabs and editing prefab instances.
+- Use `Selection` for current selection; validate with `MenuItem(..., true)` for visibility/enable.
+- Use `EditorWindow` for custom tools (e.g. Dungeon Generator, Asset Validator results); show with `GetWindow<>()`.
+
+## Conventions
+
+- Prefer editor tools for batch operations, validation, and repetitive setup (LOD groups, missing refs, prefab creation).
+- Report results in a dedicated window or Debug.Log; use EditorUtility.DisplayProgressBar for long scans.
+- Do not run heavy or blocking work on the main thread without progress bars or async where appropriate.
+
+Existing examples: CreateLODGroups.cs, MissingReferencesFinder.cs.

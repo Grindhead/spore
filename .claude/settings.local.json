@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find C:UserscraigworksporeRoobsWorldAssetsTests -name *.cs)",
+      "Bash(find C:UserscraigworksporeRoobsWorldAssetsScripts -name *.cs -newer C:UserscraigAppDataLocalUnityEditorEditor.log)",
+      "Bash(for file:*)",
+      "Bash(do grep:*)",
+      "Bash(done)",
+      "Bash(powershell.exe -File \"C:/Users/craig/work/spore/tools/run-editmode-tests.ps1\")",
+      "Bash(curl -s http://localhost:7777)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(find /c/Users/craig/work/spore/RoobsWorld/Library -name *.log -newer /c/Users/craig/work/spore/RoobsWorld/Library/ScriptAssemblies)",
+      "Bash(find /c/Users/craig/work/spore/RoobsWorld/Library/Bee -name *.log)",
+      "Bash(python3 -c \"import json; json.load\\(open\\(''C:/Users/craig/work/spore/RoobsWorld/Assets/Scripts/RoobsWorld.asmdef''\\)\\); print\\(''valid JSON''\\)\")",
+      "Bash(sort -k6,7)",
+      "Bash(find C:/Users/craig/work/spore/RoobsWorld/Assets -name *.cs -newer C:/Users/craig/work/spore/RoobsWorld/Library/ScriptAssemblies/RoobsWorld.dll)",
+      "Bash(find C:/Users/craig/AppData/Roaming/Unity -name *.json)",
+      "Bash(\"C:/Program Files/Unity/Hub/Editor/6000.3.10f1/Editor/Unity.exe\" -batchmode -quit -projectPath \"C:/Users/craig/work/spore/RoobsWorld\" -logFile \"C:/Users/craig/work/spore/unity_compile.log\")",
+      "Bash(echo \"Exit: $?\")",
+      "Read(//c/Users/craig/AppData/Local/Unity/Editor//**)",
+      "Read(//c/Users/craig/AppData/Roaming/Unity/**)",
+      "Bash(tasklist)",
+      "Bash(python3:*)",
+      "Bash(head:*)",
+      "Bash(xargs cat:*)",
+      "Bash(__NEW_LINE_61b2401af18f68b8__ echo:*)",
+      "Bash(__NEW_LINE_6f5bf2f63ab8712a__ echo:*)",
+      "Bash(wc -l echo \"   Core files with RoobsWorld imports:\" grep \"using RoobsWorld\\\\.\" \"C:\\\\Users\\\\craig\\\\work\\\\spore\\\\RoobsWorld\\\\Assets\\\\Scripts\\\\Core\"/*.cs)",
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(where unity:*)",
+      "Read(//c/Program Files/Unity/Hub/Editor/**)",
+      "Read(//c/Program Files/Unity/**)",
+      "Bash(LOG=\"C:/Users/craig/work/spore/unity_compile.log\")",
+      "Bash(\"/c/Program Files/Unity/Hub/Editor/6000.3.10f1/Editor/Unity.exe\" -batchmode -quit -projectPath \"C:/Users/craig/work/spore/RoobsWorld\" -logFile \"$LOG\" -nographics)"
+    ]
+  }
+}

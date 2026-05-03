@@ -1,0 +1,5 @@
+﻿<Solution>
+  <Project Path="RoobsWorld.csproj" />
+  <Project Path="RoobsWorld.Tests.EditMode.csproj" />
+  <Project Path="RoobsWorld.Editor.csproj" />
+</Solution>

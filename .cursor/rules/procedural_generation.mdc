@@ -1,0 +1,24 @@
+---
+description: Procedural terrain and world generation
+globs: ["**/World/**", "**/Scripts/World/**", "**/Stages/**"]
+---
+
+# Procedural generation
+
+## Existing patterns
+
+- **ProceduralTerrain**: Single-mesh Perlin-noise heightfield; used for fixed arenas (e.g. Creature/Tribal stage terrain). See Scripts/World/ProceduralTerrain.cs.
+- **GalaxyGenerator**: Seed-based procedural galaxy (stars, systems, planets); deterministic. See Stages/Space.
+- **ProceduralMeshFactory / ModelFactory**: Runtime mesh and model generation for cells, trees, rocks, buildings, etc. See Utils/.
+
+## Chunk-based world
+
+- For large or “infinite” terrain, use a chunked generator: dictionary of chunks keyed by Vector2Int (chunk coord), generate/unload by player position and view distance.
+- Per-chunk height from Perlin (e.g. `Mathf.PerlinNoise(x * scale, z * scale) * heightScale`); use a consistent seed for reproducibility.
+- Chunk size and view distance are tunable (e.g. 32x32 units, view 3–5 chunks).
+- Keep ProceduralTerrain for single-mesh stages; use ChunkedWorldGenerator only where infinite or very large terrain is required.
+
+## LOD
+
+- Use existing CreateLODGroups editor tool for imported models with _LOD0/_LOD1 naming.
+- For procedural meshes, reduce vertex count or swap mesh at distance in a custom system; align with project LOD strategy in techContext (e.g. LOD for creatures, terrain, space objects).

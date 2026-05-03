@@ -1,0 +1,15 @@
+---
+description: Blender asset naming conventions
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Blender Asset Rules
+
+Naming conventions for meshes exported to Unity:
+
+- **Visible mesh**: suffix `_VIS` (e.g. `Tree_VIS`).
+- **Collider mesh**: suffix `_COL` (e.g. `Tree_COL`); Unity importer can add MeshCollider to these.
+- **LOD**: `_LOD0` (highest detail), `_LOD1`, `_LOD2` for level-of-detail meshes.
+
+Use consistent naming so Unity import/post-process scripts can apply colliders and LOD groups automatically.

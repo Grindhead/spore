@@ -1,0 +1,12 @@
+---
+description: Testing and TDD for Unity
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Testing Rules
+
+- **EditMode tests**: Pure C# logic (DNA, stats, AI decisions, math, event payloads); no play mode required; under `RoobsWorld/Assets/Tests/EditMode/`.
+- **PlayMode tests**: Spawning, scene transitions, save/load, integration; under `RoobsWorld/Assets/Tests/PlayMode/`.
+- **TDD**: Write failing tests first, then minimal implementation; refactor with tests green. Do not delete tests — fix or refactor.
+- **CI**: Use Unity Test Framework with EditMode/PlayMode; GitHub Actions or similar for automated runs (see `.github/workflows/`).

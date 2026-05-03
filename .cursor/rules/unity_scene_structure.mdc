@@ -1,0 +1,21 @@
+---
+description: Scene layout and bootstrap for stages
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Scene Structure
+
+**Scenes (RoobsWorld/Assets/Scenes/ or equivalent):**
+
+- MainMenu, CellStage, CreatureStage, TribalStage, CivStage, SpaceStage, CreatureEditor.
+- Build Settings must include all required scenes; use RoobsWorldBuildSettingsSetup or add manually.
+
+**Bootstrap:**
+
+- Bootstrap runs in the first loaded scene; ensures managers exist (EventBus, GameManager, SaveManager, etc.) and starts Main Menu or Cell Stage.
+- Assign InputActionAsset (e.g. InputSystem_Actions) to Bootstrap when using New Input System.
+
+**Stage FSM:**
+
+- One-way transitions: Cell → Creature → Tribal → Civilization → Space. Each stage owns its scene(s), camera rig, and UI.

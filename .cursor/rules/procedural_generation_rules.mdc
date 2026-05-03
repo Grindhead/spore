@@ -1,0 +1,12 @@
+---
+description: Procedural generation principles
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Procedural Generation Rules
+
+- **Deterministic**: Use seeds for all procedural content; same seed must produce the same result (reproducible saves, tests).
+- **Chunk-based**: Generate world in chunks, not the entire world at once; load/unload or stream as needed.
+- **Separation**: Keep generation logic separate from rendering; e.g. generate mesh data then hand to Unity mesh/rendering.
+- **Pipeline**: Seed → noise/params → height/biome/mesh → LOD/collider; see `memory-bank/systemPatterns.md` (Procedural Generation Pipeline).

@@ -1,0 +1,16 @@
+---
+description: Blender export settings for Unity
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Blender Export Rules
+
+Before exporting to Unity:
+
+- **Apply transforms**: All object transforms (location, rotation, scale) must be applied before export.
+- **Scale**: Mesh scale must be 1 (Unity expects 1 unit = 1 meter).
+- **Format**: FBX for 3D models.
+- **Triangulate**: Meshes should be triangulated before export unless the pipeline handles it on import.
+
+Export output typically goes to `RoobsWorld/Assets/Art/Models/` or a subfolder.

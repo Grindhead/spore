@@ -1,0 +1,12 @@
+---
+description: UI layer and UIManager
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity UI Rules
+
+- UI lives under `RoobsWorld/Assets/Scripts/UI/`; use UIManager for screen stack (show/pop/hide).
+- Use TextMeshPro for text rendering; see `memory-bank/techContext.md` for packages.
+- Per-stage HUDs (CellStageHUD, CreatureStageHUD, etc.) are stage-specific; main menu and settings are global.
+- Localization: use `Localization.Get(key)` for user-facing strings; extend with `Set(locale, key, value)` for additional locales.

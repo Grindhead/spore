@@ -1,0 +1,20 @@
+{
+  "name": "RoobsWorld.Editor",
+  "rootNamespace": "RoobsWorld.Editor",
+  "references": [
+    "RoobsWorld",
+    "Unity.InputSystem",
+    "UnityEditor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,27 @@
+---
+description: Unity modular architecture and folder structure for RoobsWorld
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Architecture Rules
+
+The project follows a modular architecture. See `memory-bank/systemPatterns.md` for the single source of truth.
+
+**Folder structure (RoobsWorld/Assets/):**
+
+- `Scripts/Core` — EventBus, PoolManager, SaveManager, StageManager, GameManager, InputManager, etc.
+- `Scripts/Creature` — DNA, Editor, Factory, Animation, AI
+- `Scripts/Stages/` — Cell, Creature, Tribal, Civilization, Space (per-stage logic)
+- `Scripts/World` — Terrain generation, biomes
+- `Scripts/UI` — HUD, menus
+- `Scripts/Utils` — Extensions, math helpers
+- `Scripts/Creature/Editor` — Creature editor runtime; `Assets/Editor/` for Unity Editor tools
+
+**Rules:**
+
+- Use MonoBehaviour for scene-bound components; gameplay logic lives in Systems or dedicated classes.
+- Data in ScriptableObjects or JSON; zero hardcoded gameplay values.
+- Systems communicate via EventBus, not direct references.
+- Prefer composition over inheritance.
+- Avoid `FindObjectOfType` during gameplay.

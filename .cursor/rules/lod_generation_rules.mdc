@@ -1,0 +1,12 @@
+---
+description: LOD mesh and LODGroup usage
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# LOD Generation Rules
+
+- **Naming**: LOD meshes use suffix _LOD0, _LOD1, _LOD2 (e.g. from Blender or procedural LOD generator).
+- **Unity**: Use `LODGroup` component to assign meshes to LOD levels; configure screen-relative heights in the LODGroup.
+- **Procedural**: When generating LODs in code (e.g. decimation), keep the same naming convention and register with LODGroup.
+- **Performance**: Use LOD for creatures, terrain, and space objects to maintain frame budget.

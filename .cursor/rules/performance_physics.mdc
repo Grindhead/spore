@@ -1,0 +1,11 @@
+---
+description: Physics and Burst/Jobs
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Performance — Physics and Jobs
+
+- **Physics**: Use physics only where needed (ragdoll, collision, raycasts); avoid unnecessary rigidbodies or continuous collision checks.
+- **Heavy math**: Use Burst and the Job System for terrain generation, pathfinding, or other CPU-heavy work; see `com.unity.burst`, `com.unity.collections`, `com.unity.mathematics` in `memory-bank/techContext.md`.
+- **Avoid**: Blocking the main thread with large synchronous work; prefer incremental or job-based processing.

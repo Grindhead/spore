@@ -1,0 +1,24 @@
+---
+description: EventBus usage and IGameEvent
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Event System
+
+Communication between systems uses the global `EventBus` with typed events implementing `IGameEvent`.
+
+**API (see Scripts/Core/EventBus.cs):**
+
+```csharp
+EventBus.Subscribe<T>(Action<T> handler)   // where T : IGameEvent
+EventBus.Unsubscribe<T>(Action<T> handler)
+EventBus.Publish<T>(T evt)
+EventBus.Clear()  // e.g. on scene unload
+```
+
+**Rules:**
+
+- Define new event types in GameEvents or a dedicated events namespace; use descriptive names (e.g. StageTransitionEvent, CreatureEvolved).
+- Subscribe in OnEnable or Start; unsubscribe in OnDisable or OnDestroy to avoid leaks.
+- Do not publish from inside a handler that is still on the call stack for that event type (re-entrancy).

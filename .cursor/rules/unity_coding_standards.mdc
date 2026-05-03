@@ -1,0 +1,24 @@
+---
+description: C# coding standards for Unity scripts
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Coding Standards
+
+**Naming:**
+
+- Classes, methods, public fields: PascalCase
+- Local variables, parameters: camelCase
+- Private fields: _camelCase
+
+**Lifecycle:**
+
+- Avoid heavy logic inside `Update()`; use events, coroutines, or fixed timestep.
+- Cache component references in `Awake`/`Start`; do not call `GetComponent` in Update.
+
+**Style:**
+
+- Explicit, descriptive names; named constants instead of magic numbers.
+- Robust error handling and assertions for invariants.
+- Keep files under 200–300 lines; split by responsibility.

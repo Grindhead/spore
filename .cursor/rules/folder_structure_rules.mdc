@@ -1,0 +1,19 @@
+---
+description: Canonical project folder layout
+alwaysApply: true
+---
+
+# Folder Structure Rules
+
+Unity project lives under **RoobsWorld/**; repo root is **spore**. Canonical layout:
+
+- **RoobsWorld/Assets/Scripts/** — Core, Creature, Stages (Cell, Creature, Tribal, Civilization, Space), World, UI, Utils; Creature/Editor for creature editor.
+- **RoobsWorld/Assets/Editor/** — Unity Editor tools (e.g. menu items, build setup).
+- **RoobsWorld/Assets/Art/** — Models, Textures, Materials, Shaders, VFX.
+- **RoobsWorld/Assets/Audio/** — Music, SFX.
+- **RoobsWorld/Assets/Data/** — CreatureParts, Biomes, TechTrees, Configs (ScriptableObjects).
+- **RoobsWorld/Assets/Scenes/** — MainMenu, stage scenes, CreatureEditor.
+- **RoobsWorld/Assets/Prefabs/** — Prefabs.
+- **RoobsWorld/Assets/Tests/** — EditMode, PlayMode.
+
+See `memory-bank/systemPatterns.md` for the full folder structure.

@@ -1,0 +1,12 @@
+---
+description: Prefab usage and scene independence
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Prefab Rules
+
+- Prefabs are the primary unit for reusable objects (creatures, props, UI widgets).
+- Do not assume objects exist only in the current scene; support prefab instantiation and pooling.
+- `PoolManager` uses prefabs for spawn/despawn; ensure prefabs are self-contained (no scene-only references).
+- Creature parts can reference prefabs via `CreaturePartDef.ModelPrefab` when using Blender-sourced models.

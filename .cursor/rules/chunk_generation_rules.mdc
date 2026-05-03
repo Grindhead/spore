@@ -1,0 +1,11 @@
+---
+description: Chunked world generation
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Chunk Generation Rules
+
+- **Chunked worlds**: Terrain, galaxy, and large levels are built from chunks; each chunk has a deterministic result from world seed + chunk id.
+- **Do not** generate the entire world in one frame; generate on demand or over multiple frames.
+- **Examples**: Cube-sphere planet chunks, galaxy star chunks, dungeon rooms; see ProceduralTerrain, GalaxyGenerator in the codebase.

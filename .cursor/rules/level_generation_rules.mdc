@@ -1,0 +1,11 @@
+---
+description: Level and dungeon generation
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Level Generation Rules
+
+- **Deterministic**: Level generators must take a seed and produce the same layout for that seed.
+- **Configurable**: Expose parameters (room count, size, density) via ScriptableObject or inspector; support editor-time preview where useful.
+- **Prefab placement**: Use prefab or procedural placement APIs consistently; avoid hardcoded positions.

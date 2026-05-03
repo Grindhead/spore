@@ -1,0 +1,30 @@
+---
+description: RoobsWorld architecture aligned with memory-bank systemPatterns
+globs: ["**/*.cs", "**/memory-bank/**"]
+---
+
+# Game architecture
+
+Follow memory-bank/systemPatterns.md as the source of truth. Summary:
+
+## Layers
+
+- **Presentation**: UI, cameras, shaders, VFX, animation.
+- **Gameplay**: Stage FSM, creature AI, combat, economy, diplomacy.
+- **Systems**: Save/load, input, audio, EventBus, pooling, asset streaming.
+- **Data**: ScriptableObjects, JSON configs, creature DNA, world seeds.
+
+## Patterns
+
+- **Stage FSM**: IGameStage per stage (Cell, Creature, Tribal, Civilization, Space); StageManager handles transitions.
+- **EventBus**: Typed pub/sub; systems subscribe and publish; no direct cross-system references for one-off events.
+- **Hybrid ECS**: Components = data (structs/classes); Systems = stateless processors; entities = GameObjects with component containers.
+- **ScriptableObject data**: All game data (parts, biomes, tech) in ScriptableObjects or JSON; zero hardcoded gameplay values.
+
+## Folder structure (Unity Assets)
+
+- Scripts/Core, Creature, Stages, World, UI, Utils.
+- Art/Models (Blender FBX), Textures, Materials, Shaders, VFX.
+- Data, Scenes, Editor, Prefabs, Tests (EditMode, PlayMode).
+
+New systems and scripts should be placed in the appropriate folder and use EventBus/ScriptableObjects as in existing code.

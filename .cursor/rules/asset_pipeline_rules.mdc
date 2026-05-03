@@ -1,0 +1,13 @@
+---
+description: Blender to Unity asset pipeline
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Asset Pipeline Rules
+
+Pipeline: **Blender** → Export (FBX) → **Unity** importer/post-process → **Prefab**.
+
+- **Blender**: Apply transforms, naming (_VIS, _COL, _LOD0/1/2), export FBX to `RoobsWorld/Assets/Art/Models/` (or configured path).
+- **Unity**: AssetPostprocessor or ModelImportSettings for FBX (scale, materials); optional post-process to add MeshCollider to _COL, create prefabs, or build LODGroups.
+- **Single source**: See `memory-bank/systemPatterns.md` (Visual Asset Strategy / Future: Blender Pipeline) for full flow.

@@ -1,0 +1,11 @@
+---
+description: Collider mesh and component usage
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Collider Rules
+
+- **Naming**: Meshes ending with `_COL` are used for collision; Unity import or post-process can add MeshCollider to matching children.
+- **MeshCollider**: Use for complex shapes exported from Blender; use primitive colliders (box, sphere, capsule) when they suffice for performance.
+- **Procedural**: Runtime procedural meshes get colliders via code (e.g. MeshCollider.sharedMesh); ensure mesh is readable if needed.

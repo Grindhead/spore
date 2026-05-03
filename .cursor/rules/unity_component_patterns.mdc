@@ -1,0 +1,22 @@
+---
+description: Component vs System responsibility
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity Component Patterns
+
+Components (MonoBehaviour or data classes) should hold **data or simple behavior** only.
+
+**Do:**
+
+- Keep components small and reusable.
+- Expose serialized fields for designer tuning.
+- Prefer composition over inheritance.
+
+**Do not:**
+
+- Put complex gameplay logic in MonoBehaviours; move it to Systems or dedicated classes.
+- Build large “god” components; split by concern (e.g. CombatController, SocialController, PackController).
+
+The project uses a hybrid ECS-style approach: data on entities, logic in stateless or single-purpose systems.

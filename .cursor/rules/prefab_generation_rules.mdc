@@ -1,0 +1,11 @@
+---
+description: Auto-prefab from imported models
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Prefab Generation Rules
+
+- **From model**: Prefabs can be generated from imported FBX (e.g. in Assets/Art/Models/) and placed under Assets/Prefabs/ with colliders and LOD assigned.
+- **CreaturePartDef**: The `ModelPrefab` field supports prefab references; when using Blender-sourced creature parts, assign the generated prefab there.
+- **LODGroup**: When creating prefabs from _LOD0/_LOD1/_LOD2 meshes, add or update LODGroup on the root. Use project menu or editor tools (e.g. CreateLODGroups) for batch setup.
