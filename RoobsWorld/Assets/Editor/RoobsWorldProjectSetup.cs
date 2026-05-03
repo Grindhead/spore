@@ -26,6 +26,9 @@ namespace RoobsWorld.Editor
         [InitializeOnLoadMethod]
         private static void OnLoad()
         {
+            if (Application.isBatchMode)
+                return;
+
             EditorApplication.delayCall += () =>
             {
                 AddTagIfMissing(FOOD_TAG);

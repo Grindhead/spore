@@ -94,6 +94,7 @@ namespace RoobsWorld.Multiplayer
     {
         public const int MaxPlayers       = 4;
         public const int SessionCodeLength = 6;
+        public const string DefaultLobbyId = "session";
         public const int ClanNameMinLength = 3;
         public const int ClanNameMaxLength = 24;
         public const int ClanTagMinLength  = 2;
@@ -111,6 +112,8 @@ namespace RoobsWorld.Multiplayer
         private int    _nextLocalClanId = 1;
         private bool   _localReady;
         private string _sessionCode;
+        private string _localLobbyId = DefaultLobbyId;
+        private readonly Dictionary<int, string> _playerLobbyIds = new Dictionary<int, string>();
 
         // ---- public read properties ----
 
@@ -121,6 +124,7 @@ namespace RoobsWorld.Multiplayer
         public bool         IsHost        => _localPlayerId >= 0 && _localPlayerId == _hostPlayerId;
         public bool         LocalReady    => _localReady;
         public int          LocalClanId   => _localClanId;
+        public string       LocalLobbyId  => _localLobbyId;
         public MultiplayerClan LocalClan  => _clans.Find(c => c.ClanId == _localClanId);
         public bool         CanStartGame  => State != SessionState.Offline
             && IsHost
@@ -152,6 +156,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>The host started the shared game.</summary>
         public event Action OnGameStarted;
 
+        /// <summary>A player moved between relay bandwidth lobbies.</summary>
+        public event Action<int, string> OnPlayerLobbyChanged;
+
         // ---- constructor ----
 
         public MultiplayerSessionManager(INetworkTransport transport = null)
@@ -175,6 +182,7 @@ namespace RoobsWorld.Multiplayer
             _localReady    = true;
             _remotePlayers.Clear();
             _clans.Clear();
+            ResetLobbyState();
             State          = SessionState.Hosting;
 
             EventBus.Publish(new MultiplayerSessionStartedEvent
@@ -200,6 +208,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = localPlayerId;
             _localClanId   = -1;
             _localReady    = true;
+            ResetLobbyState();
             State          = SessionState.Hosting;
 
             EventBus.Publish(new MultiplayerSessionStartedEvent
@@ -224,6 +233,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = hostPlayerId;
             _localClanId   = -1;
             _localReady    = false;
+            ResetLobbyState();
             State          = localPlayerId == hostPlayerId ? SessionState.Hosting : SessionState.Connected;
 
             if (hostPlayerId != localPlayerId)
@@ -253,8 +263,38 @@ namespace RoobsWorld.Multiplayer
             _localReady    = false;
             _remotePlayers.Clear();
             _clans.Clear();
+            ResetLobbyState();
             State          = SessionState.Connected;
             return true;
+        }
+
+        /// <summary>Moves the local player into a relay lobby used to limit high-rate packet fan-out.</summary>
+        public bool SetLocalLobby(string lobbyId)
+        {
+            if (State == SessionState.Offline || _localPlayerId < 0) return false;
+            return ApplyPlayerLobby(_localPlayerId, lobbyId);
+        }
+
+        /// <summary>Applies a relay-reported bandwidth lobby change for any known player.</summary>
+        public bool ApplyPlayerLobby(int playerId, string lobbyId)
+        {
+            if (State == SessionState.Offline || !IsKnownPlayer(playerId)) return false;
+            if (!IsValidLobbyId(lobbyId)) return false;
+
+            if (playerId == _localPlayerId)
+                _localLobbyId = lobbyId;
+
+            _playerLobbyIds[playerId] = lobbyId;
+            OnPlayerLobbyChanged?.Invoke(playerId, lobbyId);
+            EventBus.Publish(new MultiplayerPlayerLobbyChangedEvent { PlayerId = playerId, LobbyId = lobbyId });
+            return true;
+        }
+
+        public string GetPlayerLobby(int playerId)
+        {
+            return _playerLobbyIds.TryGetValue(playerId, out string lobbyId)
+                ? lobbyId
+                : DefaultLobbyId;
         }
 
         /// <summary>Changes the local player's lobby readiness.</summary>
@@ -357,6 +397,7 @@ namespace RoobsWorld.Multiplayer
             }
 
             _remotePlayers.RemoveAll(p => p.PlayerId == playerId);
+            _playerLobbyIds.Remove(playerId);
             RemovePlayerFromClans(playerId);
 
             OnPlayerLeft?.Invoke(playerId, wasHost);
@@ -402,6 +443,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = -1;
             _localClanId   = -1;
             _localReady    = false;
+            ResetLobbyState();
             State          = SessionState.Offline;
         }
 
@@ -467,6 +509,25 @@ namespace RoobsWorld.Multiplayer
 
             if (_localClanId != -1 && !_clans.Exists(c => c.ClanId == _localClanId))
                 _localClanId = -1;
+        }
+
+        private void ResetLobbyState()
+        {
+            _localLobbyId = DefaultLobbyId;
+            _playerLobbyIds.Clear();
+            if (_localPlayerId >= 0)
+                _playerLobbyIds[_localPlayerId] = _localLobbyId;
+        }
+
+        private static bool IsValidLobbyId(string lobbyId)
+        {
+            if (string.IsNullOrEmpty(lobbyId) || lobbyId.Length > 24) return false;
+            for (int i = 0; i < lobbyId.Length; i++)
+            {
+                char c = lobbyId[i];
+                if (!char.IsLetterOrDigit(c) && c != '_' && c != '-') return false;
+            }
+            return true;
         }
 
         private static bool TryNormalizeClan(string clanName, string clanTag, out string normalizedName, out string normalizedTag)

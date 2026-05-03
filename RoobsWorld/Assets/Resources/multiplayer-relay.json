@@ -1,4 +1,4 @@
 {
-  "relayUrl": "ws://localhost:7788",
-  "gameToken": ""
+  "relayUrl": "wss://spore.fly.dev",
+  "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
 }

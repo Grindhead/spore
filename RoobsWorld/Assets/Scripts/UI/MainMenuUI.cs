@@ -121,9 +121,9 @@ namespace RoobsWorld.UI
             water.texture = _waterTexture;
             water.material = CreateLivingMenuMaterial(
                 new Color(1f, 1f, 1f, 0.98f),
-                new Color(0.01f, 0.04f, 0.18f, 1f),
-                new Color(0.22f, 0.95f, 1f, 1f),
-                new Color(1f, 0.35f, 0.77f, 1f),
+                UIStyleGuide.Colors.DeepNavy,
+                UIStyleGuide.Colors.TideTealBright,
+                UIStyleGuide.Colors.FossilAmber,
                 0.13f,
                 0.36f,
                 0.58f,
@@ -131,22 +131,22 @@ namespace RoobsWorld.UI
                 12.7f);
             water.raycastTarget = false;
 
-            CreateGlow(parent, "NorthernBloom", new Vector2(0.18f, 0.82f), new Vector2(760f, 430f), new Color(0.7f, 0.92f, 1f, 0.22f));
-            CreateGlow(parent, "EasternBloom", new Vector2(0.88f, 0.5f), new Vector2(640f, 390f), new Color(0.36f, 0.55f, 1f, 0.18f));
-            CreateGlow(parent, "SouthernBloom", new Vector2(0.44f, 0.08f), new Vector2(880f, 360f), new Color(0.4f, 0.85f, 1f, 0.2f));
-            CreateLightShaft(parent, "SurfaceRayLeft", new Vector2(0.08f, 0.48f), new Vector2(360f, 980f), -19f, new Color(0.78f, 0.98f, 1f, 0.12f), 0.2f);
-            CreateLightShaft(parent, "SurfaceRayCenter", new Vector2(0.46f, 0.5f), new Vector2(420f, 1100f), 8f, new Color(0.55f, 0.92f, 1f, 0.1f), 0.3f);
-            CreateLightShaft(parent, "SurfaceRayRight", new Vector2(0.83f, 0.52f), new Vector2(330f, 920f), 17f, new Color(0.96f, 0.66f, 1f, 0.08f), 0.4f);
+            CreateGlow(parent, "NorthernBloom", new Vector2(0.18f, 0.82f), new Vector2(760f, 430f), new Color(UIStyleGuide.Colors.FossilAmber.r, UIStyleGuide.Colors.FossilAmber.g, UIStyleGuide.Colors.FossilAmber.b, 0.18f));
+            CreateGlow(parent, "EasternBloom", new Vector2(0.88f, 0.5f), new Vector2(640f, 390f), new Color(UIStyleGuide.Colors.TideTeal.r, UIStyleGuide.Colors.TideTeal.g, UIStyleGuide.Colors.TideTeal.b, 0.18f));
+            CreateGlow(parent, "SouthernBloom", new Vector2(0.44f, 0.08f), new Vector2(880f, 360f), new Color(UIStyleGuide.Colors.Amethyst.r, UIStyleGuide.Colors.Amethyst.g, UIStyleGuide.Colors.Amethyst.b, 0.13f));
+            CreateLightShaft(parent, "SurfaceRayLeft", new Vector2(0.08f, 0.48f), new Vector2(360f, 980f), -19f, new Color(1f, 0.86f, 0.38f, 0.1f), 0.2f);
+            CreateLightShaft(parent, "SurfaceRayCenter", new Vector2(0.46f, 0.5f), new Vector2(420f, 1100f), 8f, new Color(0.45f, 1f, 0.95f, 0.1f), 0.3f);
+            CreateLightShaft(parent, "SurfaceRayRight", new Vector2(0.83f, 0.52f), new Vector2(330f, 920f), 17f, new Color(1f, 0.38f, 0.28f, 0.08f), 0.4f);
 
             var doodleObj = CreateFullRect(parent, "HandDrawnSporePattern");
             var doodles = doodleObj.AddComponent<RawImage>();
             doodles.texture = _doodleTexture;
             doodles.color = new Color(1f, 1f, 1f, 0.38f);
             doodles.material = CreateLivingMenuMaterial(
-                new Color(0.8f, 0.98f, 1f, 0.42f),
+                new Color(1f, 0.88f, 0.4f, 0.36f),
                 new Color(0f, 0f, 0f, 0f),
-                new Color(0.68f, 1f, 0.95f, 1f),
-                new Color(1f, 0.86f, 0.3f, 1f),
+                UIStyleGuide.Colors.TideTealBright,
+                UIStyleGuide.Colors.Coral,
                 0.22f,
                 0.14f,
                 0.12f,
@@ -159,7 +159,7 @@ namespace RoobsWorld.UI
             CreateCausticRings(parent);
 
             var wash = CreateFullRect(parent, "MenuReadabilityWash");
-            wash.AddComponent<Image>().color = new Color(0.01f, 0.03f, 0.15f, 0.13f);
+            wash.AddComponent<Image>().color = new Color(0.01f, 0.025f, 0.035f, 0.18f);
         }
 
         private void CreateCreatureCollage(Transform parent)
@@ -167,9 +167,9 @@ namespace RoobsWorld.UI
             var rng = new System.Random(4428);
             var palette = new[]
             {
-                new Color(0.95f, 0.25f, 0.18f), new Color(0.97f, 0.65f, 0.18f), new Color(0.42f, 0.88f, 0.25f),
-                new Color(0.12f, 0.72f, 0.92f), new Color(0.55f, 0.24f, 0.92f), new Color(0.95f, 0.38f, 0.68f),
-                new Color(0.08f, 0.12f, 0.22f), new Color(0.96f, 0.73f, 0.52f)
+                UIStyleGuide.Colors.Coral, UIStyleGuide.Colors.FossilAmber, UIStyleGuide.Colors.FossilGold,
+                UIStyleGuide.Colors.TideTeal, UIStyleGuide.Colors.TideTealBright, UIStyleGuide.Colors.Amethyst,
+                UIStyleGuide.Colors.InkBlue, new Color(0.86f, 0.7f, 0.46f)
             };
 
             for (int i = 0; i < 32; i++)
@@ -227,7 +227,7 @@ namespace RoobsWorld.UI
             var rimImage = rim.AddComponent<Image>();
             rimImage.sprite = _panelSprite;
             rimImage.type = Image.Type.Sliced;
-            rimImage.color = new Color(0.66f, 0.93f, 1f, 0.34f);
+            rimImage.color = new Color(UIStyleGuide.Colors.FossilAmber.r, UIStyleGuide.Colors.FossilAmber.g, UIStyleGuide.Colors.FossilAmber.b, 0.26f);
             rimImage.raycastTarget = false;
 
             var panel = new GameObject("MainMenuPanel");
@@ -238,18 +238,11 @@ namespace RoobsWorld.UI
             var panelImage = panel.AddComponent<Image>();
             panelImage.sprite = _panelSprite;
             panelImage.type = Image.Type.Sliced;
-            panelImage.color = new Color(0.05f, 0.18f, 0.44f, 0.78f);
+            panelImage.color = new Color(UIStyleGuide.Colors.PanelBackgroundStrong.r, UIStyleGuide.Colors.PanelBackgroundStrong.g, UIStyleGuide.Colors.PanelBackgroundStrong.b, 0.84f);
 
-            AddText(panel.transform, "Eyebrow", "procedural tidepool survival", new Vector2(0.1f, 0.91f), new Vector2(0.9f, 0.96f), UIStyleGuide.Typography.BodySmall, new Color(0.78f, 0.95f, 1f, 0.9f), FontStyle.Bold);
-            var titleObj = AddText(panel.transform, "Title", Localization.Get("menu.title"), new Vector2(0.035f, 0.78f), new Vector2(0.965f, 0.89f), 68, new Color(1f, 0.3f, 0.32f), FontStyle.Bold);
-            var titleText = titleObj.GetComponent<TextMeshProUGUI>();
-            titleText.textWrappingMode = TextWrappingModes.NoWrap;
-            titleText.fontSizeMin = 42f;
-            titleText.color = new Color(1f, 0.3f, 0.32f, 1f);
-            titleText.outlineColor = new Color(0.47f, 0.03f, 0.06f, 1f);
-            titleText.outlineWidth = 0.22f;
-            titleText.characterSpacing = 0.8f;
-            AddText(panel.transform, "Subtitle", Localization.Get("menu.subtitle"), new Vector2(0.09f, 0.7f), new Vector2(0.91f, 0.765f), UIStyleGuide.Typography.BodyLarge, new Color(0.96f, 0.98f, 1f, 0.96f), FontStyle.Italic);
+            AddText(panel.transform, "Eyebrow", "primeval tidepool survival", new Vector2(0.1f, 0.91f), new Vector2(0.9f, 0.96f), UIStyleGuide.Typography.BodySmall, new Color(UIStyleGuide.Colors.FossilGold.r, UIStyleGuide.Colors.FossilGold.g, UIStyleGuide.Colors.FossilGold.b, 0.92f), FontStyle.Bold);
+            CreateTitleLogo(panel.transform);
+            AddText(panel.transform, "Subtitle", Localization.Get("menu.subtitle"), new Vector2(0.09f, 0.7f), new Vector2(0.91f, 0.765f), UIStyleGuide.Typography.BodyLarge, UIStyleGuide.Colors.Subtitle, FontStyle.Italic);
 
             var hero = new GameObject("HeroMicrobe");
             hero.transform.SetParent(panel.transform, false);
@@ -257,14 +250,14 @@ namespace RoobsWorld.UI
             heroRect.anchorMin = heroRect.anchorMax = new Vector2(0.5f, 0.61f);
             heroRect.sizeDelta = new Vector2(132f, 96f);
             var heroImage = hero.AddComponent<Image>();
-            heroImage.sprite = CreateSprite(MicrobeTexture(480, 360, 555, new Color(0.92f, 0.27f, 0.72f), new Color(0.24f, 0.05f, 0.45f), 5));
+            heroImage.sprite = CreateSprite(MicrobeTexture(480, 360, 555, UIStyleGuide.Colors.TideTeal, UIStyleGuide.Colors.DeepNavy, 5));
             heroImage.preserveAspect = true;
             heroImage.raycastTarget = false;
             hero.AddComponent<MenuFloat>().Configure(10f, 1.5f, 1.3f);
             hero.AddComponent<MenuPulse>().Configure(0.055f, 1.85f);
             CreateHeroAura(panel.transform);
 
-            AddText(panel.transform, "HeroCaption", "choose a tiny body. become a strange legend.", new Vector2(0.1f, 0.502f), new Vector2(0.9f, 0.532f), UIStyleGuide.Typography.BodySmall, new Color(0.83f, 0.96f, 1f, 0.88f), FontStyle.Bold);
+            AddText(panel.transform, "HeroCaption", "adapt. drift. become ancient.", new Vector2(0.1f, 0.502f), new Vector2(0.9f, 0.532f), UIStyleGuide.Typography.BodySmall, new Color(UIStyleGuide.Colors.TideTealBright.r, UIStyleGuide.Colors.TideTealBright.g, UIStyleGuide.Colors.TideTealBright.b, 0.9f), FontStyle.Bold);
 
             float startY = 0.455f;
             float spacing = 0.078f;
@@ -275,11 +268,48 @@ namespace RoobsWorld.UI
             CreateMenuButton(panel.transform, Localization.Get("menu.achievements"), startY - spacing * 4f, false, OnAchievements);
             CreateMenuButton(panel.transform, Localization.Get("menu.quit"), startY - spacing * 5f, false, OnQuit);
 
-            var statusObj = AddText(panel.transform, "Status", "", new Vector2(0.08f, 0.12f), new Vector2(0.92f, 0.17f), UIStyleGuide.Typography.BodyMedium, new Color(1f, 0.74f, 0.58f), FontStyle.Bold);
+            var statusObj = AddText(panel.transform, "Status", "", new Vector2(0.08f, 0.12f), new Vector2(0.92f, 0.17f), UIStyleGuide.Typography.BodyMedium, UIStyleGuide.Colors.Coral, FontStyle.Bold);
             _statusText = statusObj.GetComponent<TextMeshProUGUI>();
             _statusText.gameObject.SetActive(false);
 
-            AddText(panel.transform, "Version", Localization.Get("menu.version_suffix"), new Vector2(0.1f, 0.002f), new Vector2(0.9f, 0.034f), UIStyleGuide.Typography.Caption, new Color(0.77f, 0.88f, 0.96f, 0.72f), FontStyle.Italic);
+            AddText(panel.transform, "Version", Localization.Get("menu.version_suffix"), new Vector2(0.1f, 0.002f), new Vector2(0.9f, 0.034f), UIStyleGuide.Typography.Caption, new Color(UIStyleGuide.Colors.BodyTextMuted.r, UIStyleGuide.Colors.BodyTextMuted.g, UIStyleGuide.Colors.BodyTextMuted.b, 0.72f), FontStyle.Italic);
+        }
+
+        private void CreateTitleLogo(Transform parent)
+        {
+            var logoTexture = Resources.Load<Texture2D>("UI/roobs-world-logo");
+            if (logoTexture == null)
+            {
+                var titleObj = AddText(parent, "Title", Localization.Get("menu.title"), new Vector2(0.035f, 0.78f), new Vector2(0.965f, 0.89f), 68, new Color(1f, 0.3f, 0.32f), FontStyle.Bold);
+                var titleText = titleObj.GetComponent<TextMeshProUGUI>();
+                titleText.textWrappingMode = TextWrappingModes.NoWrap;
+                titleText.fontSizeMin = 42f;
+                titleText.color = new Color(1f, 0.3f, 0.32f, 1f);
+                titleText.outlineColor = new Color(0.47f, 0.03f, 0.06f, 1f);
+                titleText.outlineWidth = 0.22f;
+                titleText.characterSpacing = 0.8f;
+                return;
+            }
+
+            var logoObj = new GameObject("TitleLogo");
+            logoObj.transform.SetParent(parent, false);
+            var rect = logoObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.045f, 0.765f);
+            rect.anchorMax = new Vector2(0.955f, 0.91f);
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+
+            var image = logoObj.AddComponent<Image>();
+            image.sprite = Sprite.Create(
+                logoTexture,
+                new Rect(0f, 0f, logoTexture.width, logoTexture.height),
+                new Vector2(0.5f, 0.5f),
+                100f);
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+
+            var fitter = logoObj.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            fitter.aspectRatio = logoTexture.width / (float)logoTexture.height;
         }
 
         private void CreateMenuButton(Transform parent, string label, float yCenter, bool primary, System.Action onClick)
@@ -294,7 +324,7 @@ namespace RoobsWorld.UI
             var image = buttonObj.AddComponent<Image>();
             image.sprite = _buttonSprite;
             image.type = Image.Type.Sliced;
-            image.color = primary ? new Color(0.08f, 0.68f, 0.42f, 0.96f) : new Color(0.08f, 0.32f, 0.67f, 0.9f);
+            image.color = primary ? new Color(0.94f, 0.55f, 0.07f, 0.96f) : new Color(0.02f, 0.35f, 0.42f, 0.92f);
 
             var button = buttonObj.AddComponent<Button>();
             button.targetGraphic = image;
@@ -309,7 +339,7 @@ namespace RoobsWorld.UI
             pearlRect.sizeDelta = Vector2.one * (primary ? 34f : 24f);
             var pearlImage = pearl.AddComponent<RawImage>();
             pearlImage.texture = _glowTexture;
-            pearlImage.color = primary ? new Color(0.95f, 1f, 0.42f, 0.88f) : new Color(0.66f, 0.93f, 1f, 0.62f);
+            pearlImage.color = primary ? new Color(1f, 0.88f, 0.33f, 0.9f) : new Color(0.22f, 0.95f, 0.92f, 0.66f);
             pearlImage.raycastTarget = false;
             pearl.AddComponent<MenuPulse>().Configure(primary ? 0.16f : 0.1f, primary ? 2.2f : 1.4f);
 
@@ -1109,8 +1139,8 @@ namespace RoobsWorld.UI
             {
                 _image = image;
                 _primary = primary;
-                _normal = primary ? new Color(0.08f, 0.68f, 0.42f, 0.96f) : new Color(0.08f, 0.32f, 0.67f, 0.9f);
-                _hover = primary ? new Color(0.18f, 0.82f, 0.5f, 1f) : new Color(0.17f, 0.48f, 0.84f, 0.96f);
+                _normal = primary ? new Color(0.94f, 0.55f, 0.07f, 0.96f) : new Color(0.02f, 0.35f, 0.42f, 0.92f);
+                _hover = primary ? new Color(1f, 0.72f, 0.18f, 1f) : new Color(0.04f, 0.58f, 0.64f, 0.96f);
             }
 
             private void Awake()

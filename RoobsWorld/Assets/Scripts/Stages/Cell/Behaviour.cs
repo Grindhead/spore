@@ -288,6 +288,99 @@ namespace RoobsWorld.Stages.Cell
             }
         }
 
+        /// <summary>
+        /// Decides current behaviour while applying short-term behavioural persistence.
+        /// This avoids lifeless twitching between equally plausible actions on adjacent AI ticks.
+        /// </summary>
+        public static BehaviourResult DecideWithMemory(BehaviourContext context, BehaviourState previousState)
+        {
+            BehaviourResult fresh = Decide(context);
+            if (fresh.State == previousState)
+                return fresh;
+
+            BehaviourDecisionScores scores = ScoreDecisions(context);
+            BehaviourState remembered = ResolveRememberedState(context, scores, previousState, fresh.State);
+            return remembered == fresh.State ? fresh : BuildResultForState(context, remembered);
+        }
+
+        public static BehaviourState ResolveRememberedState(
+            BehaviourContext context,
+            BehaviourDecisionScores scores,
+            BehaviourState previousState,
+            BehaviourState freshState)
+        {
+            if (freshState == BehaviourState.Flee || freshState == BehaviourState.Reproduce)
+                return freshState;
+
+            switch (previousState)
+            {
+                case BehaviourState.Flee:
+                    if (context.HasThreat && scores.ThreatRisk > 0.24f)
+                        return BehaviourState.Flee;
+                    break;
+                case BehaviourState.SeekFood:
+                    if (context.HasNearestFood
+                        && scores.FoodOpportunity > 0.30f
+                        && scores.FleeUtility < scores.SeekFoodUtility + 0.18f)
+                        return BehaviourState.SeekFood;
+                    break;
+                case BehaviourState.Attack:
+                    if (context.HasPrey
+                        && scores.PreyOpportunity > 0.28f
+                        && scores.ThreatRisk < 0.55f
+                        && freshState != BehaviourState.SeekFood)
+                        return BehaviourState.Attack;
+                    break;
+            }
+
+            return freshState;
+        }
+
+        private static BehaviourResult BuildResultForState(BehaviourContext context, BehaviourState state)
+        {
+            switch (state)
+            {
+                case BehaviourState.Flee:
+                {
+                    Vector3 away = context.MyPosition - context.ThreatPosition;
+                    away.y = 0f;
+                    if (away.sqrMagnitude < 0.01f)
+                        away = Vector3.forward;
+                    else
+                        away.Normalize();
+                    return new BehaviourResult
+                    {
+                        State = BehaviourState.Flee,
+                        TargetPosition = context.MyPosition + away * 10f
+                    };
+                }
+                case BehaviourState.SeekFood:
+                    return new BehaviourResult
+                    {
+                        State = BehaviourState.SeekFood,
+                        TargetPosition = context.NearestFoodPosition
+                    };
+                case BehaviourState.Attack:
+                    return new BehaviourResult
+                    {
+                        State = BehaviourState.Attack,
+                        TargetPosition = context.PreyPosition
+                    };
+                case BehaviourState.Reproduce:
+                    return new BehaviourResult
+                    {
+                        State = BehaviourState.Reproduce,
+                        TargetPosition = null
+                    };
+                default:
+                    return new BehaviourResult
+                    {
+                        State = BehaviourState.Wander,
+                        TargetPosition = null
+                    };
+            }
+        }
+
         /// <summary>Converts a behaviour result and current position into a move direction (XZ, normalized). Wander uses optional wanderDirection (e.g. random).</summary>
         public static Vector3 GetMoveDirection(BehaviourResult result, Vector3 myPosition, Vector3 wanderDirection = default)
         {

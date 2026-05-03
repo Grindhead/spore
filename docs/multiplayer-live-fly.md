@@ -22,7 +22,7 @@ fly apps create <unique-app-name>
 Then edit `server/fly.toml`:
 
 ```toml
-app = "<unique-app-name>"
+app = "spore"
 ```
 
 Set a relay token. This is a lightweight gate for the relay, not a true secret once shipped in a game client.
@@ -30,6 +30,7 @@ Set a relay token. This is a lightweight gate for the relay, not a true secret o
 ```powershell
 fly secrets set GAME_TOKEN="<random-long-token>"
 fly deploy
+fly scale count 1 -a spore --yes
 ```
 
 ## GitHub Actions deployment
@@ -64,7 +65,7 @@ Check the health endpoint:
 
 ```powershell
 fly status
-curl https://<unique-app-name>.fly.dev/healthz
+curl https://spore.fly.dev/healthz
 ```
 
 Expected response:
@@ -89,7 +90,7 @@ Before building the game, update:
 For standalone desktop smoke tests, you can also override without editing the resource file:
 
 ```powershell
-RoobsWorld.exe -relayUrl wss://<unique-app-name>.fly.dev -gameToken <same-token-as-GAME_TOKEN>
+RoobsWorld.exe -relayUrl wss://spore.fly.dev -gameToken <same-token-as-GAME_TOKEN>
 ```
 
 ## Smoke test
@@ -111,3 +112,52 @@ Look for `unauthorized`, `join rate exceeded`, or `not_found` messages.
 ## Scaling note
 
 Do not scale this relay to multiple machines yet. Sessions are stored in memory, so every player in a room must connect to the same relay instance. The current `fly.toml` keeps one machine running.
+
+Fly may create two machines on the first deploy for redundancy. If that happens, run:
+
+```powershell
+fly scale count 1 -a spore --yes
+```
+
+## Autoscaling plan
+
+Fly supports two useful autoscaling modes:
+
+- Proxy autostop/autostart starts and stops existing Machines based on request/connection load.
+- Metrics-based autoscaling can create/delete or start/stop Machines based on metrics.
+
+The relay is not ready for horizontal autoscaling yet because room state lives in process memory:
+
+- Session codes are stored in `sessions`, a local `Map`.
+- Room membership is stored on each WebSocket process.
+- A second Machine would have a different empty `sessions` map.
+
+The safe current setup is:
+
+- Keep exactly one Machine running.
+- Use the `[http_service.concurrency]` limits in `server/fly.toml` as the first alert/capacity threshold.
+- Scale vertically if needed:
+
+```powershell
+fly scale vm shared-cpu-2x -a spore
+```
+
+To enable true usage-based horizontal autoscaling, first move room/session coordination out of memory. Recommended options:
+
+1. Add Redis/Upstash for session lookup, membership, and relay pub/sub.
+2. Split matchmaking from relay traffic: keep room creation in shared storage and route each room to a specific relay instance.
+3. Replace the custom relay with a managed realtime backend that supports channels/presence.
+
+After that, create a machine pool and let Fly start/stop Machines:
+
+```powershell
+fly scale count 3 -a spore
+```
+
+Then switch:
+
+```toml
+auto_stop_machines = "suspend"
+auto_start_machines = true
+min_machines_running = 1
+```

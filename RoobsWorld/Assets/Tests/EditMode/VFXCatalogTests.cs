@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using RoobsWorld.Utils;
+using System.Collections.Generic;
 
 namespace RoobsWorld.Tests
 {
@@ -96,6 +97,19 @@ namespace RoobsWorld.Tests
         {
             var config = VFXCatalog.GetConfig(VFXType.DeathPoof);
             Assert.LessOrEqual(config.Lifetime, 2f);
+        }
+
+        [Test]
+        public void Catalog_Uses_Multiple_Particle_Styles()
+        {
+            var styles = new HashSet<VFXParticleStyle>();
+            foreach (VFXType vfxType in System.Enum.GetValues(typeof(VFXType)))
+            {
+                var config = VFXCatalog.GetConfig(vfxType);
+                styles.Add(config.ParticleStyle);
+            }
+
+            Assert.GreaterOrEqual(styles.Count, 4);
         }
     }
 }

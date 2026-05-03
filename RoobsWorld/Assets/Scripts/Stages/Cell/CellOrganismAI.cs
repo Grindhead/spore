@@ -37,6 +37,7 @@ namespace RoobsWorld.Stages.Cell
         private float _forcedExploreTimer;
         private Vector3 _forcedExploreDirection;
         private float _nextThreatExperienceTime;
+        private BehaviourState _lastBehaviourState = BehaviourState.Wander;
 
         private void Awake()
         {
@@ -93,7 +94,8 @@ namespace RoobsWorld.Stages.Cell
         private void EvaluateDecision()
         {
             var ctx = BuildContext();
-            var result = Behaviour.Decide(ctx);
+            var result = Behaviour.DecideWithMemory(ctx, _lastBehaviourState);
+            _lastBehaviourState = result.State;
             RecordAdaptivePressure(result.State);
 
             if (result.State == BehaviourState.Reproduce)

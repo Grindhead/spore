@@ -24,7 +24,7 @@ namespace RoobsWorld.Core
                 { "menu.quit", "Quit" },
                 { "menu.no_save", "No save file found." },
                 { "menu.version_suffix", "Pre-Alpha" },
-                { "menu.title", "ROOB'S WORLD" },
+                { "menu.title", "Primeval Drift" },
                 { "menu.subtitle", "Cell Stage Survival" },
                 { "settings.title", "SETTINGS" },
                 { "settings.graphics", "Graphics" },

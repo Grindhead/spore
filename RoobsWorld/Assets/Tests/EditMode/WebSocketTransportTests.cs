@@ -78,6 +78,15 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(2, ParseInt(json, "playerId"));
         }
 
+        [Test]
+        public void ParseString_Extracts_LobbyId()
+        {
+            string json = "{\"type\":\"player_lobby\",\"playerId\":2,\"lobbyId\":\"cell-0_1\"}";
+            Assert.AreEqual("player_lobby", ParseString(json, "type"));
+            Assert.AreEqual("cell-0_1", ParseString(json, "lobbyId"));
+            Assert.AreEqual(2, ParseInt(json, "playerId"));
+        }
+
         // ---- ParseBoolField ----
 
         [Test]

@@ -23,6 +23,7 @@
  *   Client → Server:
  *     { type: "create" }
  *     { type: "join",    code: "ABCD12" }
+ *     { type: "join_lobby", lobbyId: "cell" }
  *     { type: "relay",   to: <playerId|null>,  data: "<base64 ≤16 KB>" }
  *     { type: "leave" }
  *     { type: "pong" }    ← keepalive response
@@ -33,6 +34,7 @@
  *     { type: "player_joined", playerId }
  *     { type: "player_left",   playerId, wasHost }
  *     { type: "host_migrated", newHostId }
+ *     { type: "player_lobby",  playerId, lobbyId }
  *     { type: "data",          from, data }
  *     { type: "ping" }
  *     { type: "error",         reason: "not_found"|"full"|"already_in_session"|"invalid_code" }
@@ -47,6 +49,7 @@ const {
     validateClanTag,
     validateBase64,
     validateRelayTarget,
+    validateLobbyId,
     validateAuthToken,
     extractQueryParam,
 } = require('./security');
@@ -95,6 +98,7 @@ class Session {
         this.code      = code;
         /** @type {Map<number, import('ws')>} */
         this.players   = new Map(); // playerId → ws
+        this.lobbies   = new Map(); // lobbyId -> Set<playerId>
         this.clans     = new Map(); // clanId -> clan
         this.playerClans = new Map(); // playerId -> clanId
         this.ready     = new Map(); // playerId -> bool
@@ -119,6 +123,8 @@ class Session {
         this.ready.set(id, id === 0);
         ws._session  = this;
         ws._playerId = id;
+        ws._lobbyId  = 'session';
+        this.moveToLobby(id, ws._lobbyId);
         return id;
     }
 
@@ -126,6 +132,7 @@ class Session {
         const playerId = ws._playerId;
         this.players.delete(playerId);
         this.ready.delete(playerId);
+        this.removeFromLobby(playerId, ws._lobbyId);
         const clanId = this.playerClans.get(playerId);
         if (clanId == null) return;
 
@@ -167,6 +174,30 @@ class Session {
         return true;
     }
 
+    moveToLobby(playerId, lobbyId) {
+        if (!this.players.has(playerId) || !validateLobbyId(lobbyId)) return false;
+        const client = this.players.get(playerId);
+        this.removeFromLobby(playerId, client?._lobbyId);
+
+        let lobby = this.lobbies.get(lobbyId);
+        if (!lobby) {
+            lobby = new Set();
+            this.lobbies.set(lobbyId, lobby);
+        }
+
+        lobby.add(playerId);
+        if (client) client._lobbyId = lobbyId;
+        return true;
+    }
+
+    removeFromLobby(playerId, lobbyId) {
+        if (!lobbyId) return;
+        const lobby = this.lobbies.get(lobbyId);
+        if (!lobby) return;
+        lobby.delete(playerId);
+        if (lobby.size === 0) this.lobbies.delete(lobbyId);
+    }
+
     allReady() {
         if (this.players.size === 0) return false;
         for (const playerId of this.players.keys()) {
@@ -183,6 +214,22 @@ class Session {
         }
     }
 
+    broadcastToLobby(lobbyId, excludeId, msg) {
+        const lobby = this.lobbies.get(lobbyId);
+        if (!lobby) return;
+
+        const text = JSON.stringify(msg);
+        for (const id of lobby) {
+            if (id === excludeId) continue;
+            const client = this.players.get(id);
+            if (client?.readyState === 1) client.send(text);
+        }
+    }
+
+    isPlayerInLobby(playerId, lobbyId) {
+        return this.lobbies.get(lobbyId)?.has(playerId) ?? false;
+    }
+
     sendTo(toId, msg) {
         const client = this.players.get(toId);
         if (client?.readyState === 1) client.send(JSON.stringify(msg));
@@ -196,6 +243,7 @@ class Session {
             client.terminate();
         }
         this.players.clear();
+        this.lobbies.clear();
     }
 }
 
@@ -272,13 +320,20 @@ const wss = new WebSocketServer({
 });
 
 const devMode = !CFG.GAME_TOKEN;
-server.listen(CFG.PORT, () => {
-    log('info', `RoobsWorld relay server listening on ws://0.0.0.0:${CFG.PORT}${devMode ? ' (dev mode - no token required)' : ''}`);
-});
+let housekeepingTimer = null;
+
+function startRelayServer() {
+    if (server.listening) return;
+    server.listen(CFG.PORT, () => {
+        log('info', `RoobsWorld relay server listening on ws://0.0.0.0:${CFG.PORT}${devMode ? ' (dev mode - no token required)' : ''}`);
+    });
+}
 
 // ---- keepalive + housekeeping ----
 
-setInterval(() => {
+function startHousekeeping() {
+    if (housekeepingTimer) return;
+    housekeepingTimer = setInterval(() => {
     const ping = JSON.stringify({ type: 'ping' });
     const now  = Date.now();
 
@@ -308,7 +363,8 @@ setInterval(() => {
     connRateLimiter.cleanup();
     msgRateLimiter.cleanup();
     joinRateLimiter.cleanup();
-}, CFG.PING_MS);
+    }, CFG.PING_MS);
+}
 
 // ---- connection handler ----
 
@@ -341,6 +397,7 @@ wss.on('connection', (ws, req) => {
     ws._ip           = ip;
     ws._session      = null;
     ws._playerId     = -1;
+    ws._lobbyId      = null;
     ws._lastActivity = Date.now();
 
     trackConn(ip, ws);
@@ -422,6 +479,31 @@ wss.on('connection', (ws, req) => {
                         leaderPlayerId: clan.leaderPlayerId,
                     });
                 }
+                for (const [existingId, client] of session.players) {
+                    send(ws, {
+                        type: 'player_lobby',
+                        playerId: existingId,
+                        lobbyId: client._lobbyId ?? 'session',
+                    });
+                }
+                break;
+            }
+
+            // ---- bandwidth lobby ----
+            case 'join_lobby': {
+                const session = ws._session;
+                if (!session) return;
+                if (!validateLobbyId(msg.lobbyId)) {
+                    return send(ws, { type: 'error', reason: 'invalid_lobby' });
+                }
+
+                session.moveToLobby(ws._playerId, msg.lobbyId);
+                session.broadcast(-1, {
+                    type: 'player_lobby',
+                    playerId: ws._playerId,
+                    lobbyId: ws._lobbyId,
+                });
+                log('info', `lobby changed code=${session.code} player=${ws._playerId} lobby=${ws._lobbyId}`);
                 break;
             }
 
@@ -486,9 +568,10 @@ wss.on('connection', (ws, req) => {
 
                 const from = ws._playerId;
                 if (msg.to != null) {
+                    if (!session.isPlayerInLobby(msg.to, ws._lobbyId)) return;
                     session.sendTo(msg.to, { type: 'data', from, data: msg.data });
                 } else {
-                    session.broadcast(from, { type: 'data', from, data: msg.data });
+                    session.broadcastToLobby(ws._lobbyId, from, { type: 'data', from, data: msg.data });
                 }
                 break;
             }
@@ -547,13 +630,18 @@ function handleLeave(ws) {
 
 function shutdown(signal) {
     log('info', `${signal} — shutting down`);
+    if (housekeepingTimer) clearInterval(housekeepingTimer);
     for (const session of sessions.values()) session.destroy('server_shutdown');
     wss.close(() => server.close(() => process.exit(0)));
     setTimeout(() => process.exit(1), 5000); // force-exit if close hangs
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
+if (require.main === module) {
+    startRelayServer();
+    startHousekeeping();
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
+}
 
 // Export for testing
-module.exports = { sessions, Session, genCode, CFG, server, wss };
+module.exports = { sessions, Session, genCode, CFG, server, wss, startRelayServer, startHousekeeping };

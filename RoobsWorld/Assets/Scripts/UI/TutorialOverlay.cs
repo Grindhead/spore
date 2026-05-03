@@ -197,7 +197,7 @@ namespace RoobsWorld.UI
             panelRect.offsetMax = Vector2.zero;
 
             _bgImage = panelObj.AddComponent<Image>();
-            _bgImage.color = new Color(0.05f, 0.1f, 0.2f, 0.85f);
+            _bgImage.color = new Color(UIStyleGuide.Colors.PanelBackgroundStrong.r, UIStyleGuide.Colors.PanelBackgroundStrong.g, UIStyleGuide.Colors.PanelBackgroundStrong.b, 0.88f);
 
             var textObj = new GameObject("Message");
             textObj.transform.SetParent(panelObj.transform, false);

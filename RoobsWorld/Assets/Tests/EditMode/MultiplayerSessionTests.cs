@@ -295,6 +295,43 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(code, received.Value.SessionCode);
         }
 
+        [Test]
+        public void SetLocalLobby_Valid_Lobby_Updates_Local_State()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+
+            Assert.IsTrue(mgr.SetLocalLobby("cell-0_1"));
+
+            Assert.AreEqual("cell-0_1", mgr.LocalLobbyId);
+            Assert.AreEqual("cell-0_1", mgr.GetPlayerLobby(mgr.LocalPlayerId));
+        }
+
+        [Test]
+        public void ApplyPlayerLobby_Invalid_Lobby_Returns_False()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+
+            Assert.IsFalse(mgr.ApplyPlayerLobby(mgr.LocalPlayerId, "../cell"));
+            Assert.AreEqual(MultiplayerSessionManager.DefaultLobbyId, mgr.LocalLobbyId);
+        }
+
+        [Test]
+        public void ApplyPlayerLobby_Publishes_Event()
+        {
+            MultiplayerPlayerLobbyChangedEvent? received = null;
+            EventBus.Subscribe<MultiplayerPlayerLobbyChangedEvent>(e => received = e);
+
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+            mgr.ApplyPlayerLobby(mgr.LocalPlayerId, "cell");
+
+            Assert.IsNotNull(received);
+            Assert.AreEqual(mgr.LocalPlayerId, received.Value.PlayerId);
+            Assert.AreEqual("cell", received.Value.LobbyId);
+        }
+
         // ---- host authority ----
 
         [Test]

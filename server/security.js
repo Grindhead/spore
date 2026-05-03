@@ -64,6 +64,7 @@ class RateLimiter {
 
 const CODE_RE   = /^[A-Z0-9]{6}$/;
 const CLAN_TAG_RE = /^[A-Z0-9]{2,5}$/;
+const LOBBY_ID_RE = /^[A-Za-z0-9_-]{1,24}$/;
 // Base64 characters + padding
 const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
 
@@ -121,6 +122,15 @@ function validateRelayTarget(to) {
     return to == null || validatePlayerId(to);
 }
 
+/**
+ * Returns true for a compact relay lobby identifier.
+ * Lobbies are bandwidth buckets inside a session, so keep ids small and
+ * display-agnostic: letters, numbers, underscore, hyphen.
+ */
+function validateLobbyId(lobbyId) {
+    return typeof lobbyId === 'string' && LOBBY_ID_RE.test(lobbyId);
+}
+
 // ---- auth ----
 
 /**
@@ -167,6 +177,7 @@ module.exports = {
     validateBase64,
     validatePlayerId,
     validateRelayTarget,
+    validateLobbyId,
     validateAuthToken,
     extractQueryParam,
 };

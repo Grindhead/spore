@@ -134,7 +134,7 @@ namespace RoobsWorld.Core
     /// <summary>Fired when the player leaves predator threat range (used for "Escape predator" micro goal).</summary>
     public struct CellPlayerEscapedPredatorEvent : IGameEvent { }
 
-    /// <summary>Fired when the player completes reproduction (chose mutation, offspring spawned). Used for "Reproduce once" micro goal.</summary>
+    /// <summary>Fired when the player completes a cell upgrade milestone. Used for upgrade micro goals.</summary>
     public struct CellPlayerReproducedEvent : IGameEvent { }
 
     /// <summary>Fired when the player consumes a CellAI organism. PreyWasLarger is true when the prey's visual scale exceeded the player's.</summary>
@@ -224,6 +224,13 @@ namespace RoobsWorld.Core
     {
         public int  PlayerId;
         public bool IsReady;
+    }
+
+    /// <summary>Fired when a player moves between relay bandwidth lobbies.</summary>
+    public struct MultiplayerPlayerLobbyChangedEvent : IGameEvent
+    {
+        public int    PlayerId;
+        public string LobbyId;
     }
 
     /// <summary>Fired when the session host starts the shared multiplayer game.</summary>

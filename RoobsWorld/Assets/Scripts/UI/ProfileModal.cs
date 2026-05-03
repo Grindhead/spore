@@ -83,7 +83,7 @@ namespace RoobsWorld.UI
             bdRect.offsetMin = Vector2.zero;
             bdRect.offsetMax = Vector2.zero;
             var bdImg = backdrop.AddComponent<Image>();
-            bdImg.color = new Color(0f, 0f, 0f, 0.55f);
+            bdImg.color = UIStyleGuide.Colors.OverlayDim;
             var bdBtn = backdrop.AddComponent<Button>();
             bdBtn.onClick.AddListener(Hide);
 
@@ -118,7 +118,7 @@ namespace RoobsWorld.UI
             rect.pivot     = new Vector2(0.5f, 1f);
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = new Vector2(0, HeaderH);
-            headerGo.AddComponent<Image>().color = new Color(0.09f, 0.14f, 0.26f, 1f);
+            headerGo.AddComponent<Image>().color = UIStyleGuide.Colors.InkBlue;
 
             // Title
             var titleGo = new GameObject("Title");
@@ -157,7 +157,7 @@ namespace RoobsWorld.UI
             clRect.anchorMin = Vector2.zero;
             clRect.anchorMax = Vector2.one;
             var clText = closeLabelGo.AddComponent<Text>();
-            clText.font = _font; clText.text = "✕";
+            clText.font = _font; clText.text = "X";
             clText.fontSize = 20; clText.alignment = TextAnchor.MiddleCenter;
             clText.color = UIStyleGuide.Colors.BodyText;
 
@@ -193,7 +193,7 @@ namespace RoobsWorld.UI
             var slText = sectionLabel.AddComponent<Text>();
             slText.font = _font;
             slText.text = "  " + Localization.Get("profile.stats_header").ToUpperInvariant();
-            slText.fontSize = 15; slText.color = new Color(0.45f, 0.78f, 1f);
+            slText.fontSize = 15; slText.color = UIStyleGuide.Colors.FossilGold;
             slText.fontStyle = FontStyle.Bold; slText.alignment = TextAnchor.MiddleLeft;
 
             var record = GameManager.HasInstance
@@ -235,7 +235,7 @@ namespace RoobsWorld.UI
             rect.pivot     = new Vector2(0f, 1f);
             rect.anchoredPosition = new Vector2(xOffset, yOffset);
             rect.sizeDelta = new Vector2(width, 38);
-            row.AddComponent<Image>().color = new Color(0.1f, 0.16f, 0.28f, 0.5f);
+            row.AddComponent<Image>().color = UIStyleGuide.Colors.RowStripe;
 
             // Label (left)
             var labelGo = new GameObject("Label");
@@ -245,7 +245,7 @@ namespace RoobsWorld.UI
             lRect.offsetMin = new Vector2(10, 0); lRect.offsetMax = Vector2.zero;
             var lText = labelGo.AddComponent<Text>();
             lText.font = _font; lText.text = label;
-            lText.fontSize = LabelFontSz; lText.color = new Color(0.68f, 0.75f, 0.82f);
+            lText.fontSize = LabelFontSz; lText.color = UIStyleGuide.Colors.BodyTextMuted;
             lText.alignment = TextAnchor.MiddleLeft;
 
             // Value (right, gold)
@@ -256,7 +256,7 @@ namespace RoobsWorld.UI
             vRect.offsetMin = Vector2.zero; vRect.offsetMax = new Vector2(-10, 0);
             var vText = valueGo.AddComponent<Text>();
             vText.font = _font; vText.text = value;
-            vText.fontSize = ValueFontSz; vText.color = new Color(1f, 0.85f, 0.3f);
+            vText.fontSize = ValueFontSz; vText.color = UIStyleGuide.Colors.FossilGold;
             vText.alignment = TextAnchor.MiddleRight; vText.fontStyle = FontStyle.Bold;
         }
 
@@ -280,7 +280,7 @@ namespace RoobsWorld.UI
             rect.pivot     = new Vector2(0.5f, 1f);
             rect.anchoredPosition = new Vector2(0, -(HeaderH + StatsH + 6));
             rect.sizeDelta = new Vector2(0, DividerH);
-            div.AddComponent<Image>().color = new Color(0.25f, 0.45f, 0.7f, 0.5f);
+            div.AddComponent<Image>().color = UIStyleGuide.Colors.PanelBorder;
         }
 
         // ---- achievements scroll ----
@@ -302,7 +302,7 @@ namespace RoobsWorld.UI
             var lText = labelGo.AddComponent<Text>();
             lText.font = _font;
             lText.text = "  " + Localization.Get("profile.achievements_header").ToUpperInvariant();
-            lText.fontSize = 15; lText.color = new Color(0.45f, 0.78f, 1f);
+            lText.fontSize = 15; lText.color = UIStyleGuide.Colors.FossilGold;
             lText.fontStyle = FontStyle.Bold; lText.alignment = TextAnchor.MiddleLeft;
 
             float scrollTopY = topY - 28;
@@ -380,11 +380,11 @@ namespace RoobsWorld.UI
             row.transform.SetParent(parent, false);
             var rect = row.AddComponent<RectTransform>();
             rect.sizeDelta = new Vector2(0, 32);
-            row.AddComponent<Image>().color = new Color(0.1f, 0.18f, 0.32f, 0.7f);
+            row.AddComponent<Image>().color = UIStyleGuide.Colors.RowStripe;
             var text = row.AddComponent<Text>();
             text.font = _font;
             text.text = $"  {unlocked} / {total} unlocked   —   {points} / {maxPoints} pts";
-            text.fontSize = 14; text.color = new Color(0.65f, 0.75f, 0.85f);
+            text.fontSize = 14; text.color = UIStyleGuide.Colors.BodyTextMuted;
             text.alignment = TextAnchor.MiddleLeft;
         }
 
@@ -395,8 +395,8 @@ namespace RoobsWorld.UI
             var rect = row.AddComponent<RectTransform>();
             rect.sizeDelta = new Vector2(0, AchievRowH);
             row.AddComponent<Image>().color = unlocked
-                ? new Color(0.11f, 0.20f, 0.33f, 0.85f)
-                : new Color(0.09f, 0.09f, 0.14f, 0.85f);
+                ? new Color(UIStyleGuide.Colors.PanelBackground.r, UIStyleGuide.Colors.PanelBackground.g, UIStyleGuide.Colors.PanelBackground.b, 0.86f)
+                : new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.86f);
 
             // Gold/grey side bar
             var bar = new GameObject("Bar");
@@ -406,8 +406,8 @@ namespace RoobsWorld.UI
             barRect.pivot = new Vector2(0f, 0.5f);  barRect.anchoredPosition = Vector2.zero;
             barRect.sizeDelta = new Vector2(4, 0);
             bar.AddComponent<Image>().color = unlocked
-                ? new Color(1f, 0.82f, 0.2f, 0.9f)
-                : new Color(0.3f, 0.3f, 0.35f, 0.5f);
+                ? UIStyleGuide.Colors.UnlockedGold
+                : UIStyleGuide.Colors.LockedGray;
 
             const float leftPad = 14f;
 
@@ -421,7 +421,7 @@ namespace RoobsWorld.UI
             tText.font = _font;
             tText.text = def.Hidden && !unlocked ? "???" : def.Title;
             tText.fontSize = 15;
-            tText.color = unlocked ? new Color(0.95f, 0.96f, 1f) : new Color(0.48f, 0.5f, 0.56f);
+            tText.color = unlocked ? UIStyleGuide.Colors.BodyText : UIStyleGuide.Colors.BodyTextSubtle;
             tText.fontStyle = unlocked ? FontStyle.Bold : FontStyle.Normal;
 
             // Description
@@ -433,7 +433,7 @@ namespace RoobsWorld.UI
             var dText = descGo.AddComponent<Text>();
             dText.font = _font;
             dText.text = def.Hidden && !unlocked ? "???" : def.Description;
-            dText.fontSize = 11; dText.color = new Color(0.5f, 0.58f, 0.65f);
+            dText.fontSize = 11; dText.color = UIStyleGuide.Colors.BodyTextSubtle;
 
             // Points (right edge)
             var ptsGo = new GameObject("Pts");
@@ -445,7 +445,7 @@ namespace RoobsWorld.UI
             var pText = ptsGo.AddComponent<Text>();
             pText.font = _font; pText.text = def.Points + " pts";
             pText.fontSize = 13;
-            pText.color = unlocked ? new Color(1f, 0.85f, 0.3f) : new Color(0.42f, 0.42f, 0.48f);
+            pText.color = unlocked ? UIStyleGuide.Colors.FossilGold : UIStyleGuide.Colors.LockedGray;
             pText.alignment = TextAnchor.MiddleRight;
             pText.fontStyle = unlocked ? FontStyle.Bold : FontStyle.Normal;
         }

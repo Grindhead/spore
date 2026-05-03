@@ -308,6 +308,47 @@ namespace RoobsWorld.Tests
             float t = CellBehaviour.GetLowEnergyThreshold();
             Assert.Greater(t, 0f);
         }
+
+        [Test]
+        public void DecideWithMemory_PreservesFleeWhileThreatStillRelevant()
+        {
+            var ctx = new BehaviourContext
+            {
+                Energy = 10f,
+                MyPosition = Vector3.zero,
+                HasNearestFood = true,
+                NearestFoodPosition = new Vector3(1f, 0f, 0f),
+                NearestFoodDistance = 1f,
+                HasThreat = true,
+                ThreatPosition = new Vector3(4f, 0f, 0f),
+                ThreatDistance = 4f
+            };
+
+            var fresh = CellBehaviour.Decide(ctx);
+            var remembered = CellBehaviour.DecideWithMemory(ctx, BehaviourState.Flee);
+
+            Assert.AreEqual(BehaviourState.SeekFood, fresh.State);
+            Assert.AreEqual(BehaviourState.Flee, remembered.State);
+        }
+
+        [Test]
+        public void ResolveRememberedState_DropsFleeWhenThreatIsGone()
+        {
+            var ctx = new BehaviourContext
+            {
+                Energy = 50f,
+                MyPosition = Vector3.zero
+            };
+            var scores = CellBehaviour.ScoreDecisions(ctx);
+
+            BehaviourState state = CellBehaviour.ResolveRememberedState(
+                ctx,
+                scores,
+                previousState: BehaviourState.Flee,
+                freshState: BehaviourState.Wander);
+
+            Assert.AreEqual(BehaviourState.Wander, state);
+        }
     }
 
     /// <summary>Step 2 integration: multiple organisms moving and reacting in one tick.</summary>

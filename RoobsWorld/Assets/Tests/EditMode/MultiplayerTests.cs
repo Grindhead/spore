@@ -293,6 +293,28 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void DeserializeInput_FromTaggedPacketSlice_RoundTrip()
+        {
+            var pkt = new RemoteInputPacket
+            {
+                PlayerId = 3,
+                MoveX    = 0.25f,
+                MoveY    = -1f,
+                EatInput = false,
+                Tick     = 77u
+            };
+
+            byte[] payload = NetworkSerializer.Serialize(pkt);
+            byte[] packet = NetworkTickManager.Prepend(NetworkTickManager.TagInput, payload);
+            var restored = NetworkSerializer.DeserializeInput(packet, 1, packet.Length - 1);
+
+            Assert.AreEqual(pkt.PlayerId, restored.PlayerId);
+            Assert.AreEqual(pkt.MoveX, restored.MoveX, 0.0001f);
+            Assert.AreEqual(pkt.MoveY, restored.MoveY, 0.0001f);
+            Assert.AreEqual(pkt.Tick, restored.Tick);
+        }
+
+        [Test]
         public void Serialize_VoiceChatPacket_RoundTrip()
         {
             var pkt = new VoiceChatPacket
@@ -361,6 +383,30 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(7,           r.Foods[0].FoodId);
             Assert.AreEqual(FoodType.Plant, r.Foods[0].FoodType);
             Assert.IsTrue(r.Foods[0].Exists);
+        }
+
+        [Test]
+        public void DeserializeSession_FromTaggedPacketSlice_RoundTrip()
+        {
+            var state = new SessionNetState
+            {
+                Tick = 123u,
+                Players = new[]
+                {
+                    new PlayerNetState { PlayerId = 1, PosX = 2f, PosY = 3f, IsAlive = true }
+                },
+                Organisms = Array.Empty<OrganismNetState>(),
+                Foods = Array.Empty<FoodNetState>()
+            };
+
+            byte[] payload = NetworkSerializer.Serialize(state);
+            byte[] packet = NetworkTickManager.Prepend(NetworkTickManager.TagSession, payload);
+            var restored = NetworkSerializer.DeserializeSession(packet, 1, packet.Length - 1);
+
+            Assert.AreEqual(state.Tick, restored.Tick);
+            Assert.AreEqual(1, restored.Players.Length);
+            Assert.AreEqual(1, restored.Players[0].PlayerId);
+            Assert.AreEqual(2f, restored.Players[0].PosX, 0.0001f);
         }
 
         [Test]

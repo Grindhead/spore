@@ -155,7 +155,7 @@ namespace RoobsWorld.UI
             _toastRect.sizeDelta = new Vector2(420, 80);
 
             var bg = toast.AddComponent<Image>();
-            bg.color = new Color(0.08f, 0.15f, 0.3f, 0.92f);
+            bg.color = new Color(UIStyleGuide.Colors.PanelBackgroundStrong.r, UIStyleGuide.Colors.PanelBackgroundStrong.g, UIStyleGuide.Colors.PanelBackgroundStrong.b, 0.94f);
 
             var iconObj = new GameObject("Icon");
             iconObj.transform.SetParent(toast.transform, false);
@@ -174,7 +174,7 @@ namespace RoobsWorld.UI
             headerRect.anchorMin = new Vector2(0, 0.5f);
             headerRect.anchorMax = new Vector2(1, 1);
             headerRect.offsetMin = new Vector2(70, 0);
-            headerRect.offsetMax = new Vector2(-80, -5);
+            headerRect.offsetMax = new Vector2(-165, -5);
             _headerText = headerObj.AddComponent<Text>();
             _headerText.font = font;
             _headerText.fontSize = 18;
@@ -189,7 +189,7 @@ namespace RoobsWorld.UI
             titleRect.anchorMin = new Vector2(0, 0);
             titleRect.anchorMax = new Vector2(1, 0.5f);
             titleRect.offsetMin = new Vector2(70, 5);
-            titleRect.offsetMax = new Vector2(-80, 0);
+            titleRect.offsetMax = new Vector2(-165, 0);
             _titleText = titleObj.AddComponent<Text>();
             _titleText.font = font;
             _titleText.fontSize = 16;
@@ -202,7 +202,7 @@ namespace RoobsWorld.UI
             descRect.anchorMin = new Vector2(0, 0);
             descRect.anchorMax = new Vector2(1, 0.35f);
             descRect.offsetMin = new Vector2(70, 2);
-            descRect.offsetMax = new Vector2(-80, 0);
+            descRect.offsetMax = new Vector2(-165, 0);
             _descText = descObj.AddComponent<Text>();
             _descText.font = font;
             _descText.fontSize = 12;
@@ -216,12 +216,15 @@ namespace RoobsWorld.UI
             ptsRect.anchorMax = new Vector2(1, 1);
             ptsRect.pivot = new Vector2(1, 0.5f);
             ptsRect.anchoredPosition = new Vector2(-10, 0);
-            ptsRect.sizeDelta = new Vector2(65, 0);
+            ptsRect.sizeDelta = new Vector2(150, 0);
             _pointsText = ptsObj.AddComponent<Text>();
             _pointsText.font = font;
             _pointsText.fontSize = 16;
             _pointsText.color = UIStyleGuide.Colors.Warning;
             _pointsText.alignment = TextAnchor.MiddleRight;
+            _pointsText.resizeTextForBestFit = true;
+            _pointsText.resizeTextMinSize = 10;
+            _pointsText.resizeTextMaxSize = 16;
 
             _canvas.gameObject.SetActive(false);
         }

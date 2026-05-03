@@ -52,6 +52,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>Fired when a lobby player changes ready state.</summary>
         public event Action<int, bool>   OnPlayerReadyChanged;
 
+        /// <summary>Fired when the relay moves a player into a bandwidth lobby.</summary>
+        public event Action<int, string> OnPlayerLobbyChanged;
+
         /// <summary>Fired when the host starts the shared game.</summary>
         public event Action              OnGameStarted;
 
@@ -116,6 +119,9 @@ namespace RoobsWorld.Multiplayer
 
         /// <summary>Sends { type:"ready", isReady } to the server.</summary>
         public Task SendReadyAsync(bool isReady) => SendJsonAsync(new { type = "ready", isReady });
+
+        /// <summary>Sends { type:"join_lobby", lobbyId } to the server to scope high-rate relay traffic.</summary>
+        public Task SendJoinLobbyAsync(string lobbyId) => SendJsonAsync(new { type = "join_lobby", lobbyId });
 
         /// <summary>Sends { type:"start_game" } to the server; only the host may start.</summary>
         public Task SendStartGameAsync() => SendJsonAsync(new { type = "start_game" });
@@ -292,6 +298,14 @@ namespace RoobsWorld.Multiplayer
                     int pid = ParseIntField(json, "playerId");
                     bool ready = ParseBoolField(json, "isReady");
                     _mainThreadCbs.Enqueue(() => OnPlayerReadyChanged?.Invoke(pid, ready));
+                    break;
+                }
+
+                case "player_lobby":
+                {
+                    int pid = ParseIntField(json, "playerId");
+                    string lobbyId = ParseStringField(json, "lobbyId");
+                    _mainThreadCbs.Enqueue(() => OnPlayerLobbyChanged?.Invoke(pid, lobbyId));
                     break;
                 }
 

@@ -41,6 +41,9 @@ namespace RoobsWorld.Editor
 
         static UnityMCPServer()
         {
+            if (Application.isBatchMode)
+                return;
+
             foreach (string prefix in UrlPrefixes)
             {
                 try

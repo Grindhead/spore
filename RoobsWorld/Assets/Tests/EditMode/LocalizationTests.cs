@@ -8,7 +8,7 @@ namespace RoobsWorld.Tests
         [Test]
         public void Get_ReturnsExpectedValue_ForMenuTitle()
         {
-            Assert.AreEqual("ROOB'S WORLD", Localization.Get("menu.title"));
+            Assert.AreEqual("Primeval Drift", Localization.Get("menu.title"));
         }
 
         [Test]

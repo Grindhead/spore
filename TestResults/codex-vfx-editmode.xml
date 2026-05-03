@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="13" result="Passed" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.0514559">
+  <test-suite type="TestSuite" id="1000" name="RoobsWorld" fullname="RoobsWorld" runstate="Runnable" testcasecount="943" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.051456" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="2044" name="RoobsWorld.Tests.EditMode.dll" fullname="C:/Users/craig/work/spore/RoobsWorld/Library/ScriptAssemblies/RoobsWorld.Tests.EditMode.dll" runstate="Runnable" testcasecount="943" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.040580" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="37056" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="2045" name="RoobsWorld" fullname="RoobsWorld" runstate="Runnable" testcasecount="943" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.033124" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2046" name="Tests" fullname="RoobsWorld.Tests" runstate="Runnable" testcasecount="943" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.025773" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1875" name="VFXCatalogTests" fullname="RoobsWorld.Tests.VFXCatalogTests" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.018983" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1882" name="All_Configs_Have_Positive_ParticleCount" fullname="RoobsWorld.Tests.VFXCatalogTests.All_Configs_Have_Positive_ParticleCount" methodname="All_Configs_Have_Positive_ParticleCount" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="940664611" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.008312" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1883" name="All_Configs_Have_Positive_StartSpeed" fullname="RoobsWorld.Tests.VFXCatalogTests.All_Configs_Have_Positive_StartSpeed" methodname="All_Configs_Have_Positive_StartSpeed" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="833156699" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000441" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1888" name="Catalog_Uses_Multiple_Particle_Styles" fullname="RoobsWorld.Tests.VFXCatalogTests.Catalog_Uses_Multiple_Particle_Styles" methodname="Catalog_Uses_Multiple_Particle_Styles" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="81338017" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000714" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1884" name="DamageHit_StartSize_Is_Small" fullname="RoobsWorld.Tests.VFXCatalogTests.DamageHit_StartSize_Is_Small" methodname="DamageHit_StartSize_Is_Small" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="847536012" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000123" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1887" name="DeathPoof_Has_Short_Lifetime" fullname="RoobsWorld.Tests.VFXCatalogTests.DeathPoof_Has_Short_Lifetime" methodname="DeathPoof_Has_Short_Lifetime" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="632515788" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000046" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1879" name="Explosion_Has_Particles" fullname="RoobsWorld.Tests.VFXCatalogTests.Explosion_Has_Particles" methodname="Explosion_Has_Particles" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="313890865" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000059" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1878" name="Explosion_Has_Positive_Lifetime" fullname="RoobsWorld.Tests.VFXCatalogTests.Explosion_Has_Positive_Lifetime" methodname="Explosion_Has_Positive_Lifetime" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="878560442" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000061" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1877" name="GetConfig_Returns_NonNull_For_All_Types" fullname="RoobsWorld.Tests.VFXCatalogTests.GetConfig_Returns_NonNull_For_All_Types" methodname="GetConfig_Returns_NonNull_For_All_Types" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="1930328440" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.001043" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1880" name="HealGlow_Is_Looping" fullname="RoobsWorld.Tests.VFXCatalogTests.HealGlow_Is_Looping" methodname="HealGlow_Is_Looping" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="1814164060" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000170" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1886" name="SpawnBurst_Has_Short_Lifetime" fullname="RoobsWorld.Tests.VFXCatalogTests.SpawnBurst_Has_Short_Lifetime" methodname="SpawnBurst_Has_Short_Lifetime" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="622994814" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000050" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1881" name="SpeedTrail_Is_Not_Looping" fullname="RoobsWorld.Tests.VFXCatalogTests.SpeedTrail_Is_Not_Looping" methodname="SpeedTrail_Is_Not_Looping" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="398376703" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000098" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1885" name="TerraformPulse_Has_Large_Radius" fullname="RoobsWorld.Tests.VFXCatalogTests.TerraformPulse_Has_Large_Radius" methodname="TerraformPulse_Has_Large_Radius" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="1880523148" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000044" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1876" name="VFXType_Has_Expected_Count" fullname="RoobsWorld.Tests.VFXCatalogTests.VFXType_Has_Expected_Count" methodname="VFXType_Has_Expected_Count" classname="RoobsWorld.Tests.VFXCatalogTests" runstate="Runnable" seed="817713947" result="Passed" start-time="2026-05-03 20:32:21Z" end-time="2026-05-03 20:32:21Z" duration="0.000041" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[Saving results to: C:/Users/craig/AppData/LocalLow/DefaultCompany/RoobsWorld\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

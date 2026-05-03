@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using RoobsWorld.Core;
+using RoobsWorld.UI;
 using System;
 using System.Threading.Tasks;
 
@@ -64,7 +65,7 @@ namespace RoobsWorld.Multiplayer
 
             var canvas        = GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 50;
+            canvas.sortingOrder = 500;
 
             float scale = Screen.height / 1080f;
             BuildUI(scale);
@@ -151,8 +152,8 @@ namespace RoobsWorld.Multiplayer
         [Serializable]
         private sealed class RelayConfig
         {
-            public string relayUrl;
-            public string gameToken;
+            public string relayUrl = "";
+            public string gameToken = "";
         }
 
         // ---- Public API ----
@@ -388,6 +389,12 @@ namespace RoobsWorld.Multiplayer
                 RefreshStartButton();
             };
 
+            transport.OnPlayerLobbyChanged += (playerId, lobbyId) =>
+            {
+                EnsureSession();
+                _session.ApplyPlayerLobby(playerId, lobbyId);
+            };
+
             transport.OnGameStarted += () =>
             {
                 EnsureSession();
@@ -413,6 +420,7 @@ namespace RoobsWorld.Multiplayer
                 case "rate_limited": return "Too many attempts. Try again in a moment.";
                 case "not_host": return "Only the host can start the game.";
                 case "not_ready": return Localization.Get("multiplayer.waiting_ready");
+                case "invalid_lobby": return "Could not switch multiplayer lobby.";
                 default: return "Multiplayer error: " + reason;
             }
         }
@@ -539,7 +547,7 @@ namespace RoobsWorld.Multiplayer
         {
             if (_statusText == null) return;
             _statusText.text    = msg;
-            _statusText.color   = isError ? new Color(1f, 0.3f, 0.3f) : new Color(0.5f, 1f, 0.6f);
+            _statusText.color   = isError ? UIStyleGuide.Colors.Error : UIStyleGuide.Colors.FossilGold;
             _statusText.enabled = true;
             _statusHideAt = Time.unscaledTime + 4f;
         }
@@ -551,13 +559,13 @@ namespace RoobsWorld.Multiplayer
             // Root backdrop
             var backdrop = MakePanel("Backdrop", transform,
                 Vector2.zero, Vector2.one,
-                new Color(0.05f, 0.05f, 0.12f, 0.92f));
+                new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.94f));
 
             // Title
             MakeLabel(backdrop.transform, "Title",
                 new Vector2(0.15f, 0.88f), new Vector2(0.85f, 0.96f),
-                Localization.Get("multiplayer.host_button").Replace("Host ", "") + " Multiplayer",
-                26, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold, scale);
+                "Primeval Multiplayer",
+                26, UIStyleGuide.Colors.FossilGold, TextAnchor.MiddleCenter, FontStyle.Bold, scale);
 
             // ---- Offline panel ----
             _offlinePanel = MakePanel("OfflinePanel", backdrop.transform,
@@ -566,22 +574,22 @@ namespace RoobsWorld.Multiplayer
             MakeButton(_offlinePanel.transform, "HostBtn",
                 new Vector2(0f, 0.55f), new Vector2(1f, 1f),
                 Localization.Get("multiplayer.host_button"),
-                new Color(0.15f, 0.45f, 0.7f), scale, OnHostPressed);
+                UIStyleGuide.Colors.FossilAmber, scale, OnHostPressed);
 
             MakeButton(_offlinePanel.transform, "JoinBtn",
                 new Vector2(0f, 0f), new Vector2(1f, 0.48f),
                 Localization.Get("multiplayer.join_button"),
-                new Color(0.1f, 0.35f, 0.55f), scale, OnJoinTogglePressed);
+                UIStyleGuide.Colors.TideTeal, scale, OnJoinTogglePressed);
 
             // ---- Join sub-panel ----
             _joinSubPanel = MakePanel("JoinPanel", backdrop.transform,
-                new Vector2(0.2f, 0.42f), new Vector2(0.8f, 0.54f), new Color(0.1f, 0.1f, 0.2f, 0.9f));
+                new Vector2(0.2f, 0.42f), new Vector2(0.8f, 0.54f), new Color(UIStyleGuide.Colors.PanelBackground.r, UIStyleGuide.Colors.PanelBackground.g, UIStyleGuide.Colors.PanelBackground.b, 0.94f));
             _joinSubPanel.SetActive(false);
 
             MakeLabel(_joinSubPanel.transform, "EnterLabel",
                 new Vector2(0.02f, 0.55f), new Vector2(0.45f, 0.98f),
                 Localization.Get("multiplayer.enter_code"),
-                14, new Color(0.7f, 0.85f, 1f), TextAnchor.MiddleLeft, FontStyle.Normal, scale);
+                14, UIStyleGuide.Colors.Subtitle, TextAnchor.MiddleLeft, FontStyle.Normal, scale);
 
             var fieldGo = MakePanel("CodeField", _joinSubPanel.transform,
                 new Vector2(0.48f, 0.52f), new Vector2(0.82f, 0.98f), Color.white);
@@ -592,7 +600,7 @@ namespace RoobsWorld.Multiplayer
 
             MakeButton(_joinSubPanel.transform, "ConfirmBtn",
                 new Vector2(0.84f, 0.52f), new Vector2(1f, 0.98f),
-                "Go", new Color(0.2f, 0.6f, 0.3f), scale, OnJoinConfirmPressed);
+                "Go", UIStyleGuide.Colors.FossilAmber, scale, OnJoinConfirmPressed);
 
             // ---- Session panel ----
             _sessionPanel = MakePanel("SessionPanel", backdrop.transform,
@@ -601,15 +609,15 @@ namespace RoobsWorld.Multiplayer
 
             _sessionCodeLabel = MakeLabel(_sessionPanel.transform, "CodeLabel",
                 new Vector2(0f, 0.82f), new Vector2(1f, 1f),
-                "", 18, new Color(0.6f, 0.9f, 1f), TextAnchor.MiddleCenter, FontStyle.Bold, scale);
+                "", 18, UIStyleGuide.Colors.FossilGold, TextAnchor.MiddleCenter, FontStyle.Bold, scale);
 
             _playerListText = MakeLabel(_sessionPanel.transform, "PlayerList",
                 new Vector2(0f, 0.42f), new Vector2(1f, 0.8f),
-                "", 14, Color.white, TextAnchor.UpperLeft, FontStyle.Normal, scale);
+                "", 14, UIStyleGuide.Colors.BodyText, TextAnchor.UpperLeft, FontStyle.Normal, scale);
 
             _clanStatusLabel = MakeLabel(_sessionPanel.transform, "ClanStatus",
                 new Vector2(0f, 0.32f), new Vector2(1f, 0.4f),
-                "", 14, new Color(0.85f, 1f, 0.7f), TextAnchor.MiddleLeft, FontStyle.Bold, scale);
+                "", 14, UIStyleGuide.Colors.TideTealBright, TextAnchor.MiddleLeft, FontStyle.Bold, scale);
 
             var clanNameGo = MakePanel("ClanNameField", _sessionPanel.transform,
                 new Vector2(0f, 0.2f), new Vector2(0.48f, 0.3f), Color.white);
@@ -622,29 +630,29 @@ namespace RoobsWorld.Multiplayer
             MakeButton(_sessionPanel.transform, "CreateClanBtn",
                 new Vector2(0.7f, 0.2f), new Vector2(1f, 0.3f),
                 Localization.Get("multiplayer.clan_create"),
-                new Color(0.3f, 0.38f, 0.18f), scale, OnCreateClanPressed);
+                UIStyleGuide.Colors.Amethyst, scale, OnCreateClanPressed);
 
             MakeButton(_sessionPanel.transform, "LeaveBtn",
                 new Vector2(0.08f, 0f), new Vector2(0.48f, 0.18f),
                 Localization.Get("multiplayer.leave_button"),
-                new Color(0.55f, 0.12f, 0.12f), scale, OnLeavePressed);
+                UIStyleGuide.Colors.Coral, scale, OnLeavePressed);
 
             _startButton = MakeButton(_sessionPanel.transform, "StartBtn",
                 new Vector2(0.52f, 0f), new Vector2(0.92f, 0.18f),
                 Localization.Get("multiplayer.start_game"),
-                new Color(0.15f, 0.55f, 0.28f), scale, OnStartPressed);
+                UIStyleGuide.Colors.FossilAmber, scale, OnStartPressed);
             _startButtonLabel = _startButton.GetComponentInChildren<Text>();
 
             // ---- Status bar ----
             _statusText = MakeLabel(backdrop.transform, "Status",
                 new Vector2(0.1f, 0.04f), new Vector2(0.9f, 0.11f),
-                "", 14, Color.green, TextAnchor.MiddleCenter, FontStyle.Italic, scale);
+                "", 14, UIStyleGuide.Colors.FossilGold, TextAnchor.MiddleCenter, FontStyle.Italic, scale);
             _statusText.enabled = false;
 
             // ---- Close button (X) ----
             MakeButton(backdrop.transform, "CloseBtn",
                 new Vector2(0.9f, 0.92f), new Vector2(0.98f, 0.99f),
-                "✕", new Color(0.4f, 0.1f, 0.1f), scale, Close);
+                "X", UIStyleGuide.Colors.Coral, scale, Close);
         }
 
         // ---- UI helpers ----

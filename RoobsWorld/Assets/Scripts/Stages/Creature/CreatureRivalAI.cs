@@ -63,18 +63,19 @@ namespace RoobsWorld.Stages.Creature
                 RecentLocationCapacity);
 
             bool hasPlayer = _player != null && _playerCreature != null && _playerCreature.IsAlive;
-            bool shouldFleePlayer = hasPlayer && CreatureSizeRules.ShouldFleeFromPlayer(_self, _playerCreature);
-            Vector3 desired = hasPlayer
-                ? ComputeDesiredDirection(transform.position, _player.position, _wanderTarget, _aggroRange, shouldFleePlayer)
-                : ComputeDesiredDirection(transform.position, transform.position + Vector3.forward, _wanderTarget, -1f);
+            float playerDistance = hasPlayer ? Vector3.Distance(transform.position, _player.position) : float.MaxValue;
+            CreatureRivalIntent intent = hasPlayer
+                ? ChooseIntent(playerDistance)
+                : CreatureRivalIntent.Wander;
+            Vector3 desired = ResolveDesiredDirection(intent);
 
-            if (!hasPlayer || Vector3.Distance(transform.position, _player.position) > _aggroRange)
+            if (intent == CreatureRivalIntent.ReturnToTerritory || !hasPlayer || playerDistance > _aggroRange)
             {
                 if (_wanderRetargetTimer <= 0f || Vector3.Distance(transform.position, _wanderTarget) < 1.5f)
                     PickWanderTarget();
             }
 
-            float speed = Mathf.Max(1f, _self.Stats.Speed) * Mathf.Max(0.1f, _speedMultiplier);
+            float speed = Mathf.Max(1f, _self.Stats.Speed) * Mathf.Max(0.1f, _speedMultiplier) * GetIntentSpeedMultiplier(intent);
             Vector3 planarVelocity = desired * speed;
             _rb.linearVelocity = new Vector3(planarVelocity.x, _rb.linearVelocity.y, planarVelocity.z);
 
@@ -90,11 +91,70 @@ namespace RoobsWorld.Stages.Creature
             TryAttackPlayer();
         }
 
+        private CreatureRivalIntent ChooseIntent(float playerDistance)
+        {
+            if (_playerCreature == null)
+                return CreatureRivalIntent.Wander;
+
+            bool sizeThreat = CreatureSizeRules.ShouldFleeFromPlayer(_self, _playerCreature)
+                || CreatureSizeRules.IsMeaningfullySmaller(_self, _playerCreature, 0.12f);
+
+            return CreatureAIJudgement.ChooseRivalIntent(
+                _self.Stats,
+                CreatureAIJudgement.HealthRatio(_self),
+                _playerCreature.Stats,
+                CreatureAIJudgement.HealthRatio(_playerCreature),
+                playerDistance,
+                sizeThreat,
+                transform.position,
+                _anchorPosition,
+                _player.position,
+                _wanderRadius,
+                _aggroRange,
+                recentlyDamaged: _self.WasDamagedWithin(2.5f));
+        }
+
+        private Vector3 ResolveDesiredDirection(CreatureRivalIntent intent)
+        {
+            switch (intent)
+            {
+                case CreatureRivalIntent.ReturnToTerritory:
+                    return ComputeDesiredDirection(transform.position, transform.position, _anchorPosition, -1f);
+                case CreatureRivalIntent.Flee:
+                    return ComputeDesiredDirection(transform.position, _player.position, _wanderTarget, _aggroRange, fleeFromPlayer: true);
+                case CreatureRivalIntent.KeepDistance:
+                    return CreatureAIJudgement.ComputeCautiousDirection(transform.position, _player.position, _anchorPosition);
+                case CreatureRivalIntent.Stalk:
+                    return ComputeStalkDirection(transform.position, _player.position, _wanderTarget);
+                case CreatureRivalIntent.Chase:
+                    return ComputeDesiredDirection(transform.position, _player.position, _wanderTarget, _aggroRange);
+                default:
+                    return ComputeDesiredDirection(transform.position, transform.position + Vector3.forward, _wanderTarget, -1f);
+            }
+        }
+
+        private static float GetIntentSpeedMultiplier(CreatureRivalIntent intent)
+        {
+            switch (intent)
+            {
+                case CreatureRivalIntent.Flee: return 1.18f;
+                case CreatureRivalIntent.KeepDistance: return 0.78f;
+                case CreatureRivalIntent.Stalk: return 0.56f;
+                case CreatureRivalIntent.ReturnToTerritory: return 0.82f;
+                case CreatureRivalIntent.Chase: return 1.04f;
+                default: return 0.72f;
+            }
+        }
+
         private void TryAttackPlayer()
         {
             if (_playerCreature == null || !_playerCreature.IsAlive)
                 return;
-            if (CreatureSizeRules.ShouldFleeFromPlayer(_self, _playerCreature))
+            if (!CreatureAIJudgement.ShouldCommitToAttack(
+                _self,
+                _playerCreature,
+                HorizontalDistance(transform.position, _player.position),
+                recentlyDamaged: _self.WasDamagedWithin(2.5f)))
                 return;
             if (_playerCreature.IsInvulnerable)
                 return;
@@ -146,6 +206,18 @@ namespace RoobsWorld.Stages.Creature
             Vector3 wanderDelta = wanderTarget - selfPosition;
             wanderDelta.y = 0f;
             return SafeNormalize(wanderDelta);
+        }
+
+        public static Vector3 ComputeStalkDirection(Vector3 selfPosition, Vector3 playerPosition, Vector3 wanderTarget)
+        {
+            Vector3 toPlayer = playerPosition - selfPosition;
+            toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude < 0.0001f)
+                return ComputeDesiredDirection(selfPosition, playerPosition, wanderTarget, -1f);
+
+            Vector3 tangent = new Vector3(-toPlayer.z, 0f, toPlayer.x).normalized;
+            Vector3 toward = toPlayer.normalized;
+            return SafeNormalize(toward * 0.54f + tangent * 0.46f);
         }
 
         /// <summary>

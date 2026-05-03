@@ -200,7 +200,7 @@ namespace RoobsWorld.UI
             row.transform.SetParent(parent, false);
             var rowRect = row.AddComponent<RectTransform>();
             rowRect.sizeDelta = new Vector2(0, 40);
-            row.AddComponent<Image>().color = new Color(0.1f, 0.18f, 0.32f, 0.7f);
+            row.AddComponent<Image>().color = UIStyleGuide.Colors.RowStripe;
 
             var text = row.AddComponent<Text>();
             text.font = _font;
@@ -220,8 +220,8 @@ namespace RoobsWorld.UI
 
             var bg = row.AddComponent<Image>();
             bg.color = unlocked
-                ? new Color(0.11f, 0.2f, 0.33f, 0.88f)
-                : new Color(0.09f, 0.09f, 0.14f, 0.9f);
+                ? new Color(UIStyleGuide.Colors.PanelBackground.r, UIStyleGuide.Colors.PanelBackground.g, UIStyleGuide.Colors.PanelBackground.b, 0.9f)
+                : new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.9f);
 
             // Left colour bar: gold if unlocked, dim grey if not
             var sideBar = new GameObject("SideBar");
@@ -260,7 +260,7 @@ namespace RoobsWorld.UI
             titleText.font = _font;
             titleText.text = def.Hidden && !unlocked ? "???" : def.Title;
             titleText.fontSize = UIStyleGuide.Typography.BodySmall + 1;
-            titleText.color = unlocked ? UIStyleGuide.Colors.BodyText : new Color(0.5f, 0.52f, 0.58f);
+            titleText.color = unlocked ? UIStyleGuide.Colors.BodyText : UIStyleGuide.Colors.BodyTextSubtle;
             titleText.fontStyle = unlocked ? FontStyle.Bold : FontStyle.Normal;
 
             var descObj = new GameObject("Desc");
@@ -288,7 +288,7 @@ namespace RoobsWorld.UI
             ptsText.font = _font;
             ptsText.text = def.Points + " pts";
             ptsText.fontSize = UIStyleGuide.Typography.Caption;
-            ptsText.color = unlocked ? UIStyleGuide.Colors.Warning : new Color(0.45f, 0.45f, 0.5f);
+            ptsText.color = unlocked ? UIStyleGuide.Colors.Warning : UIStyleGuide.Colors.LockedGray;
             ptsText.alignment = TextAnchor.MiddleRight;
             ptsText.fontStyle = unlocked ? FontStyle.Bold : FontStyle.Normal;
         }

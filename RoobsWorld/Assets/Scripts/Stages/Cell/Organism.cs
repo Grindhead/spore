@@ -97,12 +97,15 @@ namespace RoobsWorld.Stages.Cell
             if (buffer == null) return 0;
             buffer.Clear();
             CompactRegistry();
-            var sceneInstances = FindObjectsByType<Organism>(FindObjectsInactive.Exclude);
-            for (int i = 0; i < sceneInstances.Length; i++)
+            if (_activeInstances.Count == 0)
             {
-                var organism = sceneInstances[i];
-                if (organism != null && !_activeInstances.Contains(organism))
-                    _activeInstances.Add(organism);
+                var sceneInstances = FindObjectsByType<Organism>(FindObjectsInactive.Exclude);
+                for (int i = 0; i < sceneInstances.Length; i++)
+                {
+                    var organism = sceneInstances[i];
+                    if (organism != null && !_activeInstances.Contains(organism))
+                        _activeInstances.Add(organism);
+                }
             }
 
             for (int i = 0; i < _activeInstances.Count; i++)

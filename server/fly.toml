@@ -1,5 +1,4 @@
-# Change this to a globally unique Fly app name before first deploy.
-app = "roobs-world-relay"
+app = "spore"
 primary_region = "lhr"
 
 [build]
@@ -13,10 +12,18 @@ primary_region = "lhr"
 [http_service]
   internal_port = 7788
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
   processes = ["app"]
+
+  # These limits give Fly Proxy load information for future machine-pool
+  # autostart/autostop. Keep the app at one machine until relay sessions are
+  # backed by shared state; rooms are currently stored in memory.
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 150
+    hard_limit = 220
 
   [[http_service.checks]]
     interval = "15s"

@@ -59,10 +59,9 @@ namespace RoobsWorld.Creature.AI
                 var other = BTComponentLookup.FindComponentOnCollider<CreatureInstance>(hit);
                 if (other == null || other == ctx.Creature || !other.IsAlive) continue;
 
-                if (CreatureSizeRules.ShouldFleeFromPlayer(ctx.Creature, other)
-                    || other.Stats.Attack > ctx.Creature.Stats.Defense * 1.5f)
+                float dist = Vector3.Distance(ctx.Self.transform.position, hit.transform.position);
+                if (CreatureAIJudgement.ShouldTreatAsThreat(ctx.Creature, other, dist))
                 {
-                    float dist = Vector3.Distance(ctx.Self.transform.position, hit.transform.position);
                     if (dist < minDist)
                     {
                         minDist = dist;
@@ -100,11 +99,9 @@ namespace RoobsWorld.Creature.AI
             {
                 var other = BTComponentLookup.FindComponentOnCollider<CreatureInstance>(hit);
                 if (other == null || other == ctx.Creature || !other.IsAlive) continue;
-                if (CreatureSizeRules.ShouldFleeFromPlayer(ctx.Creature, other)) continue;
-
-                if (other.Stats.Health < ctx.Creature.Stats.Attack * 3f)
+                float dist = Vector3.Distance(ctx.Self.transform.position, hit.transform.position);
+                if (CreatureAIJudgement.ShouldTreatAsPrey(ctx.Creature, other, dist))
                 {
-                    float dist = Vector3.Distance(ctx.Self.transform.position, hit.transform.position);
                     if (dist < minDist)
                     {
                         minDist = dist;

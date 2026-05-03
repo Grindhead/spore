@@ -34,6 +34,19 @@ namespace RoobsWorld.Tests.EditMode
         }
 
         [Test]
+        public void ComputeStalkDirection_BlendsApproachWithCircling()
+        {
+            Vector3 dir = CreatureRivalAI.ComputeStalkDirection(
+                selfPosition: Vector3.zero,
+                playerPosition: new Vector3(10f, 0f, 0f),
+                wanderTarget: new Vector3(0f, 0f, 7f));
+
+            Assert.That(dir.x, Is.GreaterThan(0f));
+            Assert.That(Mathf.Abs(dir.z), Is.GreaterThan(0.1f));
+            Assert.That(dir.magnitude, Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [Test]
         public void CreateRandomPlanarOffset_StaysWithinRadius()
         {
             const float radius = 10f;

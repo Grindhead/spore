@@ -16,6 +16,7 @@ const {
     validateBase64,
     validatePlayerId,
     validateRelayTarget,
+    validateLobbyId,
     validateAuthToken,
     extractQueryParam,
 } = require('./security');
@@ -207,6 +208,53 @@ describe('validateRelayTarget', () => {
     it('rejects invalid player IDs', () => {
         assert.equal(validateRelayTarget(5), false);
         assert.equal(validateRelayTarget(-1), false);
+    });
+});
+
+// ---- validateLobbyId ----
+
+describe('validateLobbyId', () => {
+    it('accepts compact lobby ids', () => {
+        assert.ok(validateLobbyId('session'));
+        assert.ok(validateLobbyId('cell-0_1'));
+        assert.ok(validateLobbyId('A'.repeat(24)));
+    });
+
+    it('rejects unsafe or oversized lobby ids', () => {
+        assert.equal(validateLobbyId(''), false);
+        assert.equal(validateLobbyId('has space'), false);
+        assert.equal(validateLobbyId('../session'), false);
+        assert.equal(validateLobbyId('A'.repeat(25)), false);
+        assert.equal(validateLobbyId(null), false);
+    });
+});
+
+// ---- Session lobbies ----
+
+describe('Session lobbies', () => {
+    it('adds new players to the default session lobby', () => {
+        const { Session } = require('./relay-server');
+        const session = new Session('ABC123');
+        const ws = { readyState: 1, send() {} };
+
+        const playerId = session.add(ws);
+
+        assert.equal(playerId, 0);
+        assert.equal(ws._lobbyId, 'session');
+        assert.ok(session.isPlayerInLobby(playerId, 'session'));
+    });
+
+    it('moves players between bandwidth lobbies', () => {
+        const { Session } = require('./relay-server');
+        const session = new Session('ABC123');
+        const ws = { readyState: 1, send() {} };
+        const playerId = session.add(ws);
+
+        assert.ok(session.moveToLobby(playerId, 'cell-0_1'));
+
+        assert.equal(ws._lobbyId, 'cell-0_1');
+        assert.equal(session.isPlayerInLobby(playerId, 'session'), false);
+        assert.ok(session.isPlayerInLobby(playerId, 'cell-0_1'));
     });
 });
 

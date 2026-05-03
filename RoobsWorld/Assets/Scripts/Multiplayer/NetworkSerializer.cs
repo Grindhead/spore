@@ -53,7 +53,17 @@ namespace RoobsWorld.Multiplayer
             if (data == null || data.Length == 0)
                 throw new InvalidDataException("Empty SessionNetState packet.");
 
-            using var ms = new MemoryStream(data);
+            return DeserializeSession(data, 0, data.Length);
+        }
+
+        /// <summary>Deserializes a host-broadcast snapshot from a slice of a tagged packet.</summary>
+        public static SessionNetState DeserializeSession(byte[] data, int offset, int count)
+        {
+            if (data == null || data.Length == 0)
+                throw new InvalidDataException("Empty SessionNetState packet.");
+            ValidateSlice(data, offset, count, "SessionNetState packet.");
+
+            using var ms = new MemoryStream(data, offset, count, writable: false);
             using var r  = new BinaryReader(ms);
 
             var state = new SessionNetState { Tick = r.ReadUInt32() };
@@ -96,7 +106,17 @@ namespace RoobsWorld.Multiplayer
             if (data == null || data.Length == 0)
                 throw new InvalidDataException("Empty RemoteInputPacket.");
 
-            using var ms = new MemoryStream(data);
+            return DeserializeInput(data, 0, data.Length);
+        }
+
+        /// <summary>Deserializes a client input packet from a slice of a tagged packet.</summary>
+        public static RemoteInputPacket DeserializeInput(byte[] data, int offset, int count)
+        {
+            if (data == null || data.Length == 0)
+                throw new InvalidDataException("Empty RemoteInputPacket.");
+            ValidateSlice(data, offset, count, "RemoteInputPacket.");
+
+            using var ms = new MemoryStream(data, offset, count, writable: false);
             using var r  = new BinaryReader(ms);
 
             return new RemoteInputPacket
@@ -134,7 +154,17 @@ namespace RoobsWorld.Multiplayer
             if (data == null || data.Length == 0)
                 throw new InvalidDataException("Empty VoiceChatPacket.");
 
-            using var ms = new MemoryStream(data);
+            return DeserializeVoice(data, 0, data.Length);
+        }
+
+        /// <summary>Deserializes a voice chat PCM packet from a slice of a tagged packet.</summary>
+        public static VoiceChatPacket DeserializeVoice(byte[] data, int offset, int count)
+        {
+            if (data == null || data.Length == 0)
+                throw new InvalidDataException("Empty VoiceChatPacket.");
+            ValidateSlice(data, offset, count, "VoiceChatPacket.");
+
+            using var ms = new MemoryStream(data, offset, count, writable: false);
             using var r  = new BinaryReader(ms);
 
             var pkt = new VoiceChatPacket
@@ -144,12 +174,12 @@ namespace RoobsWorld.Multiplayer
                 SampleRate = r.ReadInt32()
             };
 
-            int count = r.ReadInt32();
-            if (count < 0 || count > ProximityVoiceChat.MaxSamplesPerPacket)
+            int sampleCount = r.ReadInt32();
+            if (sampleCount < 0 || sampleCount > ProximityVoiceChat.MaxSamplesPerPacket)
                 throw new InvalidDataException("Invalid VoiceChatPacket sample count.");
 
-            pkt.Pcm16 = new short[count];
-            for (int i = 0; i < count; i++)
+            pkt.Pcm16 = new short[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
                 pkt.Pcm16[i] = r.ReadInt16();
 
             return pkt;
@@ -224,5 +254,11 @@ namespace RoobsWorld.Multiplayer
             FoodType = (FoodType)r.ReadByte(),
             Exists   = r.ReadBoolean()
         };
+
+        private static void ValidateSlice(byte[] data, int offset, int count, string packetName)
+        {
+            if (offset < 0 || count <= 0 || offset > data.Length || count > data.Length - offset)
+                throw new InvalidDataException($"Invalid {packetName} slice.");
+        }
     }
 }

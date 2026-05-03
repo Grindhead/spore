@@ -162,7 +162,7 @@ namespace RoobsWorld.UI
             title.alignment = TextAnchor.MiddleCenter;
             title.fontStyle = FontStyle.Bold;
             var titleOutline = titleObj.AddComponent<Outline>();
-            titleOutline.effectColor = new Color(0f, 0.15f, 0.35f, 0.7f);
+            titleOutline.effectColor = new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.8f);
             titleOutline.effectDistance = new Vector2(1.5f, -1.5f);
             var titleShadow = titleObj.AddComponent<Shadow>();
             titleShadow.effectColor = new Color(0f, 0f, 0f, 0.3f);
@@ -280,8 +280,8 @@ namespace RoobsWorld.UI
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
-            CreateGlowRect(atmosphere.transform, "TopAura", new Vector2(0f, 0.62f), new Vector2(1f, 1f), new Color(0.12f, 0.35f, 0.58f, 0.11f));
-            CreateGlowRect(atmosphere.transform, "CentreAura", new Vector2(0.25f, 0.2f), new Vector2(0.75f, 0.8f), new Color(0.1f, 0.28f, 0.5f, 0.08f));
+            CreateGlowRect(atmosphere.transform, "TopAura", new Vector2(0f, 0.62f), new Vector2(1f, 1f), new Color(UIStyleGuide.Colors.FossilAmber.r, UIStyleGuide.Colors.FossilAmber.g, UIStyleGuide.Colors.FossilAmber.b, 0.1f));
+            CreateGlowRect(atmosphere.transform, "CentreAura", new Vector2(0.25f, 0.2f), new Vector2(0.75f, 0.8f), new Color(UIStyleGuide.Colors.TideTeal.r, UIStyleGuide.Colors.TideTeal.g, UIStyleGuide.Colors.TideTeal.b, 0.09f));
         }
 
         private static void CreateGlowRect(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Color color)

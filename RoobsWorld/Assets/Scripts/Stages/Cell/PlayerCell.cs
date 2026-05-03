@@ -599,7 +599,7 @@ namespace RoobsWorld.Stages.Cell
             UpdateVisualScale();
 
             CheckEvolution();
-            TryShowUpgradeChoiceAfterFood();
+            TryApplyUpgradeAfterFood();
         }
 
         private void ConsumePartPickup(CellPartPickup pickup)
@@ -1068,7 +1068,7 @@ namespace RoobsWorld.Stages.Cell
         public static bool HasConsumedEnoughFoodForUpgrade(int consumedFoodCount, int requiredFoodCount)
             => consumedFoodCount >= Mathf.Max(1, requiredFoodCount);
 
-        private void TryShowUpgradeChoiceAfterFood()
+        private void TryApplyUpgradeAfterFood()
         {
             if (_isEvolving || _isDead || _reproductionUIActive) return;
             if (Time.time < _upgradePromptUnlockTime) return;

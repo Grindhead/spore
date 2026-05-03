@@ -41,6 +41,9 @@ namespace RoobsWorld.Multiplayer
         public const float BroadcastInterval = 0.05f; // 20 Hz
 
         private const float RemoteInputMoveSpeed = 7.5f;
+        private const float InputSendInterval = BroadcastInterval;
+        private const float ObjectCacheRefreshInterval = 0.5f;
+        private const float InputChangeEpsilon = 0.0001f;
 
         // ---- runtime state ----
 
@@ -50,9 +53,17 @@ namespace RoobsWorld.Multiplayer
 
         private uint  _tick;
         private float _broadcastTimer;
+        private float _inputSendTimer;
+        private float _objectCacheTimer;
+        private bool _objectCachesReady;
+        private Vector2 _lastSentMove = new(float.NaN, float.NaN);
+        private bool _lastSentEatInput;
 
         private readonly Dictionary<int, RemotePlayerCell> _remotePlayers  = new();
         private readonly Dictionary<EntityId, Organism>         _orgById        = new();
+        private readonly Dictionary<EntityId, uint> _organismGenomeChecksums = new();
+        private readonly List<Organism> _organismCache = new(128);
+        private FoodItem[] _foodCache = Array.Empty<FoodItem>();
         private ProximityVoiceChat _voiceChat;
 
         // ---- activation ----
@@ -83,6 +94,9 @@ namespace RoobsWorld.Multiplayer
                 _transport,
                 _localPlayer != null ? _localPlayer.transform : null,
                 GetRemotePlayerTransform);
+
+            if (_transport is WebSocketNetworkTransport wsTransport)
+                _ = wsTransport.SendJoinLobbyAsync("cell");
         }
 
         /// <summary>Stops the tick loop and destroys all remote player ghosts.</summary>
@@ -95,7 +109,16 @@ namespace RoobsWorld.Multiplayer
                 if (cell != null) Destroy(cell.gameObject);
             _remotePlayers.Clear();
             _orgById.Clear();
+            _organismGenomeChecksums.Clear();
+            _organismCache.Clear();
+            _foodCache = Array.Empty<FoodItem>();
+            _objectCachesReady = false;
+            _lastSentMove = new Vector2(float.NaN, float.NaN);
+            _lastSentEatInput = false;
             _voiceChat?.Deactivate();
+
+            if (_transport is WebSocketNetworkTransport wsTransport)
+                _ = wsTransport.SendJoinLobbyAsync(MultiplayerSessionManager.DefaultLobbyId);
 
             _session   = null;
             _transport = null;
@@ -125,8 +148,7 @@ namespace RoobsWorld.Multiplayer
             }
             else if (_session.State == SessionState.Connected)
             {
-                // Clients send their local input every frame
-                SendLocalInput();
+                SendLocalInput(Time.unscaledDeltaTime);
             }
         }
 
@@ -178,29 +200,29 @@ namespace RoobsWorld.Multiplayer
             }
 
             // ---- organisms ----
-            var organisms = FindObjectsByType<Organism>();
-            var orgStates = new OrganismNetState[organisms.Length];
-            for (int i = 0; i < organisms.Length; i++)
+            RefreshObjectCachesIfNeeded();
+            var orgStates = new OrganismNetState[_organismCache.Count];
+            for (int i = 0; i < _organismCache.Count; i++)
             {
-                var o   = organisms[i];
+                var o   = _organismCache[i];
                 var pos = o.transform.position;
+                var id  = o.gameObject.GetEntityId();
                 orgStates[i] = new OrganismNetState
                 {
-                    OrgId          = o.gameObject.GetEntityId(),
+                    OrgId          = id,
                     PosX           = pos.x,
                     PosY           = pos.z,
-                    GenomeChecksum = GenomeChecksum.Compute(o.Genome),
+                    GenomeChecksum = GetOrganismGenomeChecksum(id, o.Genome),
                     SpeciesId      = o.SpeciesId,
                     IsAlive        = !o.IsDead
                 };
             }
 
             // ---- food ----
-            var foodItems = FindObjectsByType<FoodItem>();
-            var foodStates = new FoodNetState[foodItems.Length];
-            for (int i = 0; i < foodItems.Length; i++)
+            var foodStates = new FoodNetState[_foodCache.Length];
+            for (int i = 0; i < _foodCache.Length; i++)
             {
-                var f   = foodItems[i];
+                var f   = _foodCache[i];
                 var pos = f.transform.position;
                 foodStates[i] = new FoodNetState
                 {
@@ -223,27 +245,29 @@ namespace RoobsWorld.Multiplayer
 
         // ---- client: send input ----
 
-        private void SendLocalInput()
+        private void SendLocalInput(float deltaTime)
         {
             if (_localPlayer == null) return;
 
-            Vector2 move = Vector2.zero;
-            var kb = Keyboard.current;
-            if (kb != null)
-            {
-                if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    move.y += 1f;
-                if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  move.y -= 1f;
-                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  move.x -= 1f;
-                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) move.x += 1f;
-                if (move.sqrMagnitude > 1f) move.Normalize();
-            }
+            Vector2 move = ReadMoveInput();
+            bool eatInput = false;
+            _inputSendTimer += deltaTime;
+
+            bool changed = (move - _lastSentMove).sqrMagnitude > InputChangeEpsilon
+                || eatInput != _lastSentEatInput;
+            if (!changed && _inputSendTimer < InputSendInterval)
+                return;
+
+            _inputSendTimer = 0f;
+            _lastSentMove = move;
+            _lastSentEatInput = eatInput;
 
             var pkt = new RemoteInputPacket
             {
                 PlayerId = _session.LocalPlayerId,
                 MoveX    = move.x,
                 MoveY    = move.y,
-                EatInput = false,
+                EatInput = eatInput,
                 Tick     = _tick
             };
 
@@ -261,13 +285,14 @@ namespace RoobsWorld.Multiplayer
                 return;
             }
 
-            byte tag     = raw[0];
-            var  payload = StripTag(raw);
+            byte tag = raw[0];
+            int payloadOffset = 1;
+            int payloadCount = raw.Length - payloadOffset;
 
             if (tag == TagSession)
             {
                 SessionNetState state;
-                try { state = NetworkSerializer.DeserializeSession(payload); }
+                try { state = NetworkSerializer.DeserializeSession(raw, payloadOffset, payloadCount); }
                 catch (Exception ex)
                 {
                     Debug.LogError($"[NetworkTick] Invalid SessionNetState packet from player {fromId}: {ex.Message}");
@@ -279,7 +304,7 @@ namespace RoobsWorld.Multiplayer
             else if (tag == TagVoice)
             {
                 VoiceChatPacket voice;
-                try { voice = NetworkSerializer.DeserializeVoice(payload); }
+                try { voice = NetworkSerializer.DeserializeVoice(raw, payloadOffset, payloadCount); }
                 catch (Exception ex)
                 {
                     Debug.LogError($"[NetworkTick] Invalid VoiceChatPacket from player {fromId}: {ex.Message}");
@@ -292,7 +317,7 @@ namespace RoobsWorld.Multiplayer
             {
                 if (!_session.IsHost) return;
                 RemoteInputPacket input;
-                try { input = NetworkSerializer.DeserializeInput(payload); }
+                try { input = NetworkSerializer.DeserializeInput(raw, payloadOffset, payloadCount); }
                 catch (Exception ex)
                 {
                     Debug.LogError($"[NetworkTick] Invalid RemoteInputPacket from player {fromId}: {ex.Message}");
@@ -369,9 +394,66 @@ namespace RoobsWorld.Multiplayer
         private void RebuildOrgMap()
         {
             _orgById.Clear();
-            var all = FindObjectsByType<Organism>();
-            foreach (var o in all)
+            RefreshObjectCaches(force: true);
+            foreach (var o in _organismCache)
                 _orgById[o.gameObject.GetEntityId()] = o;
+        }
+
+        private static Vector2 ReadMoveInput()
+        {
+            Vector2 move = Vector2.zero;
+            if (InputManager.HasInstance)
+                move = InputManager.Instance.MoveInput;
+
+            if (move.sqrMagnitude <= 0.0001f)
+            {
+                var kb = Keyboard.current;
+                if (kb != null)
+                {
+                    if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    move.y += 1f;
+                    if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  move.y -= 1f;
+                    if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  move.x -= 1f;
+                    if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) move.x += 1f;
+                }
+            }
+
+            if (move.sqrMagnitude > 1f) move.Normalize();
+            return move;
+        }
+
+        private void RefreshObjectCachesIfNeeded()
+        {
+            _objectCacheTimer += BroadcastInterval;
+            if (!_objectCachesReady || _objectCacheTimer >= ObjectCacheRefreshInterval)
+                RefreshObjectCaches(force: false);
+        }
+
+        private void RefreshObjectCaches(bool force)
+        {
+            if (!force && _objectCachesReady && _objectCacheTimer < ObjectCacheRefreshInterval)
+                return;
+
+            _objectCacheTimer = 0f;
+            _objectCachesReady = true;
+            Organism.CopyActiveInstances(_organismCache);
+            _foodCache = FindObjectsByType<FoodItem>(FindObjectsInactive.Exclude);
+            _organismGenomeChecksums.Clear();
+
+            for (int i = _organismCache.Count - 1; i >= 0; i--)
+            {
+                if (_organismCache[i] == null)
+                    _organismCache.RemoveAt(i);
+            }
+        }
+
+        private uint GetOrganismGenomeChecksum(EntityId id, Genome genome)
+        {
+            if (_organismGenomeChecksums.TryGetValue(id, out uint checksum))
+                return checksum;
+
+            checksum = GenomeChecksum.Compute(genome);
+            _organismGenomeChecksums[id] = checksum;
+            return checksum;
         }
 
         // ---- event handlers ----
