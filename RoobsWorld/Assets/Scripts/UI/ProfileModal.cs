@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using RoobsWorld.Core;
 
@@ -96,7 +97,7 @@ namespace RoobsWorld.UI
             _panel.pivot      = new Vector2(0.5f, 0.5f);
             _panel.sizeDelta  = new Vector2(PanelW, PanelH);
             _panel.anchoredPosition = Vector2.zero;
-            panelGo.AddComponent<Image>().color = new Color(UIStyleGuide.Colors.ScreenBackground.r, UIStyleGuide.Colors.ScreenBackground.g, UIStyleGuide.Colors.ScreenBackground.b, 0.99f);
+            UIStyleGuide.ApplyPanelChrome(panelGo, strong: true, alpha: 0.99f);
             // Block clicks from reaching backdrop
             panelGo.AddComponent<Button>().onClick.AddListener(() => { });
 
@@ -135,6 +136,7 @@ namespace RoobsWorld.UI
             titleText.color     = UIStyleGuide.Colors.AccentStrong;
             titleText.alignment = TextAnchor.MiddleLeft;
             titleText.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(titleGo, 0.45f);
 
             // Close button
             var closeBtnGo = new GameObject("CloseBtn");
@@ -146,7 +148,7 @@ namespace RoobsWorld.UI
             cbRect.anchoredPosition = new Vector2(-10, 0);
             cbRect.sizeDelta = new Vector2(36, 36);
             var closeBtnBg = closeBtnGo.AddComponent<Image>();
-            closeBtnBg.color = Color.white;
+            closeBtnBg.color = UIStyleGuide.Colors.TextOnCool;
             var closeBtn = closeBtnGo.AddComponent<Button>();
             closeBtn.targetGraphic = closeBtnBg;
             UIStyleGuide.ApplyButtonStyle(closeBtn, UIButtonVariant.Danger);
@@ -159,7 +161,7 @@ namespace RoobsWorld.UI
             var clText = closeLabelGo.AddComponent<Text>();
             clText.font = _font; clText.text = "X";
             clText.fontSize = 20; clText.alignment = TextAnchor.MiddleCenter;
-            clText.color = UIStyleGuide.Colors.BodyText;
+            UIStyleGuide.ApplyButtonLabel(clText, UIButtonVariant.Danger, bold: true);
 
             // Drag handler — dragging the header moves the whole panel
             var drag = headerGo.AddComponent<ModalDragHandler>();
@@ -179,7 +181,7 @@ namespace RoobsWorld.UI
             rect.pivot     = new Vector2(0.5f, 1f);
             rect.anchoredPosition = new Vector2(0, -HeaderH);
             rect.sizeDelta = new Vector2(0, StatsH);
-            statsGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
+            statsGo.AddComponent<Image>().color = Color.clear;
 
             // Section label
             var sectionLabel = new GameObject("SectionLabel");
@@ -236,6 +238,7 @@ namespace RoobsWorld.UI
             rect.anchoredPosition = new Vector2(xOffset, yOffset);
             rect.sizeDelta = new Vector2(width, 38);
             row.AddComponent<Image>().color = UIStyleGuide.Colors.RowStripe;
+            UIStyleGuide.ApplyOutline(row, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.18f), new Vector2(1f, -1f));
 
             // Label (left)
             var labelGo = new GameObject("Label");
@@ -327,7 +330,7 @@ namespace RoobsWorld.UI
             var vpRect = viewport.AddComponent<RectTransform>();
             vpRect.anchorMin = Vector2.zero; vpRect.anchorMax = Vector2.one;
             vpRect.offsetMin = Vector2.zero;  vpRect.offsetMax = Vector2.zero;
-            viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.01f);
+            viewport.AddComponent<Image>().color = UIStyleGuide.Colors.TransparentHitArea;
             viewport.AddComponent<Mask>().showMaskGraphic = false;
 
             var content = new GameObject("Content");
@@ -395,8 +398,8 @@ namespace RoobsWorld.UI
             var rect = row.AddComponent<RectTransform>();
             rect.sizeDelta = new Vector2(0, AchievRowH);
             row.AddComponent<Image>().color = unlocked
-                ? new Color(UIStyleGuide.Colors.PanelBackground.r, UIStyleGuide.Colors.PanelBackground.g, UIStyleGuide.Colors.PanelBackground.b, 0.86f)
-                : new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.86f);
+                ? UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBackground, 0.86f)
+                : UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.86f);
 
             // Gold/grey side bar
             var bar = new GameObject("Bar");
@@ -463,7 +466,7 @@ namespace RoobsWorld.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             {
                 OnClosed?.Invoke();
                 Hide();

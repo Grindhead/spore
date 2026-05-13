@@ -82,23 +82,28 @@ namespace RoobsWorld.Multiplayer
 
     /// <summary>
     /// Manages session lifecycle: host, join, drop-in/drop-out, host migration.
-    /// Platform-agnostic — inject a real <see cref="INetworkTransport"/> when NGO/relay is available.
+    /// Platform-agnostic: inject a real <see cref="INetworkTransport"/> when NGO/relay is available.
     ///
     /// Session model:
-    ///   • Max 4 players, invite-by-code (6-char alphanumeric).
-    ///   • Player 0 is always the initial host.
-    ///   • On host disconnect, player index 1 is promoted to host (host migration).
-    ///   • Drop-in/drop-out: players may join or leave any time within max capacity.
+    ///   - Unlimited players, invite-by-code (6-char alphanumeric).
+    ///   - Player 0 is always the initial host.
+    ///   - On host disconnect, the lowest remaining player id is promoted to host.
+    ///   - Drop-in/drop-out: players may join or leave any time.
     /// </summary>
     public sealed class MultiplayerSessionManager
     {
-        public const int MaxPlayers       = 4;
+        public const int MaxPlayers       = int.MaxValue;
+        public const bool HasPlayerLimit  = false;
         public const int SessionCodeLength = 6;
         public const string DefaultLobbyId = "session";
         public const int ClanNameMinLength = 3;
         public const int ClanNameMaxLength = 24;
         public const int ClanTagMinLength  = 2;
         public const int ClanTagMaxLength  = 5;
+        public const int PartyNameMinLength = ClanNameMinLength;
+        public const int PartyNameMaxLength = ClanNameMaxLength;
+        public const int PartyTagMinLength  = ClanTagMinLength;
+        public const int PartyTagMaxLength  = ClanTagMaxLength;
 
         private static readonly string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -126,6 +131,8 @@ namespace RoobsWorld.Multiplayer
         public int          LocalClanId   => _localClanId;
         public string       LocalLobbyId  => _localLobbyId;
         public MultiplayerClan LocalClan  => _clans.Find(c => c.ClanId == _localClanId);
+        public int          LocalPartyId  => _localClanId;
+        public MultiplayerClan LocalParty => LocalClan;
         public bool         CanStartGame  => State != SessionState.Offline
             && IsHost
             && AllPlayersReady();
@@ -135,6 +142,7 @@ namespace RoobsWorld.Multiplayer
 
         public IReadOnlyList<RemotePlayer> RemotePlayers => _remotePlayers;
         public IReadOnlyList<MultiplayerClan> Clans => _clans;
+        public IReadOnlyList<MultiplayerClan> Parties => _clans;
 
         // ---- events ----
 
@@ -149,6 +157,7 @@ namespace RoobsWorld.Multiplayer
 
         /// <summary>A clan has been created in this session.</summary>
         public event Action<MultiplayerClan> OnClanCreated;
+        public event Action<MultiplayerClan> OnPartyCreated;
 
         /// <summary>A player changed ready state in the lobby.</summary>
         public event Action<int, bool> OnPlayerReadyChanged;
@@ -224,7 +233,7 @@ namespace RoobsWorld.Multiplayer
         public void ApplyJoinedSession(string code, int localPlayerId, int hostPlayerId)
         {
             if (!IsValidAssignedSession(code, localPlayerId)) return;
-            if (hostPlayerId < 0 || hostPlayerId >= MaxPlayers) return;
+            if (hostPlayerId < 0) return;
 
             _remotePlayers.Clear();
             _clans.Clear();
@@ -253,8 +262,7 @@ namespace RoobsWorld.Multiplayer
         public bool JoinSession(string code, int localPlayerId)
         {
             if (string.IsNullOrEmpty(code) || code.Length != SessionCodeLength) return false;
-            if (localPlayerId < 0 || localPlayerId >= MaxPlayers) return false;
-            if (PlayerCount >= MaxPlayers) return false;
+            if (localPlayerId < 0) return false;
 
             _sessionCode   = code.ToUpperInvariant();
             _localPlayerId = localPlayerId;
@@ -345,10 +353,26 @@ namespace RoobsWorld.Multiplayer
             return TryApplyClanCreated(_nextLocalClanId++, clanName, clanTag, _localPlayerId, createdByLocalPlayer: true);
         }
 
+        /// <summary>
+        /// Creates a party for the local player. This is an alias of <see cref="CreateClan"/>.
+        /// </summary>
+        public bool CreateParty(string partyName, string partyTag)
+        {
+            return CreateClan(partyName, partyTag);
+        }
+
         /// <summary>Applies a clan created by the relay or another client.</summary>
         public bool ApplyClanCreated(int clanId, string clanName, string clanTag, int leaderPlayerId)
         {
             return TryApplyClanCreated(clanId, clanName, clanTag, leaderPlayerId, leaderPlayerId == _localPlayerId);
+        }
+
+        /// <summary>
+        /// Applies a party created by the relay or another client. This is an alias of <see cref="ApplyClanCreated"/>.
+        /// </summary>
+        public bool ApplyPartyCreated(int partyId, string partyName, string partyTag, int leaderPlayerId)
+        {
+            return ApplyClanCreated(partyId, partyName, partyTag, leaderPlayerId);
         }
 
         /// <summary>
@@ -358,10 +382,9 @@ namespace RoobsWorld.Multiplayer
         public bool AddRemotePlayer(int playerId, string displayName)
         {
             if (State != SessionState.Hosting && State != SessionState.Connected) return false;
-            if (playerId < 0 || playerId >= MaxPlayers) return false;
+            if (playerId < 0) return false;
             if (playerId == _localPlayerId) return false;
             if (_remotePlayers.Exists(p => p.PlayerId == playerId)) return false;
-            if (PlayerCount >= MaxPlayers) return false;
 
             var p = new RemotePlayer(playerId, displayName);
             _remotePlayers.Add(p);
@@ -425,7 +448,7 @@ namespace RoobsWorld.Multiplayer
         /// <summary>Updates host authority after the relay elects a new host.</summary>
         public void ApplyHostMigration(int newHostPlayerId)
         {
-            if (newHostPlayerId < 0 || newHostPlayerId >= MaxPlayers) return;
+            if (newHostPlayerId < 0) return;
             _hostPlayerId = newHostPlayerId;
             State = _localPlayerId == _hostPlayerId ? SessionState.Hosting : SessionState.Connected;
             OnHostMigrated?.Invoke(_hostPlayerId);
@@ -465,6 +488,7 @@ namespace RoobsWorld.Multiplayer
                 _localClanId = clanId;
 
             OnClanCreated?.Invoke(clan);
+            OnPartyCreated?.Invoke(clan);
             EventBus.Publish(new MultiplayerClanCreatedEvent
             {
                 ClanId = clan.ClanId,
@@ -552,8 +576,7 @@ namespace RoobsWorld.Multiplayer
         {
             return !string.IsNullOrEmpty(code)
                 && code.Length == SessionCodeLength
-                && localPlayerId >= 0
-                && localPlayerId < MaxPlayers;
+                && localPlayerId >= 0;
         }
 
         private static string GenerateCode()

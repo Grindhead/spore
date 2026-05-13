@@ -1,6 +1,8 @@
 using NUnit.Framework;
 using RoobsWorld.Core;
 using RoobsWorld.Creature;
+using RoobsWorld.Stages.Cell;
+using RoobsWorld.Stages.Creature;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -102,6 +104,28 @@ namespace RoobsWorld.Tests.EditMode
 
             Assert.IsNull(loaded);
             Assert.IsTrue(GameManager.Instance.CurrentSave.CreatureDNAJson.Contains("\"AttachBone\": 99"));
+        }
+
+        [Test]
+        public void CellToCreatureBridge_CarriesCombatAndMobilityTraitsIntoVisibleParts()
+        {
+            var genome = Genome.Default();
+            genome.Speed = 8f;
+            genome.Flagella = 6f;
+            genome.Attack = 7f;
+            genome.Spikes = 5f;
+            genome.Traits = GeneticTraits.Toxic;
+            var loadout = new CellPartLoadout();
+            loadout.TryUnlock(CellPartType.Jet);
+            loadout.TryUnlock(CellPartType.Spike);
+
+            var dna = CellToCreatureDnaBridge.CreateFromCell(genome, loadout);
+
+            Assert.That(dna.Parts, Has.Some.Matches<PartPlacement>(p => p.PartId == "tail_basic"));
+            Assert.That(dna.Parts, Has.Some.Matches<PartPlacement>(p => p.PartId == "wing_basic"));
+            Assert.That(dna.Parts, Has.Some.Matches<PartPlacement>(p => p.PartId == "spike_basic"));
+            Assert.AreEqual(genome.Color, dna.Colors.PrimaryColor);
+            Assert.AreEqual(new Color(0.72f, 0.2f, 0.88f), dna.Colors.AccentColor);
         }
     }
 }

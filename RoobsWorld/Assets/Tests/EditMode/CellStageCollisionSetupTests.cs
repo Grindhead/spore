@@ -113,6 +113,76 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void SetCurrentGoal_ToxinFood_SeedsToxinFoodOpportunity()
+        {
+            var stageGo = new GameObject("CellStage_GoalSupport_Toxin_Test");
+            try
+            {
+                var stage = stageGo.AddComponent<CellStage>();
+                var foodManager = stageGo.AddComponent<FoodManager>();
+                typeof(CellStage)
+                    .GetField("_foodManager", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.SetValue(stage, foodManager);
+
+                var setCurrentGoal = typeof(CellStage).GetMethod(
+                    "SetCurrentGoal",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.NotNull(setCurrentGoal, "Expected CellStage.SetCurrentGoal to exist.");
+                setCurrentGoal.Invoke(stage, new object[] { CellGoal.CreateEatFoodGoal(FoodType.Toxin, 2) });
+
+                Assert.GreaterOrEqual(
+                    foodManager.FoodCount,
+                    5,
+                    "Starting a toxin-eating goal should seed enough toxin food to make the goal immediately playable.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(stageGo);
+            }
+        }
+
+        [Test]
+        public void SetCurrentGoal_BloomEating_StartsNutrientBloomOpportunity()
+        {
+            var stageGo = new GameObject("CellStage_GoalSupport_Bloom_Test");
+            var previousRandomState = Random.state;
+            try
+            {
+                Random.InitState(104);
+                var stage = stageGo.AddComponent<CellStage>();
+                var foodManager = stageGo.AddComponent<FoodManager>();
+                var eventManager = stageGo.AddComponent<CellEnvironmentEventManager>();
+                eventManager.Activate(foodManager, arenaRadius: 45f);
+
+                typeof(CellStage)
+                    .GetField("_foodManager", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.SetValue(stage, foodManager);
+                typeof(CellStage)
+                    .GetField("_envEventManager", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.SetValue(stage, eventManager);
+
+                var setCurrentGoal = typeof(CellStage).GetMethod(
+                    "SetCurrentGoal",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.NotNull(setCurrentGoal, "Expected CellStage.SetCurrentGoal to exist.");
+                setCurrentGoal.Invoke(stage, new object[] { CellGoal.CreateEatDuringBloomGoal(3) });
+
+                Assert.AreEqual(RoobsWorld.Core.CellEnvironmentEventType.NutrientBloom, eventManager.ActiveEvent);
+                Assert.Greater(foodManager.FoodCount, 0);
+            }
+            finally
+            {
+                Random.state = previousRandomState;
+                var eventManager = stageGo.GetComponent<CellEnvironmentEventManager>();
+                if (eventManager != null)
+                    eventManager.Deactivate();
+                Object.DestroyImmediate(stageGo);
+            }
+        }
+
+        [Test]
         public void CellAI_Attach_EnsuresEnabledTriggerColliders()
         {
             var npcGo = ModelFactory.CreateCell(Vector3.zero, Color.white, 0.3f);

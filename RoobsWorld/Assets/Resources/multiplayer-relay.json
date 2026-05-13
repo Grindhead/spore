@@ -1,4 +1,43 @@
 {
-  "relayUrl": "wss://spore.fly.dev",
-  "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+  "officialServers": [
+    {
+      "name": "Official Europe",
+      "region": "London",
+      "relayUrl": "wss://spore.fly.dev",
+      "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+    },
+    {
+      "name": "Official US East",
+      "region": "Virginia",
+      "relayUrl": "wss://spore-us.fly.dev",
+      "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+    },
+    {
+      "name": "Official Asia Pacific",
+      "region": "Tokyo / Singapore",
+      "relayUrls": [
+        "wss://spore-ap.fly.dev",
+        "wss://spore-sg.fly.dev"
+      ],
+      "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+    },
+    {
+      "name": "Official South America",
+      "region": "Sao Paulo",
+      "relayUrl": "wss://spore-sa.fly.dev",
+      "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+    },
+    {
+      "name": "Official Oceania",
+      "region": "Sydney",
+      "relayUrl": "wss://spore-au.fly.dev",
+      "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+    },
+    {
+      "name": "Official Africa",
+      "region": "Johannesburg",
+      "relayUrl": "wss://spore-af.fly.dev",
+      "gameToken": "K3EFNvedZ46qtRTDxB7aIxCG87RLyYalU+i0ZZrfTbQ="
+    }
+  ]
 }

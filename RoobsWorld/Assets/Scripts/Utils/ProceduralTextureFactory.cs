@@ -72,6 +72,61 @@ namespace RoobsWorld.Utils
             return tex;
         }
 
+        private static void AddAmbientCellOrganismSilhouettes(Color[] pixels, int size)
+        {
+            for (int i = 0; i < 18; i++)
+            {
+                float seed = i * 37.17f + 11.3f;
+                float cx = Mathf.Lerp(size * 0.08f, size * 0.92f, Noise2D(seed, 2.1f));
+                float cy = Mathf.Lerp(size * 0.08f, size * 0.92f, Noise2D(seed, 5.7f));
+                float rx = Mathf.Lerp(size * 0.012f, size * 0.035f, Noise2D(seed, 9.2f));
+                float ry = rx * Mathf.Lerp(0.55f, 1.45f, Noise2D(seed, 12.6f));
+                float angle = Noise2D(seed, 18.4f) * Mathf.PI * 2f;
+                Color tint = Color.Lerp(
+                    new Color(0.7f, 1f, 0.86f, 0.22f),
+                    new Color(0.62f, 0.83f, 1f, 0.18f),
+                    Noise2D(seed, 23.8f));
+
+                PaintSoftEllipse(pixels, size, cx, cy, rx, ry, angle, tint);
+
+                if (Noise2D(seed, 29.1f) > 0.42f)
+                {
+                    float tailX = cx - Mathf.Cos(angle) * rx * 1.15f;
+                    float tailY = cy - Mathf.Sin(angle) * rx * 1.15f;
+                    PaintSoftEllipse(pixels, size, tailX, tailY, rx * 0.42f, ry * 0.25f, angle + 0.7f, tint * 0.82f);
+                }
+            }
+        }
+
+        private static void PaintSoftEllipse(
+            Color[] pixels, int size, float cx, float cy, float rx, float ry, float angle, Color tint)
+        {
+            float cos = Mathf.Cos(angle);
+            float sin = Mathf.Sin(angle);
+            int minX = Mathf.Max(0, Mathf.FloorToInt(cx - rx * 2f));
+            int maxX = Mathf.Min(size - 1, Mathf.CeilToInt(cx + rx * 2f));
+            int minY = Mathf.Max(0, Mathf.FloorToInt(cy - ry * 2f));
+            int maxY = Mathf.Min(size - 1, Mathf.CeilToInt(cy + ry * 2f));
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    float dx = x - cx;
+                    float dy = y - cy;
+                    float lx = (dx * cos + dy * sin) / Mathf.Max(0.001f, rx);
+                    float ly = (-dx * sin + dy * cos) / Mathf.Max(0.001f, ry);
+                    float d = lx * lx + ly * ly;
+                    if (d > 1f) continue;
+
+                    float alpha = tint.a * Mathf.Pow(1f - d, 1.7f);
+                    int idx = y * size + x;
+                    pixels[idx] = Color.Lerp(pixels[idx], Opaque(tint), alpha);
+                    pixels[idx].a = Mathf.Clamp01(pixels[idx].a + alpha * 0.35f);
+                }
+            }
+        }
+
         public static Texture2D CreateWaterTexture(int size = 128)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = "WaterTexture" };
@@ -134,9 +189,12 @@ namespace RoobsWorld.Utils
                 }
             }
 
+            AddAmbientCellOrganismSilhouettes(pixels, size);
+
             tex.SetPixels(pixels);
             tex.Apply();
-            tex.wrapMode = TextureWrapMode.Repeat;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
             return tex;
         }
 

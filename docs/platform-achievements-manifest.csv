@@ -1,0 +1,15 @@
+local_id,title,description,points,hidden,progress_type,steam_api_name,playstation_trophy_id,xbox_achievement_id
+cell_first_eat,First Bite,Eat your first food particle.,10,false,one-shot,CELL_FIRST_EAT,cell_first_eat,cell_first_eat
+cell_first_goal,On the Hunt,Complete your first micro goal.,15,false,one-shot,CELL_FIRST_GOAL,cell_first_goal,cell_first_goal
+cell_grow_large,Big Fish,Reach maximum cell size.,25,false,one-shot,CELL_GROW_LARGE,cell_grow_large,cell_grow_large
+cell_survive_predator,Lucky Escape,Survive a predator cell encounter.,15,false,one-shot,CELL_SURVIVE_PREDATOR,cell_survive_predator,cell_survive_predator
+cell_all_parts,Fully Equipped,Collect all cell part pickups.,30,false,one-shot,CELL_ALL_PARTS,cell_all_parts,cell_all_parts
+cell_evolve,Emergence,Complete the Cell Stage and evolve.,50,false,one-shot,CELL_EVOLVE,cell_evolve,cell_evolve
+cell_first_speciation,Genesis,Create a new species through evolution.,20,false,one-shot,CELL_FIRST_SPECIATION,cell_first_speciation,cell_first_speciation
+cell_first_extinction,The End of a Line,Experience your first species extinction.,15,false,one-shot,CELL_FIRST_EXTINCTION,cell_first_extinction,cell_first_extinction
+cell_10_species,Evolutionary Arms Race,Have 10 species in the ecosystem simultaneously.,40,false,one-shot,CELL_10_SPECIES,cell_10_species,cell_10_species
+cell_survived_leviathan,Small and Mighty,Escape a Leviathan by swimming far enough away.,30,false,one-shot,CELL_SURVIVED_LEVIATHAN,cell_survived_leviathan,cell_survived_leviathan
+cell_defeated_leviathan,Leviathan Slayer,Destroy a Leviathan.,75,true,one-shot,CELL_DEFEATED_LEVIATHAN,cell_defeated_leviathan,cell_defeated_leviathan
+creature_first_kill,First Hunt,Defeat your first rival creature.,20,false,one-shot,CREATURE_FIRST_KILL,creature_first_kill,creature_first_kill
+creature_pack_breaker,Pack Breaker,Complete the Creature-stage rival encounter objective.,45,false,one-shot,CREATURE_PACK_BREAKER,creature_pack_breaker,creature_pack_breaker
+creature_apex_streak,Apex Streak,Reach a 5-kill streak in Creature stage.,35,false,one-shot,CREATURE_APEX_STREAK,creature_apex_streak,creature_apex_streak

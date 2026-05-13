@@ -46,5 +46,64 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(center.z, clamped.z, 0.001f);
             Assert.AreEqual(0f, clamped.y, 0.001f);
         }
+
+        [Test]
+        public void ComputeGoalPartPickupSpawnPosition_PlacesPickupAheadInsideArena()
+        {
+            Vector3 playerPosition = Vector3.zero;
+            Vector3 playerForward = Vector3.forward;
+
+            Vector3 spawn = CellStage.ComputeGoalPartPickupSpawnPosition(
+                playerPosition,
+                playerForward,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f);
+
+            Vector3 toSpawn = spawn - playerPosition;
+            Assert.Greater(Vector3.Dot(toSpawn.normalized, playerForward), 0.75f);
+            Assert.Greater(toSpawn.magnitude, 5f);
+            Assert.LessOrEqual(spawn.magnitude, 50f * 0.95f + 0.001f);
+            Assert.AreEqual(0f, spawn.y, 0.001f);
+        }
+
+        [Test]
+        public void ComputeGoalFoodClusterPosition_PlacesStarterFoodAheadInSmallSpread()
+        {
+            Vector3 playerPosition = Vector3.zero;
+            Vector3 playerForward = Vector3.forward;
+
+            Vector3 left = CellStage.ComputeGoalFoodClusterPosition(
+                playerPosition,
+                playerForward,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f,
+                foodIndex: 0);
+            Vector3 middle = CellStage.ComputeGoalFoodClusterPosition(
+                playerPosition,
+                playerForward,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f,
+                foodIndex: 1);
+            Vector3 right = CellStage.ComputeGoalFoodClusterPosition(
+                playerPosition,
+                playerForward,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f,
+                foodIndex: 2);
+
+            Assert.Greater(Vector3.Dot((middle - playerPosition).normalized, playerForward), 0.95f);
+            Assert.AreEqual(middle.z, left.z, 0.001f);
+            Assert.AreEqual(middle.z, right.z, 0.001f);
+            Assert.Less(left.x, middle.x);
+            Assert.Greater(right.x, middle.x);
+            Assert.LessOrEqual(right.magnitude, 50f * 0.95f + 0.001f);
+        }
+
+        [Test]
+        public void GetGoalFoodNutrition_UsesHelpfulStarterNutrition()
+        {
+            Assert.GreaterOrEqual(CellStage.GetGoalFoodNutrition(FoodType.Plant), 5f);
+            Assert.Greater(CellStage.GetGoalFoodNutrition(FoodType.Meat), CellStage.GetGoalFoodNutrition(FoodType.Plant));
+        }
     }
 }

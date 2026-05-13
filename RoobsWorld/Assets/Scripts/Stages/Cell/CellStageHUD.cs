@@ -41,8 +41,8 @@ namespace RoobsWorld.Stages.Cell
         private Text _biomeText;
         private Text _controlsText;
         private readonly List<Vector3> _bloomHotspotBuffer = new List<Vector3>(8);
-        private readonly Color _bloomPulseColorA = new Color(0.22f, 0.95f, 0.35f, 0.95f);
-        private readonly Color _bloomPulseColorB = new Color(0.95f, 1f, 0.62f, 1f);
+        private readonly Color _bloomPulseColorA = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.95f);
+        private readonly Color _bloomPulseColorB = UIStyleGuide.Colors.FossilGoldBright;
         private Biome.BiomeType _lastBiome = (Biome.BiomeType)(-1); // force first update
         private CellStage _cellStage;
         private float _nextStageLookupTime;
@@ -69,10 +69,8 @@ namespace RoobsWorld.Stages.Cell
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 10;
             var scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            UIStyleGuide.ApplyCanvasScalerDefaults(scaler);
             scaler.matchWidthOrHeight = GetCanvasMatch();
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             gameObject.AddComponent<GraphicRaycaster>();
 
             var rootGo = new GameObject("SafeAreaRoot");
@@ -125,25 +123,29 @@ namespace RoobsWorld.Stages.Cell
                 _safeAreaRoot,
                 new Vector2(0.008f, 0.008f),
                 new Vector2(0.992f, 0.085f),
-                new Color(UIStyleGuide.Colors.HudPanel.r, UIStyleGuide.Colors.HudPanel.g, UIStyleGuide.Colors.HudPanel.b, 0.52f));
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.HudPanel, 0.52f));
         }
 
         private void OnEnable()
         {
             EventBus.Subscribe<CellGoalCompletedEvent>(OnGoalCompleted);
+            EventBus.Subscribe<CellDietVarietyBonusEvent>(OnDietVarietyBonus);
             EventBus.Subscribe<CellEnvironmentEventTriggered>(OnEnvironmentEvent);
             EventBus.Subscribe<CellLeviathanSpawnedEvent>(OnLeviathanSpawned);
             EventBus.Subscribe<CellLeviathanDefeatedEvent>(OnLeviathanDefeated);
             EventBus.Subscribe<CellPlayerInfectedEvent>(OnPlayerInfected);
+            EventBus.Subscribe<CellPlayerEscapedPredatorEvent>(OnPlayerEscapedPredator);
         }
 
         private void OnDisable()
         {
             EventBus.Unsubscribe<CellGoalCompletedEvent>(OnGoalCompleted);
+            EventBus.Unsubscribe<CellDietVarietyBonusEvent>(OnDietVarietyBonus);
             EventBus.Unsubscribe<CellEnvironmentEventTriggered>(OnEnvironmentEvent);
             EventBus.Unsubscribe<CellLeviathanSpawnedEvent>(OnLeviathanSpawned);
             EventBus.Unsubscribe<CellLeviathanDefeatedEvent>(OnLeviathanDefeated);
             EventBus.Unsubscribe<CellPlayerInfectedEvent>(OnPlayerInfected);
+            EventBus.Unsubscribe<CellPlayerEscapedPredatorEvent>(OnPlayerEscapedPredator);
         }
 
         private void UpdateThreatWarning()
@@ -157,11 +159,12 @@ namespace RoobsWorld.Stages.Cell
                 string distanceLabel = float.IsInfinity(_threatIndicator.NearestThreatDistance)
                     ? string.Empty
                     : $" {_threatIndicator.NearestThreatDistance:F0}m";
-                _threatWarningText.text = $"Predator nearby {direction}{distanceLabel}";
+                string threatLabel = ThreatIndicator.GetThreatCueLabel(_threatIndicator.PrimaryThreatType);
+                _threatWarningText.text = $"{threatLabel} nearby {direction}{distanceLabel}";
                 float t = Mathf.Clamp01(_threatIndicator.ThreatIntensity);
                 _threatWarningText.color = Color.Lerp(
-                    new Color(1f, 0.72f, 0.2f, 0.95f),
-                    new Color(1f, 0.2f, 0.12f, 0.98f),
+                    UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGold, 0.95f),
+                    UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.CoralBright, 0.98f),
                     t);
                 _threatWarningText.enabled = true;
                 if (_threatWarningPanel != null)
@@ -196,23 +199,23 @@ namespace RoobsWorld.Stages.Cell
             {
                 case CellEnvironmentEventType.NutrientBloom:
                     _envEventText.text = Localization.Get("cell.env.nutrient_bloom");
-                    _envEventText.color = new Color(0.3f, 1f, 0.4f);
+                    _envEventText.color = UIStyleGuide.Colors.AlgaeLime;
                     break;
                 case CellEnvironmentEventType.VirusOutbreak:
                     _envEventText.text = Localization.Get("cell.env.virus_outbreak");
-                    _envEventText.color = new Color(1f, 0.4f, 0.2f);
+                    _envEventText.color = UIStyleGuide.Colors.CoralBright;
                     break;
                 case CellEnvironmentEventType.TemperatureChange:
                     _envEventText.text = Localization.Get("cell.env.temperature_change");
-                    _envEventText.color = new Color(0.4f, 0.8f, 1f);
+                    _envEventText.color = UIStyleGuide.Colors.TideTealBright;
                     break;
                 case CellEnvironmentEventType.RadiationSurge:
                     _envEventText.text = Localization.Get("cell.env.radiation_surge");
-                    _envEventText.color = new Color(1f, 0.85f, 0.2f); // yellow-gold
+                    _envEventText.color = UIStyleGuide.Colors.FossilGoldBright;
                     break;
                 case CellEnvironmentEventType.OxygenSurge:
                     _envEventText.text = Localization.Get("cell.env.oxygen_surge");
-                    _envEventText.color = new Color(0.62f, 1f, 0.7f);
+                    _envEventText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.86f);
                     break;
             }
             _envEventText.enabled = true;
@@ -224,6 +227,17 @@ namespace RoobsWorld.Stages.Cell
             _infectionText.text = Localization.Get("cell.virus.infected");
             _infectionText.enabled = true;
             _infectionShowUntil = Time.time + 1.8f;
+        }
+
+        private void OnPlayerEscapedPredator(CellPlayerEscapedPredatorEvent evt)
+        {
+            if (evt.BoostSeconds <= 0f)
+                return;
+
+            ShowGoalRewardToast(
+                BuildPredatorEscapeSurgeText(evt.BoostSeconds),
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTealBright, 0.95f),
+                1.4f);
         }
 
         private void OnLeviathanSpawned(CellLeviathanSpawnedEvent evt)
@@ -240,7 +254,7 @@ namespace RoobsWorld.Stages.Cell
         {
             if (_leviathanWarningText == null) return;
             _leviathanWarningText.text = Localization.Get("cell.leviathan.defeated");
-            _leviathanWarningText.color = new Color(1f, 0.85f, 0.2f);
+            _leviathanWarningText.color = UIStyleGuide.Colors.FossilGoldBright;
             _leviathanWarningText.enabled = true;
             _leviathanWarningShowUntil = Time.time + 3f;
         }
@@ -251,25 +265,108 @@ namespace RoobsWorld.Stages.Cell
             var biome = _cellStage.GetBiomeAt(_player.transform.position);
             if (biome == _lastBiome) return;
             _lastBiome = biome;
-            _biomeText.text = Localization.Get("cell.biome." + biome.ToString().ToLower());
+            var profile = Biome.GetProfile(biome);
+            _biomeText.text = $"{Localization.Get("cell.biome." + biome.ToString().ToLower())}: {Localization.Get(profile.VisitReasonKey)}";
             // Tint the label to match biome colour
             _biomeText.color = biome switch
             {
-                Biome.BiomeType.AlgaeForest => new Color(0.3f, 0.75f, 0.3f, 0.75f),
-                Biome.BiomeType.DeepZone    => new Color(0.2f, 0.35f, 0.7f, 0.75f),
-                Biome.BiomeType.ToxicZone   => new Color(0.6f, 0.85f, 0.1f, 0.85f),
-                _                           => new Color(0.55f, 0.75f, 0.85f, 0.75f),
+                Biome.BiomeType.AlgaeForest => UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.75f),
+                Biome.BiomeType.DeepZone    => UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTealBright, 0.75f),
+                Biome.BiomeType.ToxicZone   => UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.Amethyst, 0.85f),
+                _                           => UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.Subtitle, 0.75f),
             };
         }
 
         private void OnGoalCompleted(CellGoalCompletedEvent evt)
         {
-            int dna = BalanceConstants.CellDNAPointsPerGoalComplete;
-            _goalCompleteShowUntil = Time.time + GoalCompleteDisplayDuration;
+            ShowGoalRewardToast(
+                BuildGoalCompletedText(evt),
+                UIStyleGuide.Colors.WithAlpha(
+                    evt.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier
+                        ? UIStyleGuide.Colors.AlgaeLime
+                        : UIStyleGuide.Colors.FossilGoldBright,
+                    0.95f),
+                GoalCompleteDisplayDuration);
+        }
+
+        private void OnDietVarietyBonus(CellDietVarietyBonusEvent evt)
+        {
+            ShowGoalRewardToast(
+                BuildDietVarietyBonusText(evt.ChainLength, evt.DnaBonus),
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.95f),
+                1.8f);
+        }
+
+        public static string BuildGoalCompletedText(CellGoalCompletedEvent evt)
+        {
+            int dna = evt.DnaReward > 0 ? evt.DnaReward : BalanceConstants.CellDNAPointsPerGoalComplete;
+            string key = evt.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier
+                ? "cell.goal.risk_complete_message"
+                : "cell.goal.complete_message";
+            string text = string.Format(Localization.Get(key), dna);
+            if (evt.VarietyBonusDna > 0)
+                text += $"  |  Variety x{Mathf.Max(1, evt.VarietyChain)} +{Mathf.Max(0, evt.VarietyBonusDna)} DNA";
+
+            return text;
+        }
+
+        private void ShowGoalRewardToast(string message, Color color, float duration)
+        {
+            _goalCompleteShowUntil = Time.time + Mathf.Max(0.1f, duration);
             if (_goalCompleteText != null)
             {
-                _goalCompleteText.text = string.Format(Localization.Get("cell.goal.complete_message"), dna);
+                _goalCompleteText.text = message;
+                _goalCompleteText.color = color;
                 _goalCompleteText.enabled = true;
+            }
+        }
+
+        public static string BuildDietVarietyBonusText(int chainLength, int dnaBonus)
+        {
+            return string.Format(
+                Localization.Get("cell.diet.variety_bonus"),
+                Mathf.Max(1, chainLength),
+                Mathf.Max(0, dnaBonus));
+        }
+
+        public static string BuildPredatorEscapeSurgeText(float boostSeconds)
+        {
+            return string.Format(
+                Localization.Get("cell.predator_escape_surge"),
+                Mathf.Max(0f, boostSeconds));
+        }
+
+        public static string BuildGoalRewardSuffix(CellGoal goal, int baseReward, float rewardMultiplier = 1f)
+        {
+            int reward = CellStage.ComputeGoalDnaReward(goal, baseReward, rewardMultiplier);
+            string key = goal.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier
+                ? "cell.goal.risk_reward_suffix"
+                : "cell.goal.reward_suffix";
+            return "  |  " + string.Format(Localization.Get(key), reward);
+        }
+
+        public static string BuildGoalGuidanceSuffix(CellGoal goal)
+        {
+            switch (goal.Type)
+            {
+                case CellGoal.GoalType.EatFood:
+                    return goal.TargetFoodType == FoodType.Toxin
+                        ? "  |  Toxic trail"
+                        : "  |  Nearby food";
+                case CellGoal.GoalType.EscapePredator:
+                    return "  |  Break away";
+                case CellGoal.GoalType.ReproduceOnce:
+                    return "  |  Grow to upgrade";
+                case CellGoal.GoalType.SurviveInToxicZone:
+                    return "  |  Hold toxic zone";
+                case CellGoal.GoalType.EatDuringNutrientBloom:
+                    return "  |  Bloom food";
+                case CellGoal.GoalType.EatLargerPrey:
+                    return "  |  Orange prey";
+                case CellGoal.GoalType.CollectParts:
+                    return "  |  Nearby part";
+                default:
+                    return string.Empty;
             }
         }
 
@@ -280,7 +377,7 @@ namespace RoobsWorld.Stages.Cell
             _goalText = goalGo.AddComponent<Text>();
             _goalText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _goalText.fontSize = GetHudFontSize(14, textScale, emphasizeTop: true, emphasizeLeft: true);
-            _goalText.color = new Color(0.85f, 1f, 0.85f, 0.95f);
+            _goalText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.BodyText, 0.95f);
             _goalText.alignment = TextAnchor.MiddleLeft;
         }
 
@@ -291,7 +388,7 @@ namespace RoobsWorld.Stages.Cell
             _goalCompleteText = go.AddComponent<Text>();
             _goalCompleteText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _goalCompleteText.fontSize = GetHudFontSize(16, textScale, emphasizeTop: true, emphasizeLeft: true);
-            _goalCompleteText.color = new Color(1f, 0.9f, 0.3f, 0.95f);
+            _goalCompleteText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.95f);
             _goalCompleteText.alignment = TextAnchor.MiddleLeft;
             _goalCompleteText.enabled = false;
         }
@@ -303,7 +400,7 @@ namespace RoobsWorld.Stages.Cell
             _currentIndicatorText = go.AddComponent<Text>();
             _currentIndicatorText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _currentIndicatorText.fontSize = GetHudFontSize(12, textScale, emphasizeTop: true);
-            _currentIndicatorText.color = new Color(0.5f, 0.85f, 1f, 0.9f);
+            _currentIndicatorText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTealBright, 0.9f);
             _currentIndicatorText.alignment = TextAnchor.MiddleRight;
             _currentIndicatorText.enabled = false;
         }
@@ -373,14 +470,14 @@ namespace RoobsWorld.Stages.Cell
                 _safeAreaRoot,
                 new Vector2(0.29f, 0.895f),
                 new Vector2(0.71f, 0.967f),
-                new Color(0.16f, 0.04f, 0.035f, 0.48f));
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.Coral, 0.48f));
             _threatWarningPanel.SetActive(false);
             var go = CreateUIElement("ThreatWarning", _safeAreaRoot,
                 new Vector2(0.3f, 0.90f), new Vector2(0.7f, 0.96f), emphasizeTop: true);
             _threatWarningText = go.AddComponent<Text>();
             _threatWarningText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _threatWarningText.fontSize = GetHudFontSize(18, textScale, emphasizeTop: true);
-            _threatWarningText.color = new Color(1f, 0.3f, 0.2f, 0.95f);
+            _threatWarningText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.CoralBright, 0.95f);
             _threatWarningText.alignment = TextAnchor.MiddleCenter;
             _threatWarningText.fontStyle = FontStyle.Bold;
             _threatWarningText.enabled = false;
@@ -393,7 +490,7 @@ namespace RoobsWorld.Stages.Cell
             _envEventText = go.AddComponent<Text>();
             _envEventText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _envEventText.fontSize = GetHudFontSize(18, textScale, emphasizeTop: true);
-            _envEventText.color = new Color(0.3f, 1f, 0.4f);
+            _envEventText.color = UIStyleGuide.Colors.AlgaeLime;
             _envEventText.alignment = TextAnchor.MiddleCenter;
             _envEventText.fontStyle = FontStyle.Bold;
             _envEventText.enabled = false;
@@ -406,7 +503,7 @@ namespace RoobsWorld.Stages.Cell
             _infectionText = go.AddComponent<Text>();
             _infectionText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _infectionText.fontSize = Mathf.RoundToInt(18 * textScale);
-            _infectionText.color = new Color(0.9f, 0.1f, 0.85f, 1f);
+            _infectionText.color = UIStyleGuide.Colors.Amethyst;
             _infectionText.alignment = TextAnchor.MiddleCenter;
             _infectionText.fontStyle = FontStyle.Bold;
             _infectionText.enabled = false;
@@ -420,7 +517,7 @@ namespace RoobsWorld.Stages.Cell
             _biomeText = go.AddComponent<Text>();
             _biomeText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _biomeText.fontSize = Mathf.RoundToInt(12 * textScale);
-            _biomeText.color = new Color(0.55f, 0.75f, 0.85f, 0.75f);
+            _biomeText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.Subtitle, 0.75f);
             _biomeText.alignment = TextAnchor.MiddleLeft;
             _biomeText.fontStyle = FontStyle.Italic;
         }
@@ -432,9 +529,9 @@ namespace RoobsWorld.Stages.Cell
             _controlsText = go.AddComponent<Text>();
             _controlsText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _controlsText.fontSize = Mathf.RoundToInt(11 * textScale);
-            _controlsText.color = new Color(0.8f, 0.9f, 1f, 0.7f);
+            _controlsText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.BodyTextMuted, 0.7f);
             _controlsText.alignment = TextAnchor.LowerRight;
-            _controlsText.text = "Move: Hold LMB and steer cursor  Boost: Shift/Space/RMB";
+            _controlsText.text = "Move: Hold LMB and steer cursor  Boost: Shift/Space/RMB  Speed: ]/Interact";
         }
 
         private void BuildLeviathanWarningDisplay(float textScale)
@@ -444,7 +541,7 @@ namespace RoobsWorld.Stages.Cell
             _leviathanWarningText = go.AddComponent<Text>();
             _leviathanWarningText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _leviathanWarningText.fontSize = GetHudFontSize(22, textScale, emphasizeTop: true);
-            _leviathanWarningText.color = new Color(1f, 0.2f, 0.1f, 1f);
+            _leviathanWarningText.color = UIStyleGuide.Colors.CoralBright;
             _leviathanWarningText.alignment = TextAnchor.MiddleCenter;
             _leviathanWarningText.fontStyle = FontStyle.Bold;
             _leviathanWarningText.enabled = false;
@@ -464,7 +561,7 @@ namespace RoobsWorld.Stages.Cell
             var barFill = CreateUIElement("MassBarFill", barBg.transform,
                 Vector2.zero, Vector2.one);
             _massBar = barFill.AddComponent<Image>();
-            _massBar.color = new Color(0.28f, 0.95f, 0.48f, 0.92f);
+            _massBar.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.92f);
             _massBar.raycastTarget = false;
 
             var labelGo = CreateUIElement("MassLabel", _safeAreaRoot,
@@ -507,7 +604,7 @@ namespace RoobsWorld.Stages.Cell
             _symbiosisText = go.AddComponent<Text>();
             _symbiosisText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _symbiosisText.fontSize = GetHudFontSize(13, textScale, emphasizeTop: true, emphasizeLeft: true);
-            _symbiosisText.color = new Color(0.75f, 1f, 0.86f, 0.95f);
+            _symbiosisText.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTealBright, 0.95f);
             _symbiosisText.alignment = TextAnchor.MiddleLeft;
             _symbiosisText.enabled = false;
         }
@@ -591,7 +688,7 @@ namespace RoobsWorld.Stages.Cell
             if (_leviathanWarningText != null && _leviathanWarningText.enabled && Time.time >= _leviathanWarningShowUntil)
             {
                 _leviathanWarningText.enabled = false;
-                _leviathanWarningText.color = new Color(1f, 0.2f, 0.1f, 1f); // reset to red
+                _leviathanWarningText.color = UIStyleGuide.Colors.CoralBright;
             }
 
             if (_infectionText != null && _infectionText.enabled && Time.time >= _infectionShowUntil)
@@ -606,6 +703,7 @@ namespace RoobsWorld.Stages.Cell
             float now = Time.time;
             var stage = ResolveStageReference(now);
             UpdateBloomEventDisplay(stage, now);
+            UpdateControlsHint(stage);
             if (_currentIndicatorText != null && stage != null)
             {
                 if (stage.TryGetCurrentAtPlayer(out Vector3 dir, out float force))
@@ -631,7 +729,7 @@ namespace RoobsWorld.Stages.Cell
             if (loadout.HasPart(CellPartType.Cilia)) parts += " [Cilia]";
             if (loadout.HasPart(CellPartType.Spike)) parts += " [Spike]";
             if (loadout.HasPart(CellPartType.Jet)) parts += " [Jet]";
-            _partsText.text = parts;
+            _partsText.text = parts + BuildNearestPartPreviewText();
 
             if (_symbiosisText != null)
             {
@@ -689,20 +787,55 @@ namespace RoobsWorld.Stages.Cell
                         task = string.Format(Localization.Get("cell.goal.eat_larger_task"), g.TargetCount);
                         progress = string.Format(Localization.Get("cell.goal.progress"), g.CurrentCount, g.TargetCount);
                     }
+                    else if (g.Type == RoobsWorld.Stages.Cell.CellGoal.GoalType.CollectParts)
+                    {
+                        task = string.Format(Localization.Get("cell.goal.collect_parts_task"), g.TargetCount);
+                        progress = string.Format(Localization.Get("cell.goal.progress"), g.CurrentCount, g.TargetCount);
+                    }
                     else
                     {
                         string foodName = GetFoodTypeGoalName(g.TargetFoodType);
                         task = string.Format(Localization.Get("cell.goal.task"), g.TargetCount, foodName);
                         progress = string.Format(Localization.Get("cell.goal.progress"), g.CurrentCount, g.TargetCount);
                     }
-                    _goalText.text = "Goal: " + task + progress;
+                    float rewardMultiplier = GameManager.HasInstance
+                        ? GameManager.Instance.Modifiers.DNARewardMultiplier
+                        : 1f;
+                    string upgradeProgress = string.Format(
+                        Localization.Get("cell.upgrade.progress"),
+                        _player.FoodConsumedSinceUpgrade,
+                        _player.FoodRequiredPerUpgrade);
+                    string upgradeFeedback = _player.IsUpgradeReady
+                        ? Localization.Get("cell.upgrade.ready")
+                        : string.Format(Localization.Get("cell.upgrade.remaining"), _player.FoodRemainingForUpgrade);
+                    _goalText.text = "Goal: " + task + progress + BuildGoalGuidanceSuffix(g) + BuildGoalRewardSuffix(
+                        g,
+                        BalanceConstants.CellDNAPointsPerGoalComplete,
+                        rewardMultiplier) + "  |  " + upgradeProgress + "  |  " + upgradeFeedback;
                     _goalText.enabled = true;
                 }
                 else
                 {
-                    _goalText.enabled = false;
+                    string upgradeProgress = string.Format(
+                        Localization.Get("cell.upgrade.progress"),
+                        _player.FoodConsumedSinceUpgrade,
+                        _player.FoodRequiredPerUpgrade);
+                    string upgradeFeedback = _player.IsUpgradeReady
+                        ? Localization.Get("cell.upgrade.ready")
+                        : string.Format(Localization.Get("cell.upgrade.remaining"), _player.FoodRemainingForUpgrade);
+                    _goalText.text = $"{upgradeProgress}  |  {upgradeFeedback}";
+                    _goalText.enabled = true;
                 }
             }
+        }
+
+        private void UpdateControlsHint(CellStage stage)
+        {
+            if (_controlsText == null)
+                return;
+
+            float speed = stage != null ? stage.CurrentDocumentaryTimeScale : 1f;
+            _controlsText.text = $"Move: Hold LMB and steer cursor  Boost: Shift/Space/RMB  Speed: {speed:0.#}x ]/Interact";
         }
 
         private void UpdateBloomEventDisplay(CellStage stage, float now)
@@ -781,6 +914,39 @@ namespace RoobsWorld.Stages.Cell
             if (appended == 0)
                 return string.Empty;
             return suffix + "]";
+        }
+
+        private string BuildNearestPartPreviewText()
+        {
+            if (_player == null)
+                return string.Empty;
+
+            var pickups = FindObjectsByType<CellPartPickup>(FindObjectsInactive.Exclude);
+            CellPartPickup nearest = null;
+            float bestDistanceSqr = float.MaxValue;
+            Vector3 playerPosition = _player.transform.position;
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                var pickup = pickups[i];
+                if (pickup == null)
+                    continue;
+                float d = (pickup.transform.position - playerPosition).sqrMagnitude;
+                if (d < bestDistanceSqr)
+                {
+                    bestDistanceSqr = d;
+                    nearest = pickup;
+                }
+            }
+
+            if (nearest == null)
+                return string.Empty;
+
+            return "  |  " + BuildPartPreviewText(nearest.PartType, Mathf.Sqrt(bestDistanceSqr));
+        }
+
+        public static string BuildPartPreviewText(CellPartType partType, float distance)
+        {
+            return $"{CellPartPickupPlanner.GetPreviewText(partType)} {Mathf.Max(0f, distance):F0}m";
         }
     }
 }

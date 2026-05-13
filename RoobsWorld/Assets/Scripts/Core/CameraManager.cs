@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace RoobsWorld.Core
 {
@@ -394,10 +395,14 @@ namespace RoobsWorld.Core
         [SerializeField] private float _height = 4f;
         [SerializeField] private float _followSpeed = 8f;
         [SerializeField] private float _rotationSpeed = 120f;
+        [SerializeField] private float _pitchSpeed = 70f;
+        [SerializeField] private float _minPitch = 20f;
+        [SerializeField] private float _maxPitch = 65f;
 
         private Camera _camera;
         private Transform _target;
         private float _currentAngle;
+        private float _currentPitch = 35f;
 
         public override CameraRigType RigType => CameraRigType.ThirdPerson;
 
@@ -416,14 +421,46 @@ namespace RoobsWorld.Core
         {
             if (_target == null || _camera == null) return;
 
-            float horizontalInput = InputManager.HasInstance ? InputManager.Instance.LookInput.x : 0f;
-            _currentAngle += horizontalInput * _rotationSpeed * deltaTime;
+            Vector2 lookInput = InputManager.HasInstance ? InputManager.Instance.LookInput : Vector2.zero;
+            lookInput = FilterMouseLookWithoutRightClick(lookInput);
+            float sensitivity = 1f;
+            bool invertY = false;
+            if (SettingsManager.HasInstance && SettingsManager.Instance.Current != null)
+            {
+                sensitivity = SettingsManager.Instance.Current.CameraSensitivity;
+                invertY = SettingsManager.Instance.Current.InvertY;
+            }
+
+            Vector2 lookDelta = ComputeLookDelta(
+                lookInput,
+                Mathf.Max(0.1f, sensitivity),
+                invertY,
+                _rotationSpeed,
+                _pitchSpeed,
+                deltaTime);
+
+            float middleMousePitchDelta = 0f;
+            if (Mouse.current != null && Mouse.current.middleButton.isPressed)
+            {
+                float pitchSign = invertY ? 1f : -1f;
+                Vector2 mouseDelta = Mouse.current.delta.ReadValue();
+                middleMousePitchDelta = mouseDelta.y
+                    * _pitchSpeed
+                    * Mathf.Max(0.1f, sensitivity)
+                    * pitchSign
+                    * Mathf.Max(0f, deltaTime);
+            }
+
+            _currentAngle += lookDelta.x;
+            _currentPitch = Mathf.Clamp(_currentPitch + lookDelta.y + middleMousePitchDelta, _minPitch, _maxPitch);
 
             float rad = _currentAngle * Mathf.Deg2Rad;
+            float pitchRad = _currentPitch * Mathf.Deg2Rad;
+            float horizontalDistance = Mathf.Cos(pitchRad) * _distance;
             var offset = new Vector3(
-                Mathf.Sin(rad) * _distance,
-                _height,
-                Mathf.Cos(rad) * _distance
+                Mathf.Sin(rad) * horizontalDistance,
+                Mathf.Sin(pitchRad) * _distance + _height,
+                Mathf.Cos(rad) * horizontalDistance
             );
 
             var targetPos = _target.position + offset;
@@ -434,6 +471,32 @@ namespace RoobsWorld.Core
             );
 
             _camera.transform.LookAt(_target.position + Vector3.up * 1.5f);
+        }
+
+        private static Vector2 FilterMouseLookWithoutRightClick(Vector2 lookInput)
+        {
+            if (Mouse.current == null || Mouse.current.rightButton.isPressed)
+                return lookInput;
+
+            Vector2 mouseDelta = Mouse.current.delta.ReadValue();
+            bool hasMouseMovement = mouseDelta.sqrMagnitude > 0.0001f;
+            return hasMouseMovement ? Vector2.zero : lookInput;
+        }
+
+        public static Vector2 ComputeLookDelta(
+            Vector2 lookInput,
+            float sensitivity,
+            bool invertY,
+            float yawSpeed,
+            float pitchSpeed,
+            float deltaTime)
+        {
+            float safeSensitivity = Mathf.Max(0.1f, sensitivity);
+            float safeDelta = Mathf.Max(0f, deltaTime);
+            float pitchSign = invertY ? 1f : -1f;
+            return new Vector2(
+                lookInput.x * yawSpeed * safeSensitivity * safeDelta,
+                lookInput.y * pitchSpeed * safeSensitivity * pitchSign * safeDelta);
         }
     }
 }

@@ -27,6 +27,8 @@ namespace RoobsWorld.Stages.Cell
         private const float PreyConsumeSizeRatio = 0.82f;
         private const float ThreatContactSizeRatio = 1.16f;
         private const float ContactPredationDamage = 0.08f;
+        private const float MinimumPredationProbeRadius = 0.14f;
+        private const float PredationProbeContactPadding = 0.12f;
 
         [Header("State")]
         [SerializeField] private Genome _genome;
@@ -40,6 +42,7 @@ namespace RoobsWorld.Stages.Cell
         private System.Action<Organism> _poolReturnCallback;
         private float _electricPulseTimer;
         private float _electricSlowTimer;
+        private readonly Collider[] _predationProbeHits = new Collider[32];
         private readonly BehaviourBiasTracker _adaptivePressure = new BehaviourBiasTracker();
 
         /// <summary>Optional: returns metabolism multiplier for current position (e.g. from biome). If null, 1f is used.</summary>
@@ -209,7 +212,12 @@ namespace RoobsWorld.Stages.Cell
 
         private void OnTriggerStay(Collider other)
         {
-            if (_dead || !_genome.HasTrait(GeneticTraits.Toxic)) return;
+            if (_dead) return;
+
+            if (TryResolvePredationContact(other))
+                return;
+
+            if (!_genome.HasTrait(GeneticTraits.Toxic)) return;
             var target = other.GetComponent<Organism>();
             if (target != null && !target.IsDead)
                 target.TakeDamage(BalanceConstants.GeneticTraitToxicContactDrain * Time.deltaTime);
@@ -256,6 +264,7 @@ namespace RoobsWorld.Stages.Cell
             if (_dead) return;
             float metMult = GetMetabolismMultiplier != null ? GetMetabolismMultiplier() : 1f;
             Tick(Time.deltaTime, metMult);
+            ProbeNearbyPredationContacts();
             UpdateBioluminescence();
         }
 
@@ -366,9 +375,76 @@ namespace RoobsWorld.Stages.Cell
                 Vector3 separation = CellSeparation.GetDirection(transform);
                 direction = CellSeparation.Apply(direction, separation);
                 float slowMult = _electricSlowTimer > 0f ? 0.4f : 1f;
-                float speed = _genome.Speed * 5f * Mathf.Max(0f, speedMultiplier) * slowMult;
-                transform.position += (direction * speed + separation * (speed * CellSeparation.PushSpeedMultiplier)) * deltaTime;
+                float rawSpeed = _genome.Speed * 5f * Mathf.Max(0f, speedMultiplier) * slowMult;
+                float speed = ClampSpeedToPlayer(rawSpeed, BalanceConstants.CellOrganismMaxSpeedToPlayerRatio);
+                Vector3 velocity = direction * speed + separation * (speed * CellSeparation.PushSpeedMultiplier);
+                velocity = ClampVelocityToPlayer(velocity, BalanceConstants.CellOrganismMaxSpeedToPlayerRatio);
+                transform.position += velocity * deltaTime;
             }
+        }
+
+        public static float GetPlayerRelativeMaxSpeed(float maxPlayerRatio)
+        {
+            float referenceSpeed = Mathf.Max(0.01f, PlayerCell.GetReferenceCruiseSpeed());
+            return referenceSpeed * Mathf.Max(0f, maxPlayerRatio);
+        }
+
+        public static float ClampSpeedToPlayer(float speed, float maxPlayerRatio)
+        {
+            if (speed <= 0f)
+                return 0f;
+
+            return Mathf.Min(speed, GetPlayerRelativeMaxSpeed(maxPlayerRatio));
+        }
+
+        public static Vector3 ClampVelocityToPlayer(Vector3 velocity, float maxPlayerRatio)
+        {
+            float maxSpeed = GetPlayerRelativeMaxSpeed(maxPlayerRatio);
+            return velocity.sqrMagnitude > maxSpeed * maxSpeed
+                ? velocity.normalized * maxSpeed
+                : velocity;
+        }
+
+        /// <summary>
+        /// Fallback predation detection for glancing/orbital AI movement where trigger enter can be missed.
+        /// </summary>
+        private void ProbeNearbyPredationContacts()
+        {
+            float probeRadius = ComputePredationProbeRadius(transform.lossyScale, GetComponent<SphereCollider>());
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                transform.position,
+                probeRadius,
+                _predationProbeHits,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Collide);
+
+            for (int i = 0; i < hitCount; i++)
+            {
+                var hit = _predationProbeHits[i];
+                _predationProbeHits[i] = null;
+                if (hit == null || !hit.enabled)
+                    continue;
+
+                if (TryResolvePredationContact(hit))
+                    break;
+            }
+        }
+
+        public static float ComputePredationProbeRadius(Vector3 worldScale, SphereCollider collider)
+        {
+            float scaleRadius = Mathf.Max(Mathf.Abs(worldScale.x), Mathf.Abs(worldScale.z)) * 0.5f;
+            float colliderRadius = 0f;
+
+            if (collider != null)
+            {
+                float colliderScale = Mathf.Max(
+                    Mathf.Abs(collider.transform.lossyScale.x),
+                    Mathf.Abs(collider.transform.lossyScale.z));
+                colliderRadius = Mathf.Max(0f, collider.radius) * colliderScale;
+            }
+
+            return Mathf.Max(MinimumPredationProbeRadius, Mathf.Max(scaleRadius, colliderRadius))
+                   + PredationProbeContactPadding;
         }
 
         /// <summary>Consume food: gain energy scaled by digestion. Returns actual energy gained. foodEfficiencyMultiplier 1f = normal (e.g. from biome).</summary>

@@ -127,6 +127,46 @@ namespace RoobsWorld.Stages.Cell
         }
 
         /// <summary>
+        /// Generates a readable three-choice mutation set: offense, mobility/defense, and survival/ecology.
+        /// Each option starts from normal biased mutation, then receives a deliberate role boost so the
+        /// choice changes how the player behaves immediately.
+        /// </summary>
+        public static Genome[] CreateStrategicMutationChoices(
+            Genome parent, BehaviourBias bias, GeneticTraits discovered, SystemRandom rng = null)
+        {
+            if (parent == null) parent = Genome.Default();
+
+            var options = new Genome[]
+            {
+                MutateBiased(parent, bias, rng),
+                MutateBiased(parent, bias, rng),
+                MutateBiased(parent, bias, rng)
+            };
+
+            ApplyOffenseBoost(options[0]);
+            ApplyMobilityDefenseBoost(options[1]);
+            ApplyEcologyBoost(options[2], discovered);
+            return options;
+        }
+
+        public static string GetStrategicChoiceLabel(Genome option, Genome parent, int index)
+        {
+            string role = index switch
+            {
+                0 => "Predator Shift",
+                1 => "Escape Form",
+                2 => "Survivor Bloom",
+                _ => "Mutation"
+            };
+
+            string statSummary = EvolutionStatsUI.FormatTraits(option);
+            if (string.IsNullOrWhiteSpace(statSummary))
+                statSummary = DescribeLargestChange(option, parent);
+
+            return $"{role}\n{statSummary}";
+        }
+
+        /// <summary>
         /// Generates the single recommended upgrade variant for prompts that no longer offer choices.
         /// </summary>
         public static Genome MutateRecommendedWithDiscoveries(
@@ -149,6 +189,74 @@ namespace RoobsWorld.Stages.Cell
         {
             int v = (int)flags;
             return (GeneticTraits)(v & -v);
+        }
+
+        private static void ApplyOffenseBoost(Genome g)
+        {
+            if (g == null) return;
+            g.Attack = Boost(g.Attack, 0.95f);
+            g.Spikes = Boost(g.Spikes, 0.75f);
+            g.Size = Boost(g.Size, 0.2f);
+            g.Traits |= GeneticTraits.Toxic;
+            g.Color = ProceduralTextureFactory.Opaque(Color.Lerp(g.Color, new Color(0.95f, 0.18f, 0.12f), 0.35f));
+        }
+
+        private static void ApplyMobilityDefenseBoost(Genome g)
+        {
+            if (g == null) return;
+            g.Speed = Boost(g.Speed, 0.85f);
+            g.Flagella = Boost(g.Flagella, 0.95f);
+            g.Defence = Boost(g.Defence, 0.45f);
+            g.Traits |= GeneticTraits.Armoured;
+            g.Color = ProceduralTextureFactory.Opaque(Color.Lerp(g.Color, new Color(0.24f, 0.76f, 1f), 0.35f));
+        }
+
+        private static void ApplyEcologyBoost(Genome g, GeneticTraits discovered)
+        {
+            if (g == null) return;
+            g.Digestion = Boost(g.Digestion, 0.9f);
+            g.MetabolismCost = Mathf.Clamp(g.MetabolismCost - 0.35f, TraitMin, TraitMax);
+            g.Size = Boost(g.Size, 0.12f);
+            g.Traits |= discovered != GeneticTraits.None
+                ? LowestBit(discovered)
+                : GeneticTraits.Photosynthetic | GeneticTraits.Regenerative;
+            g.Color = ProceduralTextureFactory.Opaque(Color.Lerp(g.Color, new Color(0.24f, 0.88f, 0.42f), 0.35f));
+        }
+
+        private static float Boost(float value, float amount)
+        {
+            return Mathf.Clamp(value + Mathf.Max(0f, amount), TraitMin, TraitMax);
+        }
+
+        private static string DescribeLargestChange(Genome option, Genome parent)
+        {
+            if (option == null) return "Apply Mutation";
+            if (parent == null) return EvolutionStatsUI.FormatTraits(option);
+
+            float speedDelta = option.Speed - parent.Speed;
+            float attackDelta = option.Attack - parent.Attack;
+            float defenceDelta = option.Defence - parent.Defence;
+            float digestionDelta = option.Digestion - parent.Digestion;
+
+            float best = Mathf.Abs(speedDelta);
+            string label = $"Speed {(speedDelta >= 0f ? "+" : string.Empty)}{speedDelta:0.0}";
+
+            if (Mathf.Abs(attackDelta) > best)
+            {
+                best = Mathf.Abs(attackDelta);
+                label = $"Attack {(attackDelta >= 0f ? "+" : string.Empty)}{attackDelta:0.0}";
+            }
+
+            if (Mathf.Abs(defenceDelta) > best)
+            {
+                best = Mathf.Abs(defenceDelta);
+                label = $"Defence {(defenceDelta >= 0f ? "+" : string.Empty)}{defenceDelta:0.0}";
+            }
+
+            if (Mathf.Abs(digestionDelta) > best)
+                label = $"Digestion {(digestionDelta >= 0f ? "+" : string.Empty)}{digestionDelta:0.0}";
+
+            return label;
         }
 
         /// <summary>

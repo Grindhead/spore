@@ -98,7 +98,14 @@ namespace RoobsWorld.Tests
                 Parts = new List<PartPlacement>(),
                 Upgrades = new List<CreatureUpgradeRecord>
                 {
-                    new CreatureUpgradeRecord { UpgradeId = "test", HealthDelta = 45f, SpeedDelta = -1.4f }
+                    new CreatureUpgradeRecord
+                    {
+                        UpgradeId = "test",
+                        HealthDelta = 45f,
+                        SpeedDelta = -1.4f,
+                        AttackDelta = 2f,
+                        DefenseDelta = 1.5f
+                    }
                 }
             };
 
@@ -106,6 +113,8 @@ namespace RoobsWorld.Tests
 
             Assert.AreEqual(CreatureStats.BaseStats.Health + 45f, stats.Health);
             Assert.AreEqual(CreatureStats.BaseStats.Speed - 1.4f, stats.Speed);
+            Assert.AreEqual(CreatureStats.BaseStats.Attack + 2f, stats.Attack);
+            Assert.AreEqual(CreatureStats.BaseStats.Defense + 1.5f, stats.Defense);
         }
 
         [Test]
@@ -116,7 +125,10 @@ namespace RoobsWorld.Tests
             {
                 Id = "runner_frame",
                 HealthDelta = -25f,
-                SpeedDelta = 2.2f
+                SpeedDelta = 2.2f,
+                MaxStaminaDelta = 22f,
+                StaminaRecoveryDelta = 4f,
+                AbilityCooldownDelta = -1f
             };
 
             CreatureUpgradeCatalog.ApplyUpgrade(dna, option);
@@ -125,6 +137,9 @@ namespace RoobsWorld.Tests
             Assert.AreEqual("runner_frame", dna.Upgrades[0].UpgradeId);
             Assert.AreEqual(-25f, dna.Upgrades[0].HealthDelta);
             Assert.AreEqual(2.2f, dna.Upgrades[0].SpeedDelta);
+            Assert.AreEqual(22f, dna.Upgrades[0].MaxStaminaDelta);
+            Assert.AreEqual(4f, dna.Upgrades[0].StaminaRecoveryDelta);
+            Assert.AreEqual(-1f, dna.Upgrades[0].AbilityCooldownDelta);
         }
     }
 }

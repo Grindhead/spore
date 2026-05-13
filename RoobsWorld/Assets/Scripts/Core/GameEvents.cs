@@ -54,6 +54,95 @@ namespace RoobsWorld.Core
         public GameObject CreatureObject;
         public string CreatureId;
         public bool IsPlayer;
+        public string Cause;
+        public string RecommendationKey;
+    }
+
+    /// <summary>High-level combat feedback categories used by Creature stage HUD/VFX/audio hooks.</summary>
+    public enum CreatureCombatFeedbackType
+    {
+        Hit,
+        Miss,
+        Kill,
+        PlayerDamaged,
+        Guard,
+        Blocked,
+        Counter,
+        Telegraph,
+        LowHealth
+    }
+
+    /// <summary>Fired for readable Creature-stage combat beats such as misses, hits, blocks, and telegraphs.</summary>
+    public struct CreatureCombatFeedbackEvent : IGameEvent
+    {
+        public CreatureCombatFeedbackType Type;
+        public string SourceCreatureId;
+        public string TargetCreatureId;
+        public Vector3 Position;
+        public float Amount;
+        public bool IsPlayerSource;
+        public bool IsPlayerTarget;
+    }
+
+    /// <summary>Fired when a tracked Creature-stage rival is defeated, including its tactical archetype label.</summary>
+    public struct CreatureRivalDefeatedEvent : IGameEvent
+    {
+        public string CreatureId;
+        public string ArchetypeName;
+        public bool IsAlpha;
+    }
+
+    /// <summary>Fired when a Creature-stage kill streak grants a bonus DNA payout.</summary>
+    public struct CreatureStreakBonusEvent : IGameEvent
+    {
+        public int StreakCount;
+        public int DnaBonus;
+    }
+
+    /// <summary>Fired when the Creature-stage objective loop pays out a completed objective reward.</summary>
+    public struct CreatureObjectiveCompletedEvent : IGameEvent
+    {
+        public RoobsWorld.Stages.Creature.CreatureStageObjectiveType ObjectiveType;
+        public string ObjectiveLocalizationKey;
+        public int DnaReward;
+        public int PaceBonusDna;
+        public int CompletedObjectiveCount;
+        public float CompletionSeconds;
+        public int KillStreak;
+    }
+
+    /// <summary>Fired when the player uses a Creature-stage active ability inherited from Cell-stage traits.</summary>
+    public struct CreatureAbilityUsedEvent : IGameEvent
+    {
+        public string AbilityId;
+        public string AbilityLabel;
+        public float StaminaSpent;
+        public Vector3 Position;
+    }
+
+    /// <summary>Fired when the player attempts a Creature-stage action without enough stamina.</summary>
+    public struct CreatureStaminaExhaustedEvent : IGameEvent
+    {
+        public string ActionId;
+        public float CurrentStamina;
+        public float RequiredStamina;
+    }
+
+    /// <summary>Fired when Creature-stage combat momentum restores player stamina.</summary>
+    public struct CreatureStaminaRestoredEvent : IGameEvent
+    {
+        public string ReasonId;
+        public float Amount;
+        public float CurrentStamina;
+        public float MaxStamina;
+    }
+
+    /// <summary>Fired when a creature starts or stops receiving healing-zone support.</summary>
+    public struct CreatureHealingZoneEvent : IGameEvent
+    {
+        public bool Started;
+        public Vector3 Position;
+        public bool IsPlayer;
     }
 
     /// <summary>Fired when a game save completes successfully.</summary>
@@ -125,14 +214,33 @@ namespace RoobsWorld.Core
         public RoobsWorld.Stages.Cell.FoodType FoodType;
     }
 
+    /// <summary>Fired when the player earns the cell-stage varied-diet reward for switching food types.</summary>
+    public struct CellDietVarietyBonusEvent : IGameEvent
+    {
+        public RoobsWorld.Stages.Cell.FoodType FoodType;
+        public int ChainLength;
+        public int DnaBonus;
+        public float MassBonus;
+    }
+
     /// <summary>Fired when a cell-stage micro goal is completed (e.g. eat N algae).</summary>
     public struct CellGoalCompletedEvent : IGameEvent
     {
         public RoobsWorld.Stages.Cell.CellGoal.GoalType GoalType;
+        public RoobsWorld.Stages.Cell.CellGoal.GoalActionCategory ActionCategory;
+        public int DnaReward;
+        public int RewardMultiplier;
+        public bool IsRepeatable;
+        public bool RepeatedActionCategory;
+        public int VarietyChain;
+        public int VarietyBonusDna;
     }
 
     /// <summary>Fired when the player leaves predator threat range (used for "Escape predator" micro goal).</summary>
-    public struct CellPlayerEscapedPredatorEvent : IGameEvent { }
+    public struct CellPlayerEscapedPredatorEvent : IGameEvent
+    {
+        public float BoostSeconds;
+    }
 
     /// <summary>Fired when the player completes a cell upgrade milestone. Used for upgrade micro goals.</summary>
     public struct CellPlayerReproducedEvent : IGameEvent { }
@@ -142,6 +250,13 @@ namespace RoobsWorld.Core
 
     /// <summary>Fired when the player collects a cell part pickup.</summary>
     public struct CellPartCollectedEvent : IGameEvent { public RoobsWorld.Stages.Cell.CellPartType PartType; }
+
+    /// <summary>Fired when the player chooses a cell-stage mutation option.</summary>
+    public struct CellMutationChosenEvent : IGameEvent
+    {
+        public string ChoiceLabel;
+        public int TraitMask;
+    }
 
     /// <summary>Fired when a new cell-stage species diverges from its parent (genetic distance threshold crossed).</summary>
     public struct CellNewSpeciesEvent : IGameEvent

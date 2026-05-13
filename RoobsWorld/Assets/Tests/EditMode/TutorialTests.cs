@@ -161,6 +161,18 @@ namespace RoobsWorld.Tests
             Assert.IsFalse(string.IsNullOrWhiteSpace(encounterProgress));
             Assert.AreNotEqual("creature.encounter.progress", encounterProgress);
 
+            string alphaProgress = Localization.Get("creature.objective.alpha_progress");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(alphaProgress));
+            Assert.AreNotEqual("creature.objective.alpha_progress", alphaProgress);
+
+            string holdSecure = Localization.Get("creature.objective.hold_state.secure");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(holdSecure));
+            Assert.AreNotEqual("creature.objective.hold_state.secure", holdSecure);
+
+            string holdReturn = Localization.Get("creature.objective.hold_state.return");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(holdReturn));
+            Assert.AreNotEqual("creature.objective.hold_state.return", holdReturn);
+
             string encounterComplete = Localization.Get("creature.encounter.complete");
             Assert.IsFalse(string.IsNullOrWhiteSpace(encounterComplete));
             Assert.AreNotEqual("creature.encounter.complete", encounterComplete);

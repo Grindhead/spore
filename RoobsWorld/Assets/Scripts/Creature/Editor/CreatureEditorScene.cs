@@ -2,7 +2,10 @@ using System.Collections.Generic;
 using RoobsWorld.Core;
 using RoobsWorld.Utils;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using RoobsWorld.Creature;
 
 namespace RoobsWorld.Creature.Editor
 {
@@ -12,11 +15,14 @@ namespace RoobsWorld.Creature.Editor
     public class CreatureEditorScene : MonoBehaviour
     {
         [SerializeField] private float _orbitSpeed = 120f;
+        [SerializeField] private float _orbitPitchSpeed = 80f;
         [SerializeField] private float _orbitDistance = 5f;
         [SerializeField] private float _orbitHeight = 2f;
         [SerializeField] private float _zoomSpeed = 2f;
         [SerializeField] private float _minZoom = 2f;
         [SerializeField] private float _maxZoom = 10f;
+        [SerializeField] private float _minPitch = 10f;
+        [SerializeField] private float _maxPitch = 70f;
 
         private CreatureEditorState _state;
         private CreatureGallery _gallery;
@@ -26,10 +32,24 @@ namespace RoobsWorld.Creature.Editor
 
         private float _currentAngle;
         private float _currentZoom;
+        private float _currentPitch = 28f;
         private Text _statText;
         private Text _costText;
         private Text _nameText;
+        private Text _statusText;
         private readonly List<GameObject> _partButtons = new List<GameObject>();
+        private readonly List<Transform> _spineAnchors = new List<Transform>();
+
+        private string _draggingPartId;
+        private bool _isDraggingPart;
+        private bool _lastDropValid;
+        private DropCandidate _lastDropCandidate;
+        private GameObject _dragPreviewPart;
+        private bool _isBodySculptDrag;
+        private Vector2 _bodyDragStartScreen;
+        private Vector3 _bodyDragStartScale;
+        private float _bodyDragStartFrontPull;
+        private int _bodyDragStartAnchorIndex;
 
         private Dictionary<string, CreaturePartDef> _partCatalog;
         private static readonly string[] DEFAULT_PART_IDS =
@@ -43,7 +63,7 @@ namespace RoobsWorld.Creature.Editor
         public void Initialize(CreatureDNA dna = null, Dictionary<string, CreaturePartDef> catalog = null)
         {
             _state = new CreatureEditorState(dna);
-            _partCatalog = catalog ?? new Dictionary<string, CreaturePartDef>();
+            _partCatalog = catalog ?? CreaturePartCatalog.GetDefaultCatalog();
             _gallery = new CreatureGallery();
             _currentZoom = _orbitDistance;
 
@@ -55,26 +75,50 @@ namespace RoobsWorld.Creature.Editor
         private void Update()
         {
             UpdateOrbitCamera();
+            UpdateBodySculptInput();
+            UpdateDragPreview();
             UpdateStatDisplay();
         }
 
         private void UpdateOrbitCamera()
         {
             Vector2 look = InputManager.HasInstance ? InputManager.Instance.LookInput : Vector2.zero;
+            look = FilterMouseLookWithoutRightClick(look);
             _currentAngle += look.x * _orbitSpeed * Time.deltaTime;
             _currentZoom = Mathf.Clamp(_currentZoom - look.y * _zoomSpeed * Time.deltaTime, _minZoom, _maxZoom);
 
+            if (Mouse.current != null && Mouse.current.middleButton.isPressed)
+            {
+                Vector2 mouseDelta = Mouse.current.delta.ReadValue();
+                _currentPitch = Mathf.Clamp(
+                    _currentPitch - mouseDelta.y * _orbitPitchSpeed * Time.deltaTime,
+                    _minPitch,
+                    _maxPitch);
+            }
+
             float rad = _currentAngle * Mathf.Deg2Rad;
+            float pitchRad = _currentPitch * Mathf.Deg2Rad;
+            float horizontalDistance = Mathf.Cos(pitchRad) * _currentZoom;
             var cam = Camera.main;
             if (cam != null)
             {
                 cam.transform.position = new Vector3(
-                    Mathf.Sin(rad) * _currentZoom,
-                    _orbitHeight,
-                    Mathf.Cos(rad) * _currentZoom
+                    Mathf.Sin(rad) * horizontalDistance,
+                    Mathf.Sin(pitchRad) * _currentZoom + _orbitHeight,
+                    Mathf.Cos(rad) * horizontalDistance
                 );
                 cam.transform.LookAt(Vector3.up * 0.5f);
             }
+        }
+
+        private static Vector2 FilterMouseLookWithoutRightClick(Vector2 lookInput)
+        {
+            if (Mouse.current == null || Mouse.current.rightButton.isPressed)
+                return lookInput;
+
+            Vector2 mouseDelta = Mouse.current.delta.ReadValue();
+            bool hasMouseMovement = mouseDelta.sqrMagnitude > 0.0001f;
+            return hasMouseMovement ? Vector2.zero : lookInput;
         }
 
         private void UpdateStatDisplay()
@@ -133,6 +177,8 @@ namespace RoobsWorld.Creature.Editor
 
         private void BuildUI()
         {
+            EnsureEventSystem();
+
             var canvasObj = new GameObject("EditorCanvas");
             _uiCanvas = canvasObj.AddComponent<Canvas>();
             _uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -143,6 +189,16 @@ namespace RoobsWorld.Creature.Editor
             BuildPartPalette(canvasObj.transform);
             BuildStatsPanel(canvasObj.transform);
             BuildToolbar(canvasObj.transform);
+        }
+
+        private static void EnsureEventSystem()
+        {
+            if (FindAnyObjectByType<EventSystem>() != null)
+                return;
+
+            var eventSystemObj = new GameObject("EventSystem");
+            eventSystemObj.AddComponent<EventSystem>();
+            eventSystemObj.AddComponent<StandaloneInputModule>();
         }
 
         private void BuildPartPalette(Transform parent)
@@ -184,6 +240,7 @@ namespace RoobsWorld.Creature.Editor
             _nameText = CreateUIText(panel.transform, "Name: Roob", new Vector2(5, -5), 14);
             _statText = CreateUIText(panel.transform, "Stats", new Vector2(5, -25), 12);
             _costText = CreateUIText(panel.transform, "DNA Cost: 0", new Vector2(5, -80), 12);
+            _statusText = CreateUIText(panel.transform, "Drag body to sculpt, or drag a part onto the body.", new Vector2(5, -105), 10);
         }
 
         private void BuildToolbar(Transform parent)
@@ -223,6 +280,8 @@ namespace RoobsWorld.Creature.Editor
             var btn = btnObj.AddComponent<Button>();
             string id = partId;
             btn.onClick.AddListener(() => OnPartSelected(id));
+            var dragHandler = btnObj.AddComponent<PalettePartDragHandler>();
+            dragHandler.Initialize(this, id);
 
             CreateUIText(btnObj.transform, partId.Replace("_", " "), Vector2.zero, 11);
             _partButtons.Add(btnObj);
@@ -269,9 +328,120 @@ namespace RoobsWorld.Creature.Editor
 
         private void OnPartSelected(string partId)
         {
-            int bone = _state.DNA.Body.SpineSegments > 1 ? 1 : 0;
-            _state.AddPart(partId, bone, new Vector3(0.3f, 0, 0));
+            SetStatus($"Drag {partId.Replace("_", " ")} onto the creature.");
+        }
+
+        private void UpdateDragPreview()
+        {
+            if (!_isDraggingPart)
+            {
+                DestroyDragPreviewPart();
+                return;
+            }
+
+            _lastDropValid = TryGetDropCandidate(out _lastDropCandidate, out string reason);
+            string partLabel = _draggingPartId != null ? _draggingPartId.Replace("_", " ") : "part";
+            if (_lastDropValid)
+            {
+                SetStatus($"Drop {partLabel}: valid snap");
+                UpdateDragPreviewPart();
+            }
+            else
+            {
+                SetStatus($"Drop {partLabel}: {reason}");
+                DestroyDragPreviewPart();
+            }
+        }
+
+        private void UpdateBodySculptInput()
+        {
+            if (_isDraggingPart || _state?.DNA?.Body == null || Mouse.current == null)
+                return;
+
+            if (Mouse.current.leftButton.wasPressedThisFrame)
+                TryBeginBodySculptDrag();
+
+            if (_isBodySculptDrag && Mouse.current.leftButton.isPressed)
+                ContinueBodySculptDrag();
+
+            if (_isBodySculptDrag && Mouse.current.leftButton.wasReleasedThisFrame)
+                EndBodySculptDrag();
+        }
+
+        private void TryBeginBodySculptDrag()
+        {
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+                return;
+
+            if (!TryGetBodyHit(out var hit, out int nearestAnchor))
+                return;
+
+            _isBodySculptDrag = true;
+            _bodyDragStartScreen = Mouse.current.position.ReadValue();
+            _bodyDragStartScale = _state.DNA.Body.BodyScale;
+            _bodyDragStartFrontPull = _state.DNA.Body.FrontPull;
+            _bodyDragStartAnchorIndex = nearestAnchor;
+            SetStatus("Sculpting body: drag to stretch like plasticine.");
+        }
+
+        private void ContinueBodySculptDrag()
+        {
+            Vector2 current = Mouse.current.position.ReadValue();
+            Vector2 delta = current - _bodyDragStartScreen;
+
+            float widthDelta = delta.x * 0.0025f;
+            float lengthDelta = delta.y * 0.0025f;
+            float heightDelta = delta.y * 0.0012f;
+
+            Vector3 newScale = new Vector3(
+                _bodyDragStartScale.x + widthDelta,
+                _bodyDragStartScale.y + heightDelta,
+                _bodyDragStartScale.z + lengthDelta);
+
+            float frontPullDelta = _bodyDragStartAnchorIndex == 0 ? (delta.y * 0.0018f) : (delta.y * 0.0006f);
+            float newFrontPull = _bodyDragStartFrontPull + frontPullDelta;
+
+            _state.SetBodyShape(newScale, newFrontPull);
             RefreshCreaturePreview();
+        }
+
+        private void EndBodySculptDrag()
+        {
+            _isBodySculptDrag = false;
+            SetStatus("Body sculpt updated. Drag the body again or place parts.");
+        }
+
+        private bool TryGetBodyHit(out RaycastHit hit, out int nearestAnchor)
+        {
+            hit = default;
+            nearestAnchor = 0;
+
+            if (_creaturePreview == null || Camera.main == null || _spineAnchors.Count == 0)
+                return false;
+
+            Vector2 pointerPos = Mouse.current != null
+                ? Mouse.current.position.ReadValue()
+                : Vector2.zero;
+
+            Ray ray = Camera.main.ScreenPointToRay(pointerPos);
+            if (!Physics.Raycast(ray, out hit, 50f))
+                return false;
+
+            if (!hit.transform.IsChildOf(_creaturePreview.transform))
+                return false;
+
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < _spineAnchors.Count; i++)
+            {
+                float sqr = (hit.point - _spineAnchors[i].position).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    nearestAnchor = i;
+                }
+            }
+
+            return true;
         }
 
         private void RefreshCreaturePreview()
@@ -279,9 +449,284 @@ namespace RoobsWorld.Creature.Editor
             if (_creaturePreview != null)
                 Destroy(_creaturePreview);
 
-            _creaturePreview = ModelFactory.CreateCreatureModel(
-                Vector3.zero, _state.DNA.Colors.PrimaryColor);
+            _creaturePreview = ModelFactory.CreateCreatureModel(Vector3.zero, _state.DNA);
             _creaturePreview.name = "CreaturePreview";
+            CacheSpineAnchors();
+            EnsurePreviewColliders();
+        }
+
+        private void CacheSpineAnchors()
+        {
+            _spineAnchors.Clear();
+            if (_creaturePreview == null)
+                return;
+
+            int spineSegments = _state?.DNA?.Body != null ? Mathf.Max(1, _state.DNA.Body.SpineSegments) : 1;
+            for (int i = 0; i < spineSegments; i++)
+            {
+                var anchor = _creaturePreview.transform.Find($"Body/{CreatureModelBuilder.SpineAnchorPrefix}{i}");
+                if (anchor != null)
+                    _spineAnchors.Add(anchor);
+            }
+        }
+
+        private void EnsurePreviewColliders()
+        {
+            if (_creaturePreview == null)
+                return;
+
+            var meshFilters = _creaturePreview.GetComponentsInChildren<MeshFilter>(true);
+            for (int i = 0; i < meshFilters.Length; i++)
+            {
+                var mf = meshFilters[i];
+                if (mf == null || mf.sharedMesh == null)
+                    continue;
+
+                var existingCollider = mf.GetComponent<Collider>();
+                if (existingCollider == null)
+                {
+                    var meshCollider = mf.gameObject.AddComponent<MeshCollider>();
+                    meshCollider.sharedMesh = mf.sharedMesh;
+                    meshCollider.convex = false;
+                }
+            }
+        }
+
+        internal void BeginPartDrag(string partId)
+        {
+            _draggingPartId = partId;
+            _isDraggingPart = true;
+            _lastDropValid = false;
+        }
+
+        internal void UpdatePartDrag()
+        {
+            if (!_isDraggingPart)
+                return;
+
+            _lastDropValid = TryGetDropCandidate(out _lastDropCandidate, out _);
+        }
+
+        internal void EndPartDrag()
+        {
+            if (!_isDraggingPart)
+                return;
+
+            if (_lastDropValid && !string.IsNullOrWhiteSpace(_draggingPartId))
+            {
+                _state.AddPart(_draggingPartId, _lastDropCandidate.AttachBone, _lastDropCandidate.Offset);
+                RefreshCreaturePreview();
+                SetStatus($"Placed {_draggingPartId.Replace("_", " ")}.");
+            }
+            else
+            {
+                SetStatus("Drop blocked. Move to a clear body location.");
+            }
+
+            _isDraggingPart = false;
+            _draggingPartId = null;
+            DestroyDragPreviewPart();
+        }
+
+        private bool TryGetDropCandidate(out DropCandidate candidate, out string reason)
+        {
+            candidate = default;
+            reason = "hover over body";
+
+            if (_creaturePreview == null || Camera.main == null)
+                return false;
+
+            Vector2 pointerPos;
+            if (Mouse.current != null)
+                pointerPos = Mouse.current.position.ReadValue();
+            else if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
+                pointerPos = Touchscreen.current.primaryTouch.position.ReadValue();
+            else
+                return false;
+
+            Ray ray = Camera.main.ScreenPointToRay(pointerPos);
+            if (!Physics.Raycast(ray, out var hit, 50f))
+                return false;
+
+            if (!hit.transform.IsChildOf(_creaturePreview.transform))
+                return false;
+
+            if (_spineAnchors.Count == 0)
+                return false;
+
+            int nearestAnchor = 0;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < _spineAnchors.Count; i++)
+            {
+                float sqr = (hit.point - _spineAnchors[i].position).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    nearestAnchor = i;
+                }
+            }
+
+            Transform anchor = _spineAnchors[nearestAnchor];
+            Vector3 localHit = _creaturePreview.transform.InverseTransformPoint(hit.point);
+            Vector3 localAnchor = _creaturePreview.transform.InverseTransformPoint(anchor.position);
+            Vector3 localNormal = _creaturePreview.transform.InverseTransformDirection(hit.normal).normalized;
+            Vector3 offset = localHit - localAnchor + (localNormal * 0.04f);
+
+            if (offset.magnitude > 1.25f)
+                offset = offset.normalized * 1.25f;
+
+            float newPartRadius = EstimatePartRadius(_draggingPartId, 1f);
+            if (HasOverlap(_draggingPartId, nearestAnchor, offset, newPartRadius))
+            {
+                reason = "overlaps existing part";
+                return false;
+            }
+
+            candidate = new DropCandidate
+            {
+                AttachBone = nearestAnchor,
+                Offset = offset
+            };
+            reason = "valid";
+            return true;
+        }
+
+        private bool HasOverlap(string partId, int attachBone, Vector3 offset, float newRadius)
+        {
+            var parts = _state?.DNA?.Parts;
+            if (parts == null)
+                return false;
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var existing = parts[i];
+                if (existing == null || existing.AttachBone != attachBone)
+                    continue;
+
+                float existingRadius = EstimatePartRadius(existing.PartId, existing.Scale);
+                float minDistance = (newRadius + existingRadius) * 0.85f;
+                if ((existing.Offset - offset).sqrMagnitude < (minDistance * minDistance))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private float EstimatePartRadius(string partId, float scale)
+        {
+            float baseRadius = 0.16f;
+            if (!string.IsNullOrWhiteSpace(partId) && _partCatalog != null && _partCatalog.TryGetValue(partId, out var def))
+                baseRadius = Mathf.Max(0.12f, def.DefaultScale.magnitude * 0.12f);
+            return Mathf.Max(0.06f, baseRadius * Mathf.Max(0.15f, scale));
+        }
+
+        private void SetStatus(string message)
+        {
+            if (_statusText != null)
+                _statusText.text = message;
+        }
+
+        private void UpdateDragPreviewPart()
+        {
+            if (_creaturePreview == null || string.IsNullOrWhiteSpace(_draggingPartId))
+                return;
+
+            if (_dragPreviewPart == null)
+                _dragPreviewPart = CreateDragPreviewPart(_draggingPartId);
+
+            if (_dragPreviewPart == null)
+                return;
+
+            int anchorIndex = Mathf.Clamp(_lastDropCandidate.AttachBone, 0, Mathf.Max(0, _spineAnchors.Count - 1));
+            Transform anchor = _spineAnchors.Count > 0 ? _spineAnchors[anchorIndex] : null;
+            if (anchor == null)
+                return;
+
+            Vector3 anchorLocal = _creaturePreview.transform.InverseTransformPoint(anchor.position);
+            Vector3 localPos = anchorLocal + _lastDropCandidate.Offset;
+            _dragPreviewPart.transform.position = _creaturePreview.transform.TransformPoint(localPos);
+            _dragPreviewPart.transform.rotation = _creaturePreview.transform.rotation * GetAutoRotation(_draggingPartId, _lastDropCandidate.Offset);
+        }
+
+        private GameObject CreateDragPreviewPart(string partId)
+        {
+            if (string.IsNullOrWhiteSpace(partId))
+                return null;
+
+            GameObject previewObj = null;
+            if (_partCatalog != null && _partCatalog.TryGetValue(partId, out var def) && def != null)
+            {
+                if (def.ModelPrefab != null)
+                {
+                    previewObj = Instantiate(def.ModelPrefab);
+                    BlenderAssetLibrary.DisableColliders(previewObj);
+                }
+                else
+                {
+                    previewObj = new GameObject($"DragPreview_{partId}");
+                    var mf = previewObj.AddComponent<MeshFilter>();
+                    mf.mesh = CreaturePartMeshFactory.GetPartMesh(partId);
+                    previewObj.AddComponent<MeshRenderer>();
+                }
+
+                Vector3 scale = def.DefaultScale == Vector3.zero ? Vector3.one : def.DefaultScale;
+                previewObj.transform.localScale = scale;
+            }
+
+            if (previewObj == null)
+                return null;
+
+            previewObj.name = $"DragPreview_{partId}";
+            TintDragPreviewRenderers(previewObj);
+            return previewObj;
+        }
+
+        private static void TintDragPreviewRenderers(GameObject previewObj)
+        {
+            var renderers = previewObj.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null)
+                    continue;
+
+                var materials = renderer.materials;
+                for (int m = 0; m < materials.Length; m++)
+                {
+                    var mat = materials[m];
+                    if (mat == null || !mat.HasProperty("_Color"))
+                        continue;
+
+                    Color c = mat.color;
+                    c.a = 0.55f;
+                    mat.color = c;
+                }
+                renderer.materials = materials;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+        }
+
+        private static Quaternion GetAutoRotation(string partId, Vector3 offset)
+        {
+            bool leftSide = offset.x < -0.001f;
+
+            if ((partId.StartsWith("wing") || partId.StartsWith("fin")) && leftSide)
+                return Quaternion.Euler(0f, 180f, 0f);
+
+            if (partId.StartsWith("arm"))
+                return Quaternion.Euler(0f, 0f, leftSide ? -18f : 18f);
+
+            return Quaternion.identity;
+        }
+
+        private void DestroyDragPreviewPart()
+        {
+            if (_dragPreviewPart != null)
+            {
+                Destroy(_dragPreviewPart);
+                _dragPreviewPart = null;
+            }
         }
 
         private void OnDone()
@@ -296,7 +741,41 @@ namespace RoobsWorld.Creature.Editor
         {
             if (_editorRoot != null) Destroy(_editorRoot);
             if (_creaturePreview != null) Destroy(_creaturePreview);
+            DestroyDragPreviewPart();
             if (_uiCanvas != null) Destroy(_uiCanvas.gameObject);
+        }
+
+        private struct DropCandidate
+        {
+            public int AttachBone;
+            public Vector3 Offset;
+        }
+
+        private sealed class PalettePartDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+        {
+            private CreatureEditorScene _scene;
+            private string _partId;
+
+            public void Initialize(CreatureEditorScene scene, string partId)
+            {
+                _scene = scene;
+                _partId = partId;
+            }
+
+            public void OnBeginDrag(PointerEventData eventData)
+            {
+                _scene?.BeginPartDrag(_partId);
+            }
+
+            public void OnDrag(PointerEventData eventData)
+            {
+                _scene?.UpdatePartDrag();
+            }
+
+            public void OnEndDrag(PointerEventData eventData)
+            {
+                _scene?.EndPartDrag();
+            }
         }
     }
 }

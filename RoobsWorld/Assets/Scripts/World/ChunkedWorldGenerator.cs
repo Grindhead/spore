@@ -21,11 +21,15 @@ namespace RoobsWorld.World
         [SerializeField] private int _seed;
 
         private readonly Dictionary<Vector2Int, GameObject> _chunks = new Dictionary<Vector2Int, GameObject>();
+        private readonly List<Vector2Int> _chunksToRemove = new List<Vector2Int>(32);
+        private Vector2Int _lastPlayerChunk = new Vector2Int(int.MinValue, int.MinValue);
+        private Material _chunkMaterial;
 
         private void Start()
         {
             if (_player == null)
                 _player = Camera.main != null ? Camera.main.transform : transform;
+            EnsureChunkMaterial();
         }
 
         private void Update()
@@ -36,7 +40,15 @@ namespace RoobsWorld.World
             int cx = Mathf.FloorToInt(pos.x / _chunkSize);
             int cz = Mathf.FloorToInt(pos.z / _chunkSize);
             var playerChunk = new Vector2Int(cx, cz);
+            if (playerChunk == _lastPlayerChunk)
+                return;
 
+            _lastPlayerChunk = playerChunk;
+            RefreshChunks(playerChunk);
+        }
+
+        private void RefreshChunks(Vector2Int playerChunk)
+        {
             for (int x = -_viewDistance; x <= _viewDistance; x++)
             {
                 for (int z = -_viewDistance; z <= _viewDistance; z++)
@@ -47,16 +59,17 @@ namespace RoobsWorld.World
                 }
             }
 
-            var toRemove = new List<Vector2Int>();
+            _chunksToRemove.Clear();
             foreach (var kv in _chunks)
             {
                 int dx = Mathf.Abs(kv.Key.x - playerChunk.x);
                 int dz = Mathf.Abs(kv.Key.y - playerChunk.y);
                 if (dx > _viewDistance || dz > _viewDistance)
-                    toRemove.Add(kv.Key);
+                    _chunksToRemove.Add(kv.Key);
             }
-            foreach (var coord in toRemove)
+            for (int i = 0; i < _chunksToRemove.Count; i++)
             {
+                var coord = _chunksToRemove[i];
                 if (_chunks.TryGetValue(coord, out var go))
                 {
                     Destroy(go);
@@ -75,13 +88,22 @@ namespace RoobsWorld.World
             var mf = go.AddComponent<MeshFilter>();
             mf.mesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Standard");
-            mr.material = new Material(shader) { name = "ChunkMat" };
+            mr.sharedMaterial = EnsureChunkMaterial();
             var mc = go.AddComponent<MeshCollider>();
             mc.sharedMesh = mesh;
 
             _chunks[coord] = go;
+        }
+
+        private Material EnsureChunkMaterial()
+        {
+            if (_chunkMaterial != null)
+                return _chunkMaterial;
+
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) shader = Shader.Find("Standard");
+            _chunkMaterial = new Material(shader) { name = "ChunkMat" };
+            return _chunkMaterial;
         }
 
         private Mesh BuildChunkMesh(Vector2Int coord)

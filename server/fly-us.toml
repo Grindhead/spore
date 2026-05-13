@@ -1,0 +1,31 @@
+app = "spore-us"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "7788"
+  MAX_PLAYERS = "1000"
+  OFFICIAL_LOBBIES = "PUBLIC:Official US East"
+
+[http_service]
+  internal_port = 7788
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 512
+    hard_limit = 768
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"

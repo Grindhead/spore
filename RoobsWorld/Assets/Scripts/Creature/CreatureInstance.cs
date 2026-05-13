@@ -65,7 +65,16 @@ namespace RoobsWorld.Creature
             if (_isDead || amount <= 0f)
                 return;
             if (IsInvulnerable)
+            {
+                EventBus.Publish(new CreatureCombatFeedbackEvent
+                {
+                    Type = CreatureCombatFeedbackType.Blocked,
+                    TargetCreatureId = _dna?.CreatureId,
+                    Position = transform.position,
+                    IsPlayerTarget = _isPlayer
+                });
                 return;
+            }
 
             float mitigated = Mathf.Max(0, amount - _stats.Defense * 0.5f);
             _currentHealth = Mathf.Max(0, _currentHealth - mitigated);
@@ -74,6 +83,14 @@ namespace RoobsWorld.Creature
             {
                 _lastDamageTime = Time.time;
                 RoobsWorld.Utils.VFXFactory.Create(RoobsWorld.Utils.VFXType.DamageHit, transform.position);
+                EventBus.Publish(new CreatureCombatFeedbackEvent
+                {
+                    Type = _isPlayer ? CreatureCombatFeedbackType.PlayerDamaged : CreatureCombatFeedbackType.Hit,
+                    TargetCreatureId = _dna?.CreatureId,
+                    Position = transform.position,
+                    Amount = mitigated,
+                    IsPlayerTarget = _isPlayer
+                });
 
                 if (_isPlayer)
                 {
@@ -86,6 +103,14 @@ namespace RoobsWorld.Creature
                     if (hpRatio <= 0.3f && Time.time >= _nextLowHealthTipTime)
                     {
                         RoobsWorld.UI.TutorialOverlay.Instance?.ShowContextualTip("creature.player.low_health", 1.8f);
+                        EventBus.Publish(new CreatureCombatFeedbackEvent
+                        {
+                            Type = CreatureCombatFeedbackType.LowHealth,
+                            TargetCreatureId = _dna?.CreatureId,
+                            Position = transform.position,
+                            Amount = hpRatio,
+                            IsPlayerTarget = true
+                        });
                         _nextLowHealthTipTime = Time.time + 8f;
                     }
                 }

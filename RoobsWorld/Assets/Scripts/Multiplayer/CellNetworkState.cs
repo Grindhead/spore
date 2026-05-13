@@ -87,6 +87,7 @@ namespace RoobsWorld.Multiplayer
         public int   PlayerId;
         public float MoveX, MoveY;
         public bool  EatInput;
+        public float Mass;
         public uint  Tick;
     }
 

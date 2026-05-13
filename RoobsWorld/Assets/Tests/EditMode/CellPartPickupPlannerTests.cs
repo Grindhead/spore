@@ -45,5 +45,52 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual(8, plan.Count);
             Assert.AreEqual(4, set.Count);
         }
+
+        [Test]
+        public void GetStrategicSpawnBand_PutsHighImpactPartsInRiskierOuterBands()
+        {
+            var cilia = CellPartPickupPlanner.GetStrategicSpawnBand(CellPartType.Cilia);
+            var jet = CellPartPickupPlanner.GetStrategicSpawnBand(CellPartType.Jet);
+
+            Assert.Less(cilia.MaxRadiusFraction, jet.MaxRadiusFraction);
+            Assert.IsFalse(cilia.AllowToxicZone);
+            Assert.IsTrue(jet.AllowToxicZone);
+        }
+
+        [Test]
+        public void GetPreviewText_ExplainsGameplayRole()
+        {
+            string spike = CellPartPickupPlanner.GetPreviewText(CellPartType.Spike);
+            string jet = CellPartPickupPlanner.GetPreviewText(CellPartType.Jet);
+
+            Assert.That(spike, Does.Contain("contact"));
+            Assert.That(jet, Does.Contain("boost"));
+        }
+
+        [Test]
+        public void SelectGoalPartType_PrefersLockedUtilityParts()
+        {
+            var loadout = new CellPartLoadout();
+
+            Assert.AreEqual(CellPartType.Cilia, CellPartPickupPlanner.SelectGoalPartType(loadout));
+
+            loadout.TryUnlock(CellPartType.Cilia);
+            Assert.AreEqual(CellPartType.Spike, CellPartPickupPlanner.SelectGoalPartType(loadout));
+
+            loadout.TryUnlock(CellPartType.Spike);
+            Assert.AreEqual(CellPartType.Jet, CellPartPickupPlanner.SelectGoalPartType(loadout));
+        }
+
+        [Test]
+        public void SelectGoalPartType_FallsBackToCilia_WhenAllPartsUnlocked()
+        {
+            var loadout = new CellPartLoadout();
+            loadout.TryUnlock(CellPartType.Cilia);
+            loadout.TryUnlock(CellPartType.Spike);
+            loadout.TryUnlock(CellPartType.Jet);
+            loadout.TryUnlock(CellPartType.Flagella);
+
+            Assert.AreEqual(CellPartType.Cilia, CellPartPickupPlanner.SelectGoalPartType(loadout));
+        }
     }
 }

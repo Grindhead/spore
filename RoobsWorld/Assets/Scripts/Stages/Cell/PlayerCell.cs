@@ -17,6 +17,7 @@ namespace RoobsWorld.Stages.Cell
         private const float OrganismConsumeMassFactor = 0.45f;
         private const float NpcCellConsumeSizeRatio = 0.8f;
         private const float OrganismConsumeSizeRatio = 0.82f;
+        private const float GoalLargerPreyConsumeSizeRatio = 1.12f;
         private const float EndosymbiosisTraitTransferChance = 0.35f;
         private const double EndosymbiosisPreferredTraitBiasChance = 0.72d;
         private const int MaxSymbiosisLevel = 3;
@@ -28,6 +29,9 @@ namespace RoobsWorld.Stages.Cell
         private const float UpgradeSpeedBonus = 0.35f;
         private const float MinGenomeSpeedMultiplier = 0.9f;
         private const float MaxGenomeSpeedMultiplier = 1.6f;
+        private const int DietVarietyChainThreshold = 2;
+        private const int DietVarietyDnaBonus = 1;
+        private const float DietVarietyMassBonusMultiplier = 0.35f;
 
         [Header("Movement")]
         [SerializeField] private float _moveSpeed = 5.6f;
@@ -58,11 +62,15 @@ namespace RoobsWorld.Stages.Cell
 
         private const float MinimumMass = 0.5f;
         private bool _isDead;
+        private string _lastDeathCauseKey = "cell.death.cause.unknown";
+        private string _lastDeathRecommendationKey = "cell.death.tip.general";
         private float _peakMass;
         private float _maxUnlockedBaseScale;
         private CellStage _stageCache;
         private int _foodConsumedTotal;
         private int _foodConsumedSinceUpgrade;
+        private FoodType? _lastConsumedFoodType;
+        private int _dietVarietyChain;
         private float _upgradePromptUnlockTime;
 
         public float CurrentMass => _currentMass;
@@ -71,8 +79,15 @@ namespace RoobsWorld.Stages.Cell
         public float MaxMassForStage => _evolutionThreshold * MaxEvolutions;
         public float NormalizedMass => Mathf.Clamp01(_currentMass / MaxMassForStage);
         public int DNAPoints => _dnaPointsCollected;
+        public int FoodConsumedSinceUpgrade => _foodConsumedSinceUpgrade;
+        public int FoodRequiredPerUpgrade => Mathf.Max(1, _foodConsumedPerUpgrade);
+        public int FoodRemainingForUpgrade => Mathf.Max(0, FoodRequiredPerUpgrade - _foodConsumedSinceUpgrade);
+        public bool IsUpgradeReady => HasConsumedEnoughFoodForUpgrade(_foodConsumedSinceUpgrade, _foodConsumedPerUpgrade);
         public CellPartLoadout PartLoadout => _partLoadout;
         public bool IsDead => _isDead;
+        public float CurrentCruiseSpeed => ComputeEffectiveMoveSpeed(includeActiveBoost: false);
+        public float CurrentBoostSpeed => ComputeEffectiveMoveSpeed(includeActiveBoost: true);
+        public int FoodConsumedTotal => _foodConsumedTotal;
         public bool HasAnySymbiosisLevels =>
             _photosyntheticSymbiosisLevel > 0 ||
             _toxicSymbiosisLevel > 0 ||
@@ -104,6 +119,13 @@ namespace RoobsWorld.Stages.Cell
             _activeInstance = null;
             player = null;
             return false;
+        }
+
+        public static float GetReferenceCruiseSpeed()
+        {
+            return TryGetActiveInstance(out var player)
+                ? player.CurrentCruiseSpeed
+                : BalanceConstants.CellPlayerFallbackCruiseSpeed;
         }
 
         private const int MaxEvolutions = 3;
@@ -213,7 +235,7 @@ namespace RoobsWorld.Stages.Cell
             float speed = _moveSpeed;
             if (_boostTimer > 0)
             {
-                speed *= _boostMultiplier;
+                speed *= _boostMultiplier * _partLoadout.BoostSpeedMultiplier;
                 _boostTimer -= Time.fixedDeltaTime;
             }
 
@@ -221,7 +243,7 @@ namespace RoobsWorld.Stages.Cell
             speed *= _partLoadout.SpeedMultiplier;
             speed *= GetGenomeSpeedMultiplier();
 
-            float sizeSpeedPenalty = 1f / (1f + _currentMass * 0.17f);
+            float sizeSpeedPenalty = ComputeSizeSpeedPenalty(_currentMass);
             if (moveDir.sqrMagnitude > 0.0001f)
                 _lastAimDirection = moveDir;
 
@@ -249,7 +271,8 @@ namespace RoobsWorld.Stages.Cell
         /// </summary>
         private void ProbeNearbyConsumables()
         {
-            float probeRadius = ComputeConsumeProbeRadius(transform.lossyScale, GetComponent<SphereCollider>());
+            float probeRadius = ComputeConsumeProbeRadius(transform.lossyScale, GetComponent<SphereCollider>())
+                + _partLoadout.ConsumeProbeRadiusBonus;
             int hitCount = Physics.OverlapSphereNonAlloc(
                 transform.position,
                 probeRadius,
@@ -466,11 +489,11 @@ namespace RoobsWorld.Stages.Cell
                 }
                 else if (ShouldDieFromFailedConsumeAttempt(playerScale, targetScale, NpcCellConsumeSizeRatio))
                 {
-                    TriggerDeath();
+                    TriggerDeath("cell.death.cause.too_large", "cell.death.tip.spikes");
                 }
                 else if (_partLoadout.HasContactDamage)
                 {
-                    npcCell.ApplyDamage(SpikeContactDamage);
+                    npcCell.ApplyDamage(SpikeContactDamage * _partLoadout.ContactDamageMultiplier);
                 }
                 return true;
             }
@@ -480,17 +503,19 @@ namespace RoobsWorld.Stages.Cell
             {
                 float playerScale = transform.localScale.x;
                 float targetScale = organism.transform.localScale.x;
-                if (CanConsumeTarget(playerScale, targetScale, OrganismConsumeSizeRatio))
+                bool isGoalLargerPreyTarget = FindComponentOnCollider<CellGoalLargerPreyTarget>(other) != null;
+                if (CanConsumeTarget(playerScale, targetScale, OrganismConsumeSizeRatio) ||
+                    (isGoalLargerPreyTarget && CanConsumeGoalLargerPreyTarget(playerScale, targetScale)))
                 {
                     ConsumeOrganism(organism);
                 }
                 else if (ShouldDieFromFailedConsumeAttempt(playerScale, targetScale, OrganismConsumeSizeRatio))
                 {
-                    TriggerDeath();
+                    TriggerDeath("cell.death.cause.too_large", "cell.death.tip.armour");
                 }
                 else if (_partLoadout.HasContactDamage)
                 {
-                    organism.TakeDamage(SpikeContactDamage * 6f);
+                    organism.TakeDamage(SpikeContactDamage * 6f * _partLoadout.ContactDamageMultiplier);
                 }
                 return true;
             }
@@ -526,6 +551,14 @@ namespace RoobsWorld.Stages.Cell
         private static bool CanConsumeTarget(float playerScale, float targetScale, float consumeSizeRatio)
             => targetScale < playerScale * consumeSizeRatio;
 
+        public static bool CanConsumeGoalLargerPreyTarget(float playerScale, float targetScale)
+        {
+            float safePlayerScale = Mathf.Max(0.01f, Mathf.Abs(playerScale));
+            float safeTargetScale = Mathf.Max(0f, Mathf.Abs(targetScale));
+            return safeTargetScale > safePlayerScale &&
+                   safeTargetScale <= safePlayerScale * GoalLargerPreyConsumeSizeRatio;
+        }
+
         /// <summary>
         /// Returns true when a failed consume attempt should kill the player:
         /// target is not consumable and is strictly larger than the player.
@@ -545,7 +578,7 @@ namespace RoobsWorld.Stages.Cell
 
         private void ApplyConsumptionMassGain(float massGain)
         {
-            _currentMass += Mathf.Max(MinimumConsumptionMassGain, massGain);
+            _currentMass += Mathf.Max(MinimumConsumptionMassGain, massGain * _partLoadout.FoodGainMultiplier);
             TrackPeakMass();
         }
 
@@ -581,25 +614,74 @@ namespace RoobsWorld.Stages.Cell
                 return;
 
             RoobsWorld.Utils.VFXFactory.Create(RoobsWorld.Utils.VFXType.FoodEat, foodPosition);
-            ApplyConsumptionMassGain(_growthPerFood * GetDigestiveGainMultiplier(_playerGenome, _regenerativeSymbiosisLevel));
+            float baseMassGain = _growthPerFood * GetDigestiveGainMultiplier(_playerGenome, _regenerativeSymbiosisLevel);
+            int previousDietChain = _dietVarietyChain;
+            _dietVarietyChain = ComputeDietVarietyChain(_lastConsumedFoodType, foodType, _dietVarietyChain);
+            _lastConsumedFoodType = foodType;
+            float varietyMassBonus = ComputeDietVarietyMassBonus(
+                baseMassGain,
+                _dietVarietyChain,
+                DietVarietyChainThreshold,
+                DietVarietyMassBonusMultiplier);
+            ApplyConsumptionMassGain(baseMassGain + varietyMassBonus);
             _foodConsumedTotal++;
             _foodConsumedSinceUpgrade++;
-            _dnaPointsCollected += BalanceConstants.CellDNAPointsPerFood;
-            GameManager.Instance.AddDNAPoints(BalanceConstants.CellDNAPointsPerFood);
+            int dnaReward = BalanceConstants.CellDNAPointsPerFood;
+            bool awardedVarietyBonus = ShouldAwardDietVarietyBonus(
+                previousDietChain,
+                _dietVarietyChain,
+                DietVarietyChainThreshold);
+            if (awardedVarietyBonus)
+                dnaReward += DietVarietyDnaBonus;
+            _dnaPointsCollected += dnaReward;
+            GameManager.Instance.AddDNAPoints(dnaReward);
             _biasTracker.RecordFoodEaten(foodType);
             EventBus.Publish(new CellFoodConsumedEvent { FoodType = foodType });
+            if (awardedVarietyBonus)
+            {
+                EventBus.Publish(new CellDietVarietyBonusEvent
+                {
+                    FoodType = foodType,
+                    ChainLength = _dietVarietyChain,
+                    DnaBonus = DietVarietyDnaBonus,
+                    MassBonus = varietyMassBonus
+                });
+            }
             var eatSfx = foodType == FoodType.Meat  ? SFXType.FoodEatenMeat
                        : foodType == FoodType.Toxin ? SFXType.FoodEatenToxin
                        : SFXType.FoodEatenPlant;
             AudioManager.Instance?.PlaySFX(eatSfx);
-            InputManager.Instance?.RequestHaptic(0.1f, 0.3f, 0.06f);
+            InputManager.Instance?.RequestHaptic(
+                awardedVarietyBonus ? 0.16f : 0.1f,
+                awardedVarietyBonus ? 0.42f : 0.3f,
+                awardedVarietyBonus ? 0.08f : 0.06f);
             if (RoobsWorld.Core.CameraManager.HasInstance)
                 RoobsWorld.Core.CameraManager.Instance.RequestShake(0.12f, 0.1f);
             PlayEatPulse(foodType);
             UpdateVisualScale();
 
-            CheckEvolution();
-            TryApplyUpgradeAfterFood();
+            // Cell-stage progression is now pure eat-to-grow with no upgrade/evolution overlays.
+        }
+
+        private float ComputeEffectiveMoveSpeed(bool includeActiveBoost)
+        {
+            float speed = _moveSpeed;
+            if (includeActiveBoost && _boostTimer > 0f)
+                speed *= _boostMultiplier * _partLoadout.BoostSpeedMultiplier;
+
+            speed *= CellFeelDirector.PlayerSpeedMultiplier;
+            speed *= _partLoadout.SpeedMultiplier;
+            speed *= GetGenomeSpeedMultiplier();
+
+            float sizeSpeedPenalty = ComputeSizeSpeedPenalty(_currentMass);
+            return speed * sizeSpeedPenalty;
+        }
+
+        public static float ComputeSizeSpeedPenalty(float currentMass)
+        {
+            float mass = Mathf.Max(MinimumMass, currentMass);
+            float t = Mathf.Clamp01((mass - MinimumMass) / Mathf.Max(0.01f, BalanceConstants.CellEvolutionMassThresholdBase - MinimumMass));
+            return Mathf.Lerp(1f, 0.62f, t);
         }
 
         private void ConsumePartPickup(CellPartPickup pickup)
@@ -1013,7 +1095,19 @@ namespace RoobsWorld.Stages.Cell
         }
 
         /// <summary>Called by CellStage when the player escapes a predator threat radius.</summary>
-        public void NotifyPredatorEscaped() => _biasTracker.RecordPredatorEscaped();
+        public float NotifyPredatorEscaped()
+        {
+            _biasTracker.RecordPredatorEscaped();
+            float boostSeconds = ComputePredatorEscapeBoostSeconds(
+                _boostDuration,
+                CellFeelDirector.PlayerBoostDurationMultiplier,
+                _partLoadout.BoostDurationMultiplier,
+                BalanceConstants.CellPredatorEscapeBoostDurationMultiplier);
+            if (boostSeconds > 0f)
+                _boostTimer = Mathf.Max(_boostTimer, boostSeconds);
+
+            return boostSeconds;
+        }
 
         /// <summary>
         /// Called by CellStage on a RadiationSurge event. Offers the player one bonus biased mutation
@@ -1022,15 +1116,9 @@ namespace RoobsWorld.Stages.Cell
         /// </summary>
         public void OfferRadiationMutation()
         {
-            if (_isDead || _isEvolving || _reproductionUIActive) return;
-            _reproductionUIActive = true;
-            var bias = _biasTracker.ComputeBias();
-            var discovered = RoobsWorld.Core.GameManager.HasInstance
-                ? RoobsWorld.Core.GameManager.Instance.DiscoveredTraits
-                : GeneticTraits.None;
-            var radiationVariant = MutationSystem.MutateRecommendedWithDiscoveries(_playerGenome, bias, discovered);
-            string subtitle = Localization.Get("cell.env.radiation_surge_subtitle");
-            MutationChoiceUI.Show(radiationVariant, OnRadiationMutationChoice, subtitle);
+            // Cell stage no longer presents power-up choices or modal overlays.
+            // Radiation surges can still affect the environment, but not player mutation UX.
+            return;
         }
 
         private void OnRadiationMutationChoice(Genome chosen)
@@ -1038,6 +1126,11 @@ namespace RoobsWorld.Stages.Cell
             if (chosen != null)
             {
                 RoobsWorld.Core.GameManager.Instance?.RecordTraitDiscovery(chosen.Traits);
+                EventBus.Publish(new CellMutationChosenEvent
+                {
+                    ChoiceLabel = CellEvolutionStoryBuilder.ResolveDominantBehavior(chosen),
+                    TraitMask = (int)chosen.Traits
+                });
                 int speciesId = SpeciationSystem.GetSpeciesIdForOffspring(0, _playerGenome, chosen);
                 _playerGenome = chosen;
                 RefreshGenomeVisuals();
@@ -1054,6 +1147,11 @@ namespace RoobsWorld.Stages.Cell
             Genome upgradedGenome = EnsureUpgradeImprovesCoreStats(chosen, previousGenome);
             _biasTracker.Reset();
             RoobsWorld.Core.GameManager.Instance?.RecordTraitDiscovery(upgradedGenome.Traits);
+            EventBus.Publish(new CellMutationChosenEvent
+            {
+                ChoiceLabel = CellEvolutionStoryBuilder.ResolveDominantBehavior(upgradedGenome),
+                TraitMask = (int)upgradedGenome.Traits
+            });
             int speciesId = SpeciationSystem.GetSpeciesIdForOffspring(0, previousGenome, upgradedGenome);
             _playerGenome = upgradedGenome;
             RefreshGenomeVisuals();
@@ -1068,19 +1166,50 @@ namespace RoobsWorld.Stages.Cell
         public static bool HasConsumedEnoughFoodForUpgrade(int consumedFoodCount, int requiredFoodCount)
             => consumedFoodCount >= Mathf.Max(1, requiredFoodCount);
 
+        public static int ComputeDietVarietyChain(FoodType? lastFoodType, FoodType currentFoodType, int currentChain)
+        {
+            if (!lastFoodType.HasValue)
+                return 1;
+
+            return lastFoodType.Value == currentFoodType
+                ? 1
+                : Mathf.Max(1, currentChain) + 1;
+        }
+
+        public static bool ShouldAwardDietVarietyBonus(int previousChain, int currentChain, int threshold)
+        {
+            int safeThreshold = Mathf.Max(1, threshold);
+            return currentChain >= safeThreshold && currentChain > previousChain;
+        }
+
+        public static float ComputeDietVarietyMassBonus(
+            float baseMassGain,
+            int currentChain,
+            int threshold,
+            float bonusMultiplier)
+        {
+            if (currentChain < Mathf.Max(1, threshold))
+                return 0f;
+
+            return Mathf.Max(0f, baseMassGain) * Mathf.Max(0f, bonusMultiplier);
+        }
+
+        public static float ComputePredatorEscapeBoostSeconds(
+            float baseBoostDuration,
+            float feelMultiplier,
+            float partMultiplier,
+            float escapeMultiplier)
+        {
+            float seconds = Mathf.Max(0f, baseBoostDuration)
+                * Mathf.Max(0f, feelMultiplier)
+                * Mathf.Max(0f, partMultiplier)
+                * Mathf.Max(0f, escapeMultiplier);
+            return seconds <= 0f ? 0f : Mathf.Max(0.05f, seconds);
+        }
+
         private void TryApplyUpgradeAfterFood()
         {
-            if (_isEvolving || _isDead || _reproductionUIActive) return;
-            if (Time.time < _upgradePromptUnlockTime) return;
-            if (_currentMass < BalanceConstants.CellPlayerReproductionMassThreshold) return;
-            if (!HasConsumedEnoughFoodForUpgrade(_foodConsumedSinceUpgrade, _foodConsumedPerUpgrade)) return;
-
-            var bias = _biasTracker.ComputeBias();
-            var discovered = RoobsWorld.Core.GameManager.HasInstance
-                ? RoobsWorld.Core.GameManager.Instance.DiscoveredTraits
-                : GeneticTraits.None;
-            var variant = MutationSystem.MutateRecommendedWithDiscoveries(_playerGenome, bias, discovered);
-            ApplyAutomaticUpgrade(variant);
+            // Intentionally disabled: cell stage uses automatic growth-only progression.
         }
 
         private void ApplyAutomaticUpgrade(Genome chosen)
@@ -1132,7 +1261,8 @@ namespace RoobsWorld.Stages.Cell
 
         private void CheckEvolution()
         {
-            _evolutionTracker.UpdateMass(_currentMass, _foodConsumedTotal, _foodConsumedPerUpgrade);
+            // Stage progression should be driven by size growth; food milestones gate upgrades separately.
+            _evolutionTracker.UpdateMass(_currentMass);
         }
 
         private void OnEvolutionReached(int level)
@@ -1172,7 +1302,9 @@ namespace RoobsWorld.Stages.Cell
 
         public void Boost()
         {
-            _boostTimer = _boostDuration * CellFeelDirector.PlayerBoostDurationMultiplier;
+            _boostTimer = _boostDuration
+                * CellFeelDirector.PlayerBoostDurationMultiplier
+                * _partLoadout.BoostDurationMultiplier;
         }
 
         public void TakeDamage(float massDrain)
@@ -1186,7 +1318,7 @@ namespace RoobsWorld.Stages.Cell
             _currentMass -= massDrain;
             if (_currentMass < MinimumMass)
             {
-                TriggerDeath();
+                TriggerDeath("cell.death.cause.mass_loss", "cell.death.tip.defence");
                 return;
             }
 
@@ -1197,12 +1329,14 @@ namespace RoobsWorld.Stages.Cell
             UpdateVisualScale();
         }
 
-        private void TriggerDeath()
+        private void TriggerDeath(string causeKey = null, string recommendationKey = null)
         {
             if (_isDead) return;
 
             _currentMass = 0f;
             _isDead = true;
+            _lastDeathCauseKey = string.IsNullOrWhiteSpace(causeKey) ? "cell.death.cause.unknown" : causeKey;
+            _lastDeathRecommendationKey = string.IsNullOrWhiteSpace(recommendationKey) ? "cell.death.tip.general" : recommendationKey;
             if (_rb != null)
                 _rb.linearVelocity = Vector3.zero;
             AudioManager.Instance?.PlaySFX(SFXType.CreatureDeath);
@@ -1212,7 +1346,9 @@ namespace RoobsWorld.Stages.Cell
             {
                 CreatureObject = gameObject,
                 CreatureId = "player_cell",
-                IsPlayer = true
+                IsPlayer = true,
+                Cause = _lastDeathCauseKey,
+                RecommendationKey = _lastDeathRecommendationKey
             });
         }
     }

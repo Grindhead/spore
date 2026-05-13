@@ -15,7 +15,8 @@ namespace RoobsWorld.Stages.Cell
         public const string ID = "MutationChoice";
         public override string ScreenId => ID;
 
-        private Genome _option;
+        private Genome[] _options;
+        private Genome _parentGenome;
         private Action<Genome> _onChosen;
         private Canvas _canvas;
         private string _biasDescription;
@@ -28,10 +29,16 @@ namespace RoobsWorld.Stages.Cell
         /// </summary>
         public static void Show(Genome option, Action<Genome> onChosen, string biasDescription = null)
         {
-            if (option == null || onChosen == null) return;
+            Show(option != null ? new[] { option } : null, onChosen, biasDescription, null);
+        }
+
+        public static void Show(Genome[] options, Action<Genome> onChosen, string biasDescription = null, Genome parentGenome = null)
+        {
+            if (options == null || options.Length == 0 || onChosen == null) return;
             var go = new GameObject("MutationChoiceUI");
             var ui = go.AddComponent<MutationChoiceUI>();
-            ui._option = option;
+            ui._options = options;
+            ui._parentGenome = parentGenome;
             ui._onChosen = onChosen;
             ui._biasDescription = biasDescription;
             AudioManager.Instance?.PlaySFX(SFXType.MutationChoiceShown);
@@ -39,18 +46,17 @@ namespace RoobsWorld.Stages.Cell
             ui.BuildUI();
         }
 
-        private static readonly Color PrimaryAccent = new Color(0.25f, 0.75f, 1f);
+        private static readonly Color PrimaryAccent = UIStyleGuide.Colors.TideTealBright;
 
         private void BuildUI()
         {
-            var font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
+            var font = UIStyleGuide.GetDefaultFont();
 
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 101;
             var scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            UIStyleGuide.ApplyCanvasScalerDefaults(scaler);
             gameObject.AddComponent<GraphicRaycaster>();
 
             // Dimmer
@@ -61,9 +67,9 @@ namespace RoobsWorld.Stages.Cell
             dimRect.anchorMax = Vector2.one;
             dimRect.offsetMin = Vector2.zero;
             dimRect.offsetMax = Vector2.zero;
-            dimmer.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
+            dimmer.AddComponent<Image>().color = UIStyleGuide.Colors.OverlayDim;
+            UIStyleGuide.AddScreenAtmosphere(_canvas.transform, "Mutation", 1f);
 
-            // Panel border
             var border = new GameObject("PanelBorder");
             border.transform.SetParent(_canvas.transform, false);
             var brRect = border.AddComponent<RectTransform>();
@@ -71,7 +77,10 @@ namespace RoobsWorld.Stages.Cell
             brRect.anchorMax = new Vector2(0.9f, 0.87f);
             brRect.offsetMin = Vector2.zero;
             brRect.offsetMax = Vector2.zero;
-            border.AddComponent<Image>().color = new Color(0.3f, 0.65f, 0.9f, 0.28f);
+            var borderImage = border.AddComponent<Image>();
+            borderImage.sprite = UIStyleGuide.GetPaintedPanelSprite();
+            borderImage.type = Image.Type.Sliced;
+            borderImage.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.2f);
 
             var panel = new GameObject("Panel");
             panel.transform.SetParent(_canvas.transform, false);
@@ -80,7 +89,7 @@ namespace RoobsWorld.Stages.Cell
             panelRect.anchorMax = new Vector2(0.89f, 0.86f);
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
-            panel.AddComponent<Image>().color = new Color(0.06f, 0.07f, 0.14f, 0.97f);
+            UIStyleGuide.ApplyPaintedPanelChrome(panel, strong: true, alpha: 0.98f);
 
             // Top accent bar
             var topBar = new GameObject("TopBar");
@@ -91,7 +100,7 @@ namespace RoobsWorld.Stages.Cell
             tbRect.pivot = new Vector2(0.5f, 1f);
             tbRect.anchoredPosition = Vector2.zero;
             tbRect.sizeDelta = new Vector2(0, 5);
-            topBar.AddComponent<Image>().color = new Color(0.3f, 0.7f, 1f, 0.85f);
+            topBar.AddComponent<Image>().color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilAmber, 0.78f);
 
             var titleGo = new GameObject("Title");
             titleGo.transform.SetParent(panel.transform, false);
@@ -101,15 +110,16 @@ namespace RoobsWorld.Stages.Cell
             titleRect.offsetMin = Vector2.zero;
             titleRect.offsetMax = Vector2.zero;
             var titleText = titleGo.AddComponent<Text>();
-            titleText.text = "UPGRADE";
+            titleText.text = _options != null && _options.Length > 1 ? "CHOOSE MUTATION" : "UPGRADE";
             titleText.font = font;
             titleText.fontSize = 42;
-            titleText.color = new Color(0.45f, 0.85f, 1f);
+            titleText.color = UIStyleGuide.Colors.AccentStrong;
             titleText.alignment = TextAnchor.MiddleCenter;
             titleText.fontStyle = FontStyle.Bold;
             var titleOutline = titleGo.AddComponent<Outline>();
-            titleOutline.effectColor = new Color(0f, 0.15f, 0.35f, 0.8f);
+            titleOutline.effectColor = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.8f);
             titleOutline.effectDistance = new Vector2(1.5f, -1.5f);
+            UIStyleGuide.ApplyTextShadow(titleGo, 0.45f);
 
             float biasBottom = 0.73f;
             if (!string.IsNullOrEmpty(_biasDescription))
@@ -125,22 +135,47 @@ namespace RoobsWorld.Stages.Cell
                 subText.text = _biasDescription;
                 subText.font = font;
                 subText.fontSize = 23;
-                subText.color = new Color(0.6f, 0.72f, 0.85f);
+                subText.color = UIStyleGuide.Colors.BodyTextMuted;
                 subText.alignment = TextAnchor.MiddleCenter;
                 subText.fontStyle = FontStyle.Italic;
                 biasBottom = 0.64f;
             }
 
-            string traitLabel = EvolutionStatsUI.FormatTraits(_option);
-            if (string.IsNullOrEmpty(traitLabel)) traitLabel = "Apply Upgrade";
-            CreateChoiceButton(panel.GetComponent<RectTransform>(), traitLabel, 0.28f, Mathf.Min(0.56f, biasBottom - 0.04f));
+            CreateChoiceButtons(panel.GetComponent<RectTransform>(), biasBottom);
         }
 
-        private void CreateChoiceButton(RectTransform parent, string label, float yMin, float yMax)
+        private void CreateChoiceButtons(RectTransform parent, float biasBottom)
         {
-            var font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
+            if (_options == null || _options.Length == 0)
+                return;
+
+            if (_options.Length == 1)
+            {
+                string traitLabel = EvolutionStatsUI.FormatTraits(_options[0]);
+                if (string.IsNullOrEmpty(traitLabel)) traitLabel = "Apply Upgrade";
+                CreateChoiceButton(parent, _options[0], traitLabel, "GO", 0.28f, Mathf.Min(0.56f, biasBottom - 0.04f));
+                return;
+            }
+
+            int count = Mathf.Min(3, _options.Length);
+            float top = Mathf.Min(0.67f, biasBottom - 0.035f);
+            float buttonHeight = 0.145f;
+            float gap = 0.025f;
+            for (int i = 0; i < count; i++)
+            {
+                float yMax = top - i * (buttonHeight + gap);
+                float yMin = yMax - buttonHeight;
+                int optionIndex = i;
+                string label = MutationSystem.GetStrategicChoiceLabel(_options[optionIndex], _parentGenome, optionIndex);
+                string letter = ((char)('A' + optionIndex)).ToString();
+                CreateChoiceButton(parent, _options[optionIndex], label, letter, yMin, yMax);
+            }
+        }
+
+        private void CreateChoiceButton(RectTransform parent, Genome option, string label, string letter, float yMin, float yMax)
+        {
+            var font = UIStyleGuide.GetDefaultFont();
             Color accent = PrimaryAccent;
-            const string letter = "GO";
 
             // Border
             var frameGo = new GameObject("Frame_Upgrade");
@@ -150,7 +185,10 @@ namespace RoobsWorld.Stages.Cell
             frameRect.anchorMax = new Vector2(0.94f, yMax + 0.005f);
             frameRect.offsetMin = Vector2.zero;
             frameRect.offsetMax = Vector2.zero;
-            frameGo.AddComponent<Image>().color = new Color(accent.r, accent.g, accent.b, 0.22f);
+            var frameImage = frameGo.AddComponent<Image>();
+            frameImage.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            frameImage.type = Image.Type.Sliced;
+            frameImage.color = UIStyleGuide.Colors.WithAlpha(accent, 0.22f);
 
             var btnGo = new GameObject("Btn_Upgrade");
             btnGo.transform.SetParent(parent, false);
@@ -160,16 +198,11 @@ namespace RoobsWorld.Stages.Cell
             btnRect.offsetMin = Vector2.zero;
             btnRect.offsetMax = Vector2.zero;
             var btnImage = btnGo.AddComponent<Image>();
-            btnImage.color = Color.white;
             var button = btnGo.AddComponent<Button>();
-            var colors = button.colors;
-            colors.normalColor    = new Color(accent.r * 0.15f, accent.g * 0.15f, accent.b * 0.15f, 0.92f);
-            colors.highlightedColor = new Color(accent.r * 0.26f, accent.g * 0.26f, accent.b * 0.26f, 1f);
-            colors.pressedColor   = new Color(accent.r * 0.08f, accent.g * 0.08f, accent.b * 0.08f, 1f);
-            colors.selectedColor  = colors.highlightedColor;
             button.targetGraphic = btnImage;
-            button.colors = colors;
-            button.onClick.AddListener(OnUpgradeSelected);
+            UIStyleGuide.ApplyPaintedButtonChrome(button, UIButtonVariant.Secondary);
+            UIStyleGuide.AddButtonPearl(btnGo, UIButtonVariant.Secondary, 28f, 0.045f);
+            button.onClick.AddListener(() => OnUpgradeSelected(option));
 
             // Left accent bar
             var barGo = new GameObject("Bar");
@@ -180,7 +213,7 @@ namespace RoobsWorld.Stages.Cell
             barRect.pivot = new Vector2(0f, 0.5f);
             barRect.anchoredPosition = Vector2.zero;
             barRect.sizeDelta = new Vector2(5, 0);
-            barGo.AddComponent<Image>().color = new Color(accent.r, accent.g, accent.b, 0.9f);
+            barGo.AddComponent<Image>().color = UIStyleGuide.Colors.WithAlpha(accent, 0.9f);
 
             // Variant letter badge
             var letterGo = new GameObject("Letter");
@@ -195,7 +228,7 @@ namespace RoobsWorld.Stages.Cell
             letterText.text = letter;
             letterText.font = font;
             letterText.fontSize = 30;
-            letterText.color = new Color(accent.r, accent.g, accent.b, 0.9f);
+            letterText.color = UIStyleGuide.Colors.WithAlpha(accent, 0.9f);
             letterText.alignment = TextAnchor.MiddleCenter;
             letterText.fontStyle = FontStyle.Bold;
 
@@ -210,19 +243,20 @@ namespace RoobsWorld.Stages.Cell
             btnText.text = label;
             btnText.font = font;
             btnText.fontSize = 29;
-            btnText.color = new Color(0.85f, 0.9f, 0.95f);
+            btnText.color = UIStyleGuide.Colors.TextOnCool;
             btnText.alignment = TextAnchor.MiddleLeft;
             btnText.horizontalOverflow = HorizontalWrapMode.Wrap;
             btnText.verticalOverflow = VerticalWrapMode.Overflow;
             btnText.resizeTextForBestFit = true;
             btnText.resizeTextMinSize = 23;
             btnText.resizeTextMaxSize = 30;
+            UIStyleGuide.ApplyTextShadow(textGo, 0.32f);
         }
 
-        private void OnUpgradeSelected()
+        private void OnUpgradeSelected(Genome option)
         {
-            if (_option == null || _onChosen == null) return;
-            _onChosen?.Invoke(_option);
+            if (option == null || _onChosen == null) return;
+            _onChosen?.Invoke(option);
             ResumeGameplayIfNeeded();
             Destroy(gameObject);
         }

@@ -71,10 +71,41 @@ namespace RoobsWorld.Creature
             def.DNACost = cost;
             def.MaxCount = maxCount;
             def.RequiresSymmetry = category != PartCategory.Mouth && category != PartCategory.Tail && category != PartCategory.Shell;
-            def.DefaultScale = Vector3.one;
+            def.DefaultScale = GetDefaultScale(category);
+            def.AllowedBones = GetDefaultAllowedBones(category);
             def.ModelPrefab = BlenderAssetLibrary.LoadCreaturePartPrefab(partId);
             def.name = partId;
             return def;
+        }
+
+        private static Vector3 GetDefaultScale(PartCategory category)
+        {
+            switch (category)
+            {
+                case PartCategory.Eye: return Vector3.one * 0.82f;
+                case PartCategory.Mouth: return Vector3.one * 0.9f;
+                case PartCategory.Wing: return Vector3.one * 1.05f;
+                case PartCategory.Shell: return Vector3.one * 1.12f;
+                case PartCategory.Spike: return Vector3.one * 0.92f;
+                default: return Vector3.one;
+            }
+        }
+
+        private static int[] GetDefaultAllowedBones(PartCategory category)
+        {
+            switch (category)
+            {
+                case PartCategory.Mouth:
+                case PartCategory.Eye:
+                case PartCategory.Horn:
+                    return new[] { 0 };
+                case PartCategory.Tail:
+                    return new[] { 2, 3, 4, 5, 6, 7 };
+                case PartCategory.Shell:
+                    return new[] { 1, 2, 3 };
+                default:
+                    return new[] { 1, 2, 3, 4, 5, 6, 7 };
+            }
         }
 
         public static CreaturePartDef GetPart(string partId)

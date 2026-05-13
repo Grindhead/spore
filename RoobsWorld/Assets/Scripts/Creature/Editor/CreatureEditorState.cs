@@ -9,7 +9,7 @@ namespace RoobsWorld.Creature.Editor
     /// </summary>
     public class EditorAction
     {
-        public enum ActionType { AddPart, RemovePart, MovePart, ScalePart, RotatePart, ChangeColor }
+        public enum ActionType { AddPart, RemovePart, MovePart, ScalePart, RotatePart, ChangeColor, ChangeBodyScale }
 
         public ActionType Type;
         public int PartIndex;
@@ -17,6 +17,10 @@ namespace RoobsWorld.Creature.Editor
         public PartPlacement NewPlacement;
         public CreatureColors OldColors;
         public CreatureColors NewColors;
+        public Vector3 OldBodyScale;
+        public Vector3 NewBodyScale;
+        public float OldFrontPull;
+        public float NewFrontPull;
     }
 
     /// <summary>
@@ -41,6 +45,7 @@ namespace RoobsWorld.Creature.Editor
         public CreatureEditorState(CreatureDNA dna = null)
         {
             _dna = dna ?? CreatureDNA.CreateDefault();
+            CreatureSkeletonConstraintSolver.Apply(_dna);
         }
 
         public void SetSymmetry(bool enabled)
@@ -88,6 +93,7 @@ namespace RoobsWorld.Creature.Editor
                 _dna.Parts.Add(mirrored);
             }
 
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             return index;
         }
 
@@ -120,12 +126,14 @@ namespace RoobsWorld.Creature.Editor
                     }
                     if (_selectedPartIndex == index || _selectedPartIndex == mirrorIdx)
                         _selectedPartIndex = -1;
+                    CreatureSkeletonConstraintSolver.Apply(_dna);
                     return true;
                 }
             }
 
             _dna.Parts.RemoveAt(index);
             if (_selectedPartIndex == index) _selectedPartIndex = -1;
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             return true;
         }
 
@@ -152,6 +160,7 @@ namespace RoobsWorld.Creature.Editor
             if (mirrorIdx >= 0 && mirrorIdx != index)
                 _dna.Parts[mirrorIdx].Offset = new Vector3(-newOffset.x, newOffset.y, newOffset.z);
 
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             return true;
         }
 
@@ -179,6 +188,7 @@ namespace RoobsWorld.Creature.Editor
                     _dna.Parts[mirrorIdx].Scale = newScale;
             }
 
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             return true;
         }
 
@@ -205,6 +215,7 @@ namespace RoobsWorld.Creature.Editor
                     _dna.Parts[mirrorIdx].Rotation = new Vector3(newRotation.x, -newRotation.y, -newRotation.z);
             }
 
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             return true;
         }
 
@@ -232,6 +243,40 @@ namespace RoobsWorld.Creature.Editor
                     AccentColor = accent
                 }
             });
+
+            CreatureSkeletonConstraintSolver.Apply(_dna);
+        }
+
+        public void SetBodyShape(Vector3 bodyScale, float frontPull)
+        {
+            if (_dna?.Body == null)
+                _dna.Body = new BodyPlan();
+
+            Vector3 clampedScale = new Vector3(
+                Mathf.Clamp(bodyScale.x, 0.5f, 2.5f),
+                Mathf.Clamp(bodyScale.y, 0.5f, 2.5f),
+                Mathf.Clamp(bodyScale.z, 0.5f, 2.5f));
+            float clampedFrontPull = Mathf.Clamp(frontPull, -0.3f, 0.8f);
+
+            Vector3 oldScale = _dna.Body.BodyScale;
+            float oldFrontPull = _dna.Body.FrontPull;
+
+            if ((oldScale - clampedScale).sqrMagnitude < 0.00001f && Mathf.Abs(oldFrontPull - clampedFrontPull) < 0.0001f)
+                return;
+
+            _dna.Body.BodyScale = clampedScale;
+            _dna.Body.FrontPull = clampedFrontPull;
+
+            PushUndo(new EditorAction
+            {
+                Type = EditorAction.ActionType.ChangeBodyScale,
+                OldBodyScale = oldScale,
+                NewBodyScale = clampedScale,
+                OldFrontPull = oldFrontPull,
+                NewFrontPull = clampedFrontPull
+            });
+
+            CreatureSkeletonConstraintSolver.Apply(_dna);
         }
 
         public bool Undo()
@@ -263,8 +308,15 @@ namespace RoobsWorld.Creature.Editor
                     _dna.Colors.SecondaryColor = action.OldColors.SecondaryColor;
                     _dna.Colors.AccentColor = action.OldColors.AccentColor;
                     break;
+                case EditorAction.ActionType.ChangeBodyScale:
+                    if (_dna?.Body == null)
+                        _dna.Body = new BodyPlan();
+                    _dna.Body.BodyScale = action.OldBodyScale;
+                    _dna.Body.FrontPull = action.OldFrontPull;
+                    break;
             }
 
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             _redoStack.Add(action);
             return true;
         }
@@ -299,8 +351,15 @@ namespace RoobsWorld.Creature.Editor
                         _dna.Colors.AccentColor = action.NewColors.AccentColor;
                     }
                     break;
+                case EditorAction.ActionType.ChangeBodyScale:
+                    if (_dna?.Body == null)
+                        _dna.Body = new BodyPlan();
+                    _dna.Body.BodyScale = action.NewBodyScale;
+                    _dna.Body.FrontPull = action.NewFrontPull;
+                    break;
             }
 
+            CreatureSkeletonConstraintSolver.Apply(_dna);
             _undoStack.Add(action);
             return true;
         }

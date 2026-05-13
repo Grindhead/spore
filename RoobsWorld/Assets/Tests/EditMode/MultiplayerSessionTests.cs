@@ -81,19 +81,13 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
-        public void JoinSession_Full_Session_Returns_False()
+        public void JoinSession_Allows_PlayerIds_Above_Four()
         {
-            var mgr = new MultiplayerSessionManager();
-            mgr.CreateSession();
-            // fill remaining 3 slots
-            mgr.AddRemotePlayer(1, "P1");
-            mgr.AddRemotePlayer(2, "P2");
-            mgr.AddRemotePlayer(3, "P3");
-
-            // another manager tries to join (4 players already present)
             var joiner = new MultiplayerSessionManager();
-            bool result = joiner.JoinSession(mgr.SessionCode, localPlayerId: 4);
-            Assert.IsFalse(result);
+            bool result = joiner.JoinSession("ABCD12", localPlayerId: 4);
+
+            Assert.IsTrue(result);
+            Assert.AreEqual(4, joiner.LocalPlayerId);
         }
 
         // ---- adding/removing players ----
@@ -107,6 +101,21 @@ namespace RoobsWorld.Tests
 
             mgr.AddRemotePlayer(1, "Alice");
             Assert.AreEqual(2, mgr.PlayerCount);
+        }
+
+        [Test]
+        public void AddRemotePlayer_Allows_More_Than_Four_Players()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+
+            Assert.IsTrue(mgr.AddRemotePlayer(1, "P1"));
+            Assert.IsTrue(mgr.AddRemotePlayer(2, "P2"));
+            Assert.IsTrue(mgr.AddRemotePlayer(3, "P3"));
+            Assert.IsTrue(mgr.AddRemotePlayer(4, "P4"));
+            Assert.IsTrue(mgr.AddRemotePlayer(5, "P5"));
+
+            Assert.AreEqual(6, mgr.PlayerCount);
         }
 
         [Test]
@@ -239,6 +248,21 @@ namespace RoobsWorld.Tests
 
             Assert.IsTrue(mgr.CreateClan("Spore Pack", "SPOR"));
             Assert.IsFalse(mgr.CreateClan("Second Pack", "SECO"));
+        }
+
+        [Test]
+        public void CreateParty_Valid_Name_And_Tag_Creates_Local_Party()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+
+            bool created = mgr.CreateParty("Tide Hunters", "tide");
+
+            Assert.IsTrue(created);
+            Assert.IsNotNull(mgr.LocalParty);
+            Assert.AreEqual("TIDE", mgr.LocalParty.Tag);
+            Assert.AreEqual(mgr.LocalPlayerId, mgr.LocalParty.LeaderPlayerId);
+            Assert.AreEqual(mgr.LocalPartyId, mgr.LocalClanId);
         }
 
         [Test]

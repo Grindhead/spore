@@ -106,6 +106,45 @@ namespace RoobsWorld.Tests.EditMode
         }
 
         [Test]
+        public void GetSteamApiName_MapsKnownIdsToSteamStyleNames()
+        {
+            Assert.AreEqual("CELL_FIRST_EAT", AchievementCatalog.GetSteamApiName("cell_first_eat"));
+            Assert.AreEqual("CREATURE_APEX_STREAK", AchievementCatalog.GetSteamApiName("creature_apex_streak"));
+        }
+
+        [Test]
+        public void GetSteamApiName_UnknownIdFallsBackToUppercaseId()
+        {
+            Assert.AreEqual("CUSTOM_UNLOCK", AchievementCatalog.GetSteamApiName("custom_unlock"));
+        }
+
+        [Test]
+        public void GetPlayStationTrophyId_MapsKnownIds()
+        {
+            Assert.AreEqual("cell_first_eat", AchievementCatalog.GetPlayStationTrophyId("cell_first_eat"));
+            Assert.AreEqual("creature_apex_streak", AchievementCatalog.GetPlayStationTrophyId("creature_apex_streak"));
+        }
+
+        [Test]
+        public void GetXboxAchievementId_MapsKnownIds()
+        {
+            Assert.AreEqual("cell_first_eat", AchievementCatalog.GetXboxAchievementId("cell_first_eat"));
+            Assert.AreEqual("creature_apex_streak", AchievementCatalog.GetXboxAchievementId("creature_apex_streak"));
+        }
+
+        [Test]
+        public void AllAchievements_HavePlatformMappings()
+        {
+            foreach (var def in AchievementCatalog.GetAll())
+            {
+                Assert.IsFalse(string.IsNullOrWhiteSpace(def.Id), "Missing local id");
+                Assert.IsFalse(string.IsNullOrWhiteSpace(def.SteamApiName), $"{def.Id} missing Steam API name");
+                Assert.IsFalse(string.IsNullOrWhiteSpace(def.PlayStationTrophyId), $"{def.Id} missing PlayStation trophy id");
+                Assert.IsFalse(string.IsNullOrWhiteSpace(def.XboxAchievementId), $"{def.Id} missing Xbox achievement id");
+            }
+        }
+
+        [Test]
         public void GetAll_ReturnsAllDefs()
         {
             var all = AchievementCatalog.GetAll();
@@ -162,6 +201,15 @@ namespace RoobsWorld.Tests.EditMode
     public class PlatformAchievementProviderTests
     {
         [Test]
+        public void PlatformServicesConfig_DefaultsUseDevelopmentPlaceholders()
+        {
+            Assert.IsTrue(PlatformServicesConfig.UsesDevelopmentSteamAppId);
+            Assert.IsTrue(PlatformServicesConfig.UsesPlaceholderPlayStationServiceId);
+            Assert.IsTrue(PlatformServicesConfig.UsesPlaceholderXboxTitleId);
+            Assert.AreEqual("saves", PlatformServicesConfig.SteamCloudSaveDirectory);
+        }
+
+        [Test]
         public void LocalAchievementProvider_ReportUnlock_DoesNotThrow()
         {
             var provider = new LocalAchievementProvider();
@@ -202,6 +250,27 @@ namespace RoobsWorld.Tests.EditMode
             var mock = new MockPlatformAchievementProvider();
             Assert.DoesNotThrow(() => GameManager.UnlockAchievementCore(null, mock, "cell_first_eat"));
             Assert.AreEqual(0, mock.ReportedIds.Count);
+        }
+
+        [Test]
+        public void PlatformCloudSaveSync_NormalizesSlotNamesForSteamRemoteStorage()
+        {
+            Assert.AreEqual("autosave", PlatformCloudSaveSync.NormalizeSlotName(null));
+            Assert.AreEqual("slot_1", PlatformCloudSaveSync.NormalizeSlotName("slot 1"));
+            Assert.AreEqual("profile-A.2", PlatformCloudSaveSync.NormalizeSlotName(" profile-A.2 "));
+            Assert.AreEqual("saves/slot_1.json", PlatformCloudSaveSync.BuildRemoteFileName("slot 1"));
+        }
+
+        [Test]
+        public void SteamRichPresenceStatus_MapsKnownStages()
+        {
+            Assert.AreEqual("Exploring the primordial ocean", SteamPlatformProvider.BuildRichPresenceStatus(GameStageType.Cell));
+            Assert.AreEqual("Hunting in Creature Stage", SteamPlatformProvider.BuildRichPresenceStatus(GameStageType.Creature));
+            Assert.AreEqual("In the main menu", SteamPlatformProvider.BuildRichPresenceStatus(GameStageType.None));
+
+            Assert.AreEqual("cell", SteamPlatformProvider.BuildRichPresenceStageKey(GameStageType.Cell));
+            Assert.AreEqual("creature", SteamPlatformProvider.BuildRichPresenceStageKey(GameStageType.Creature));
+            Assert.AreEqual("menu", SteamPlatformProvider.BuildRichPresenceStageKey(GameStageType.None));
         }
     }
 }

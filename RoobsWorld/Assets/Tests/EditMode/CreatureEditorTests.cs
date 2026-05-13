@@ -59,9 +59,22 @@ namespace RoobsWorld.Tests.EditMode
             var state = new CreatureEditorState(new CreatureDNA { Parts = new System.Collections.Generic.List<PartPlacement>() });
             state.SetSymmetry(false);
             state.AddPart("leg_basic", 1, Vector3.zero);
-            var newPos = new Vector3(1, 2, 3);
+            var newPos = new Vector3(0.4f, 0.3f, 0.5f);
             Assert.IsTrue(state.MovePart(0, newPos));
             Assert.AreEqual(newPos, state.DNA.Parts[0].Offset);
+        }
+
+        [Test]
+        public void MovePart_OutOfEnvelope_IsClampedBySkeleton()
+        {
+            var state = new CreatureEditorState(new CreatureDNA { Parts = new System.Collections.Generic.List<PartPlacement>() });
+            state.SetSymmetry(false);
+            state.AddPart("leg_basic", 1, Vector3.zero);
+            Assert.IsTrue(state.MovePart(0, new Vector3(9f, 9f, 9f)));
+            var offset = state.DNA.Parts[0].Offset;
+            Assert.Less(offset.x, 9f);
+            Assert.Less(offset.y, 9f);
+            Assert.Less(offset.z, 9f);
         }
 
         [Test]
@@ -184,6 +197,20 @@ namespace RoobsWorld.Tests.EditMode
             state.AddPart("leg_basic", 1, new Vector3(0.5f, 0, 0));
             state.ScalePart(0, 2f);
             Assert.AreEqual(2f, state.DNA.Parts[1].Scale, 0.01f);
+        }
+
+        [Test]
+        public void AddPart_AttachBoneIsConstrainedToSpine()
+        {
+            var dna = new CreatureDNA
+            {
+                Body = new BodyPlan { SpineSegments = 2, BodyScale = Vector3.one },
+                Parts = new System.Collections.Generic.List<PartPlacement>()
+            };
+            var state = new CreatureEditorState(dna);
+            state.SetSymmetry(false);
+            state.AddPart("tail_basic", 99, new Vector3(0f, 0f, -0.5f));
+            Assert.AreEqual(1, state.DNA.Parts[0].AttachBone);
         }
     }
 }

@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using RoobsWorld.Creature;
+using RoobsWorld.Stages.Cell;
+using RoobsWorld.Stages.Creature;
 using UnityEngine;
 
 namespace RoobsWorld.Tests
@@ -81,6 +83,31 @@ namespace RoobsWorld.Tests
             Assert.IsTrue(json.Contains("CreatureId"));
             Assert.IsTrue(json.Contains("Parts"));
             Assert.IsTrue(json.Contains("Body"));
+        }
+
+        [Test]
+        public void CellToCreatureBridge_SelectsAbilityFromCellTraits()
+        {
+            var genome = Genome.Default();
+            genome.Traits = GeneticTraits.Electric;
+
+            Assert.AreEqual("bioelectric_burst", CellToCreatureDnaBridge.ResolveInheritedAbilityId(genome, null));
+        }
+
+        [Test]
+        public void CellToCreatureBridge_StoresLegacySummaryAndAbility()
+        {
+            var genome = Genome.Default();
+            genome.Traits = GeneticTraits.Regenerative;
+            var loadout = new CellPartLoadout();
+            loadout.TryUnlock(CellPartType.Cilia);
+
+            var dna = CellToCreatureDnaBridge.CreateFromCell(genome, loadout);
+
+            Assert.AreEqual((int)GeneticTraits.Regenerative, dna.LegacyTraitMask);
+            Assert.AreEqual("regenerative_surge", dna.LegacyAbilityId);
+            StringAssert.Contains("Cell legacy", dna.LegacySummary);
+            StringAssert.Contains("starter parts", dna.LegacySummary);
         }
     }
 }

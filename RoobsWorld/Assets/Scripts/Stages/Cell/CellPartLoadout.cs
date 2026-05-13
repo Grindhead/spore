@@ -33,6 +33,11 @@ namespace RoobsWorld.Stages.Cell
         }
 
         public bool HasContactDamage => _unlockedParts.Contains(CellPartType.Spike);
+        public float ContactDamageMultiplier => _unlockedParts.Contains(CellPartType.Spike) ? 1.45f : 1f;
+        public float ConsumeProbeRadiusBonus => _unlockedParts.Contains(CellPartType.Cilia) ? 0.35f : 0f;
+        public float FoodGainMultiplier => _unlockedParts.Contains(CellPartType.Cilia) ? 1.15f : 1f;
+        public float BoostDurationMultiplier => _unlockedParts.Contains(CellPartType.Jet) ? 1.35f : 1f;
+        public float BoostSpeedMultiplier => _unlockedParts.Contains(CellPartType.Jet) ? 1.15f : 1f;
 
         public bool TryUnlock(CellPartType partType)
         {

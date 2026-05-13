@@ -88,13 +88,14 @@ namespace RoobsWorld.Multiplayer
         /// <summary>Serializes a client input packet to bytes (sent every tick from client → host).</summary>
         public static byte[] Serialize(in RemoteInputPacket pkt)
         {
-            using var ms = new MemoryStream(20);
+            using var ms = new MemoryStream(24);
             using var w  = new BinaryWriter(ms);
 
             w.Write(pkt.PlayerId);
             w.Write(pkt.MoveX);
             w.Write(pkt.MoveY);
             w.Write(pkt.EatInput);
+            w.Write(pkt.Mass);
             w.Write(pkt.Tick);
 
             return ms.ToArray();
@@ -125,6 +126,7 @@ namespace RoobsWorld.Multiplayer
                 MoveX    = r.ReadSingle(),
                 MoveY    = r.ReadSingle(),
                 EatInput = r.ReadBoolean(),
+                Mass     = r.ReadSingle(),
                 Tick     = r.ReadUInt32()
             };
         }

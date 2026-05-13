@@ -71,6 +71,14 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void Default_AudioDevices_Use_SystemDefaults()
+        {
+            var settings = new GameSettings();
+            Assert.AreEqual(string.Empty, settings.MicrophoneDeviceName);
+            Assert.AreEqual(string.Empty, settings.AudioOutputDeviceName);
+        }
+
+        [Test]
         public void Serialization_Roundtrip_Preserves_All_Fields()
         {
             var settings = new GameSettings
@@ -82,9 +90,18 @@ namespace RoobsWorld.Tests
                 MasterVolume = 0.8f,
                 MusicVolume = 0.5f,
                 SFXVolume = 0.9f,
+                AmbientVolume = 0.6f,
+                MicrophoneDeviceName = "Mic 1",
+                AudioOutputDeviceName = "Speakers",
                 CameraSensitivity = 1.5f,
                 InvertY = true,
-                ShowFPS = true
+                ShowFPS = true,
+                VSync = false,
+                TargetFrameRate = 120,
+                SubtitlesEnabled = false,
+                UITextScale = 1.35f,
+                ColorBlindModeIndex = (int)ColorBlindMode.Tritanopia,
+                HighContrastMode = true
             };
 
             string json = JsonUtility.ToJson(settings);
@@ -97,9 +114,18 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(0.8f, restored.MasterVolume, 0.001f);
             Assert.AreEqual(0.5f, restored.MusicVolume, 0.001f);
             Assert.AreEqual(0.9f, restored.SFXVolume, 0.001f);
+            Assert.AreEqual(0.6f, restored.AmbientVolume, 0.001f);
+            Assert.AreEqual("Mic 1", restored.MicrophoneDeviceName);
+            Assert.AreEqual("Speakers", restored.AudioOutputDeviceName);
             Assert.AreEqual(1.5f, restored.CameraSensitivity, 0.001f);
             Assert.IsTrue(restored.InvertY);
             Assert.IsTrue(restored.ShowFPS);
+            Assert.IsFalse(restored.VSync);
+            Assert.AreEqual(120, restored.TargetFrameRate);
+            Assert.IsFalse(restored.SubtitlesEnabled);
+            Assert.AreEqual(1.35f, restored.UITextScale, 0.001f);
+            Assert.AreEqual((int)ColorBlindMode.Tritanopia, restored.ColorBlindModeIndex);
+            Assert.IsTrue(restored.HighContrastMode);
         }
 
         [Test]
@@ -152,6 +178,13 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void Default_SubtitlesEnabled_Is_True()
+        {
+            var settings = new GameSettings();
+            Assert.IsTrue(settings.SubtitlesEnabled);
+        }
+
+        [Test]
         public void Serialization_Preserves_UITextScale()
         {
             var settings = new GameSettings { UITextScale = 1.5f };
@@ -174,6 +207,19 @@ namespace RoobsWorld.Tests
             string json = JsonUtility.ToJson(settings);
             var restored = JsonUtility.FromJson<GameSettings>(json);
             Assert.IsTrue(restored.HighContrastMode);
+        }
+
+        [Test]
+        public void ThirdPersonCamera_LookDelta_UsesSensitivityAndInvertY()
+        {
+            Vector2 normal = ThirdPersonCameraRig.ComputeLookDelta(
+                new Vector2(1f, 1f), 2f, false, 120f, 70f, 0.5f);
+            Vector2 inverted = ThirdPersonCameraRig.ComputeLookDelta(
+                new Vector2(1f, 1f), 2f, true, 120f, 70f, 0.5f);
+
+            Assert.AreEqual(120f, normal.x, 0.001f);
+            Assert.AreEqual(-70f, normal.y, 0.001f);
+            Assert.AreEqual(70f, inverted.y, 0.001f);
         }
     }
 
@@ -224,6 +270,48 @@ namespace RoobsWorld.Tests
             SettingsManager.Instance.Load();
             float scale = SettingsManager.GetUITextScale();
             Assert.AreEqual(1.25f, scale, 0.001f);
+        }
+
+        [Test]
+        public void Load_SanitizesInvalidSettingsValues()
+        {
+            var settings = new GameSettings
+            {
+                MasterVolume = 4f,
+                MusicVolume = -1f,
+                SFXVolume = 2f,
+                AmbientVolume = -0.5f,
+                CameraSensitivity = 10f,
+                UITextScale = 4f,
+                ColorBlindModeIndex = 99,
+                TargetFrameRate = 75
+            };
+            PlayerPrefs.SetString(SETTINGS_KEY, JsonUtility.ToJson(settings));
+            PlayerPrefs.Save();
+
+            SettingsManager.Instance.Load();
+            var loaded = SettingsManager.Instance.Current;
+
+            Assert.AreEqual(1f, loaded.MasterVolume, 0.001f);
+            Assert.AreEqual(0f, loaded.MusicVolume, 0.001f);
+            Assert.AreEqual(1f, loaded.SFXVolume, 0.001f);
+            Assert.AreEqual(0f, loaded.AmbientVolume, 0.001f);
+            Assert.AreEqual(3f, loaded.CameraSensitivity, 0.001f);
+            Assert.AreEqual(2f, loaded.UITextScale, 0.001f);
+            Assert.AreEqual((int)ColorBlindMode.Tritanopia, loaded.ColorBlindModeIndex);
+            Assert.AreEqual(0, loaded.TargetFrameRate);
+        }
+
+        [Test]
+        public void AreSubtitlesEnabled_ReflectsLoadedSetting()
+        {
+            var settings = new GameSettings { SubtitlesEnabled = false };
+            PlayerPrefs.SetString(SETTINGS_KEY, JsonUtility.ToJson(settings));
+            PlayerPrefs.Save();
+
+            SettingsManager.Instance.Load();
+
+            Assert.IsFalse(SettingsManager.AreSubtitlesEnabled());
         }
     }
 }

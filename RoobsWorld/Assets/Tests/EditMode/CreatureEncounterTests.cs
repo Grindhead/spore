@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using RoobsWorld.Core;
 using RoobsWorld.Creature;
 using RoobsWorld.Stages.Creature;
 using UnityEngine;
@@ -214,6 +215,266 @@ namespace RoobsWorld.Tests.EditMode
         }
 
         [Test]
+        public void ComputeObjectiveDnaReward_ScalesForHigherRiskObjectives()
+        {
+            var rivalCull = new CreatureStageObjective(CreatureStageObjectiveType.RivalCull, 5, 1f, "creature.objective.rival_cull");
+            var alphaHunt = new CreatureStageObjective(CreatureStageObjectiveType.AlphaHunt, 3, 1f, "creature.objective.alpha_hunt");
+            var holdGround = new CreatureStageObjective(CreatureStageObjectiveType.HoldFeedingGround, 5, 45f, "creature.objective.hold_ground");
+
+            int baseReward = BalanceConstants.CreatureDNAPointsObjectiveComplete;
+
+            Assert.AreEqual(baseReward, CreatureStage.ComputeObjectiveDnaReward(rivalCull, baseReward));
+            Assert.AreEqual(baseReward + 6, CreatureStage.ComputeObjectiveDnaReward(alphaHunt, baseReward));
+            Assert.AreEqual(baseReward + 4, CreatureStage.ComputeObjectiveDnaReward(holdGround, baseReward));
+        }
+
+        [Test]
+        public void ComputeObjectivePaceTargetSeconds_UsesDefeatTargetsAndHoldGrace()
+        {
+            var rivalCull = new CreatureStageObjective(CreatureStageObjectiveType.RivalCull, 5, 1f, "creature.objective.rival_cull");
+            var holdGround = new CreatureStageObjective(CreatureStageObjectiveType.HoldFeedingGround, 5, 45f, "creature.objective.hold_ground");
+
+            Assert.That(
+                CreatureStage.ComputeObjectivePaceTargetSeconds(rivalCull, 18f, 0.2f),
+                Is.EqualTo(90f).Within(0.001f));
+            Assert.That(
+                CreatureStage.ComputeObjectivePaceTargetSeconds(holdGround, 18f, 0.2f),
+                Is.EqualTo(54f).Within(0.001f));
+        }
+
+        [Test]
+        public void ComputeObjectivePaceBonusDna_RewardsFastClearsAndCaps()
+        {
+            var rivalCull = new CreatureStageObjective(CreatureStageObjectiveType.RivalCull, 5, 1f, "creature.objective.rival_cull");
+            var holdGround = new CreatureStageObjective(CreatureStageObjectiveType.HoldFeedingGround, 5, 45f, "creature.objective.hold_ground");
+
+            Assert.AreEqual(6, CreatureStage.ComputeObjectivePaceBonusDna(rivalCull, 0f, 18f, 0.2f, 6));
+            Assert.AreEqual(3, CreatureStage.ComputeObjectivePaceBonusDna(rivalCull, 45f, 18f, 0.2f, 6));
+            Assert.AreEqual(0, CreatureStage.ComputeObjectivePaceBonusDna(rivalCull, 90f, 18f, 0.2f, 6));
+            Assert.AreEqual(1, CreatureStage.ComputeObjectivePaceBonusDna(holdGround, 45f, 18f, 0.2f, 6));
+            Assert.AreEqual(0, CreatureStage.ComputeObjectivePaceBonusDna(holdGround, 54f, 18f, 0.2f, 6));
+        }
+
+        [Test]
+        public void ComputeObjectiveMomentumDelaySeconds_ShortensBetweenObjectivesAndCaps()
+        {
+            Assert.That(
+                CreatureStage.ComputeObjectiveMomentumDelaySeconds(6f, 0, 0.45f, 3.5f),
+                Is.EqualTo(6f).Within(0.001f));
+            Assert.That(
+                CreatureStage.ComputeObjectiveMomentumDelaySeconds(6f, 2, 0.45f, 3.5f),
+                Is.EqualTo(5.1f).Within(0.001f));
+            Assert.That(
+                CreatureStage.ComputeObjectiveMomentumDelaySeconds(6f, 99, 0.45f, 3.5f),
+                Is.EqualTo(3.5f).Within(0.001f));
+        }
+
+        [Test]
+        public void ComputeObjectiveStaminaRestore_ScalesWithPaceBonusAndCaps()
+        {
+            Assert.That(
+                CreatureStage.ComputeObjectiveStaminaRestore(0, 18f, 1.5f, 30f),
+                Is.EqualTo(18f).Within(0.001f));
+            Assert.That(
+                CreatureStage.ComputeObjectiveStaminaRestore(6, 18f, 1.5f, 30f),
+                Is.EqualTo(27f).Within(0.001f));
+            Assert.That(
+                CreatureStage.ComputeObjectiveStaminaRestore(99, 18f, 1.5f, 30f),
+                Is.EqualTo(30f).Within(0.001f));
+        }
+
+        [Test]
+        public void BuildObjectiveRewardLabel_ShowsDnaRewardBeforeCompletion()
+        {
+            var alphaHunt = new CreatureStageObjective(CreatureStageObjectiveType.AlphaHunt, 3, 1f, "creature.objective.alpha_hunt");
+
+            Assert.AreEqual(
+                "Reward: +26 DNA",
+                CreatureStage.BuildObjectiveRewardLabel(alphaHunt, BalanceConstants.CreatureDNAPointsObjectiveComplete));
+        }
+
+        [Test]
+        public void ComputeObjectiveDefeatProgress_UsesObjectiveStartBaseline()
+        {
+            Assert.AreEqual(3, CreatureStage.ComputeObjectiveDefeatProgress(8, 5));
+            Assert.AreEqual(0, CreatureStage.ComputeObjectiveDefeatProgress(3, 5));
+            Assert.AreEqual(4, CreatureStage.ComputeObjectiveDefeatProgress(4, -3));
+        }
+
+        [Test]
+        public void ComputeObjectiveAlphaProgress_UsesObjectiveStartBaseline()
+        {
+            Assert.AreEqual(2, CreatureStage.ComputeObjectiveAlphaProgress(5, 3));
+            Assert.AreEqual(0, CreatureStage.ComputeObjectiveAlphaProgress(3, 5));
+            Assert.AreEqual(4, CreatureStage.ComputeObjectiveAlphaProgress(4, -2));
+        }
+
+        [Test]
+        public void ComputeHoldObjectivePressureProgress_ScalesFromHoldTime()
+        {
+            Assert.AreEqual(0, CreatureStage.ComputeHoldObjectivePressureProgress(-1f, 45f, 5));
+            Assert.AreEqual(0, CreatureStage.ComputeHoldObjectivePressureProgress(8.9f, 45f, 5));
+            Assert.AreEqual(1, CreatureStage.ComputeHoldObjectivePressureProgress(9f, 45f, 5));
+            Assert.AreEqual(3, CreatureStage.ComputeHoldObjectivePressureProgress(27f, 45f, 5));
+            Assert.AreEqual(5, CreatureStage.ComputeHoldObjectivePressureProgress(45f, 45f, 5));
+            Assert.AreEqual(5, CreatureStage.ComputeHoldObjectivePressureProgress(99f, 45f, 5));
+        }
+
+        [Test]
+        public void BuildHoldObjectiveProgressText_ShowsWhetherPlayerIsSecuringGround()
+        {
+            Assert.AreEqual(
+                "Reward: +24 DNA   Securing: 13/45s   Active Rivals: 2/3   Streak: x4",
+                CreatureStage.BuildHoldObjectiveProgressText("Reward: +24 DNA", 13f, 45f, 2, 3, 4, true));
+            Assert.AreEqual(
+                "Reward: +24 DNA   Return to ground: 13/45s   Active Rivals: 2/3   Streak: x4",
+                CreatureStage.BuildHoldObjectiveProgressText("Reward: +24 DNA", 13f, 45f, 2, 3, 4, false));
+        }
+
+        [Test]
+        public void BuildStreakTimerSuffix_ShowsRemainingChainTimeOnlyWhenActive()
+        {
+            Assert.AreEqual("   Chain: 8s", CreatureStage.BuildStreakTimerSuffix(2, 7.2f));
+            Assert.AreEqual("   Chain: 1s", CreatureStage.BuildStreakTimerSuffix(1, 0.1f));
+            Assert.AreEqual(string.Empty, CreatureStage.BuildStreakTimerSuffix(0, 7.2f));
+            Assert.AreEqual(string.Empty, CreatureStage.BuildStreakTimerSuffix(2, 0f));
+        }
+
+        [Test]
+        public void ComputeHoldGroundDistanceToMarker_MeasuresDistanceToMarkerEdge()
+        {
+            Assert.That(CreatureStage.ComputeHoldGroundDistanceToMarker(Vector3.zero), Is.EqualTo(0f).Within(0.001f));
+            Assert.That(
+                CreatureStage.ComputeHoldGroundDistanceToMarker(new Vector3(CreatureStageObjectivePlanner.FeedingGroundRadius + 7f, 2f, 0f)),
+                Is.EqualTo(7f).Within(0.001f));
+        }
+
+        [Test]
+        public void ComputeObjectiveSpawnProgress_UsesObjectiveStartBaseline()
+        {
+            Assert.AreEqual(3, CreatureStage.ComputeObjectiveSpawnProgress(19, 16));
+            Assert.AreEqual(0, CreatureStage.ComputeObjectiveSpawnProgress(12, 12));
+            Assert.AreEqual(7, CreatureStage.ComputeObjectiveSpawnProgress(7, -4));
+        }
+
+        [Test]
+        public void ComputeObjectiveCompletionSeconds_UsesObjectiveStartTime()
+        {
+            Assert.That(CreatureStage.ComputeObjectiveCompletionSeconds(42f, 12f), Is.EqualTo(30f).Within(0.001f));
+            Assert.That(CreatureStage.ComputeObjectiveCompletionSeconds(4f, 12f), Is.EqualTo(0f).Within(0.001f));
+        }
+
+        [Test]
+        public void ShouldSpawnReplacement_AllowsRepeatObjectivesWithLocalSpawnProgress()
+        {
+            int localSpawnProgress = CreatureStage.ComputeObjectiveSpawnProgress(
+                totalSpawnedRivals: 19,
+                objectiveStartSpawnedRivals: 16);
+
+            bool shouldSpawn = CreatureStageEncounterManager.ShouldSpawnReplacement(
+                activeRivals: 1,
+                desiredActiveRivals: 3,
+                defeatedRivals: 1,
+                objectiveDefeats: 5,
+                totalSpawnedRivals: localSpawnProgress,
+                maxSpawnedRivals: 4,
+                respawnCooldownTimer: 0f);
+
+            Assert.IsTrue(shouldSpawn);
+        }
+
+        [Test]
+        public void BuildObjectiveCooldownText_CeilsRemainingSeconds()
+        {
+            Assert.AreEqual("Objective complete. Next objective in 6s", CreatureStage.BuildObjectiveCooldownText(5.2f));
+            Assert.AreEqual("Objective complete. Next objective in 0s", CreatureStage.BuildObjectiveCooldownText(-1f));
+        }
+
+        [Test]
+        public void GetRivalArchetype_RotatesAcrossDistinctTactics()
+        {
+            Assert.AreEqual(CreatureRivalArchetype.Charger, CreatureStageEncounterManager.GetRivalArchetype(0, 0));
+            Assert.AreEqual(CreatureRivalArchetype.Stalker, CreatureStageEncounterManager.GetRivalArchetype(1, 0));
+            Assert.AreEqual(CreatureRivalArchetype.Tank, CreatureStageEncounterManager.GetRivalArchetype(2, 0));
+            Assert.AreEqual(CreatureRivalArchetype.Skirmisher, CreatureStageEncounterManager.GetRivalArchetype(3, 0));
+            Assert.AreEqual(CreatureRivalArchetype.Stalker, CreatureStageEncounterManager.GetRivalArchetype(0, 1));
+        }
+
+        [Test]
+        public void AlphaHunt_SpawnsRecurringAlphaRivals()
+        {
+            Assert.IsTrue(CreatureStageEncounterManager.ShouldSpawnAlphaRival(CreatureStageObjectiveType.AlphaHunt, 0));
+            Assert.IsFalse(CreatureStageEncounterManager.ShouldSpawnAlphaRival(CreatureStageObjectiveType.AlphaHunt, 1));
+            Assert.IsTrue(CreatureStageEncounterManager.ShouldSpawnAlphaRival(CreatureStageObjectiveType.AlphaHunt, 2));
+            Assert.IsFalse(CreatureStageEncounterManager.ShouldSpawnAlphaRival(CreatureStageObjectiveType.AlphaHunt, 3));
+            Assert.IsFalse(CreatureStageEncounterManager.ShouldSpawnAlphaRival(CreatureStageObjectiveType.RivalCull, 0));
+            Assert.AreEqual("Alpha Tank", CreatureStageEncounterManager.BuildRivalLabel(CreatureRivalArchetype.Tank, true));
+        }
+
+        [Test]
+        public void PlayerGuard_CanStartOnlyWhenCooldownAndGuardAreClear()
+        {
+            Assert.IsTrue(CreaturePlayerController.CanStartGuard(0f, 0f));
+            Assert.IsFalse(CreaturePlayerController.CanStartGuard(0.1f, 0f));
+            Assert.IsFalse(CreaturePlayerController.CanStartGuard(0f, 0.1f));
+        }
+
+        [Test]
+        public void CanResolveTelegraphedAttack_RequiresTargetStillInReach()
+        {
+            Assert.IsTrue(CreatureRivalAI.CanResolveTelegraphedAttack(1.8f, 2f));
+            Assert.IsFalse(CreatureRivalAI.CanResolveTelegraphedAttack(2.2f, 2f));
+        }
+
+        [Test]
+        public void TargetAssist_ScoresForwardTargetsAboveSideTargets()
+        {
+            float forward = CreatureTargetAssist.ComputeTargetScore(2f, 1f, overlapsAttackZone: true);
+            float side = CreatureTargetAssist.ComputeTargetScore(2f, 0f, overlapsAttackZone: true);
+
+            Assert.Greater(forward, side);
+            Assert.IsTrue(CreatureTargetAssist.IsWithinAssistCone(Vector3.forward, Vector3.forward));
+            Assert.IsFalse(CreatureTargetAssist.IsWithinAssistCone(Vector3.forward, Vector3.left, 0.5f));
+        }
+
+        [Test]
+        public void CreatureArenaLandmarks_IncludeTacticalTerrainAndHealing()
+        {
+            var landmarks = CreatureStageArena.GetDefaultLandmarks(48f);
+            Assert.That(landmarks, Has.Some.Matches<CreatureArenaLandmark>(l => l.Type == CreatureArenaLandmarkType.Cover));
+            Assert.That(landmarks, Has.Some.Matches<CreatureArenaLandmark>(l => l.Type == CreatureArenaLandmarkType.HighGround));
+            Assert.That(landmarks, Has.Some.Matches<CreatureArenaLandmark>(l => l.Type == CreatureArenaLandmarkType.NarrowPassage));
+            Assert.That(landmarks, Has.Some.Matches<CreatureArenaLandmark>(l => l.Type == CreatureArenaLandmarkType.HealingZone));
+        }
+
+        [Test]
+        public void ObjectivePlanner_CanSelectNonDefeatObjective()
+        {
+            var dna = CreatureDNA.CreateDefault();
+            dna.Parts.Add(new PartPlacement { PartId = "tail_basic", AttachBone = 2, Offset = Vector3.back });
+
+            var objective = CreatureStageObjectivePlanner.CreateObjective(dna);
+
+            Assert.AreEqual(CreatureStageObjectiveType.HoldFeedingGround, objective.Type);
+            Assert.IsTrue(objective.UsesHoldTimer);
+        }
+
+        [Test]
+        public void ObjectivePlanner_RotatesWithCompletedObjectiveCount()
+        {
+            var dna = CreatureDNA.CreateDefault();
+            dna.Parts.Clear();
+
+            Assert.AreEqual(0, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 0));
+            Assert.AreEqual(1, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 1));
+            Assert.AreEqual(2, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 2));
+            Assert.AreEqual(0, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 3));
+            Assert.AreEqual(CreatureStageObjectiveType.RivalCull, CreatureStageObjectivePlanner.CreateObjective(dna, 0).Type);
+            Assert.AreEqual(CreatureStageObjectiveType.AlphaHunt, CreatureStageObjectivePlanner.CreateObjective(dna, 1).Type);
+            Assert.AreEqual(CreatureStageObjectiveType.HoldFeedingGround, CreatureStageObjectivePlanner.CreateObjective(dna, 2).Type);
+        }
+
+        [Test]
         public void CreatureInstance_InvulnerabilityBlocksDamage()
         {
             var creatureObject = new GameObject("Creature_InvulnTest");
@@ -277,6 +538,58 @@ namespace RoobsWorld.Tests.EditMode
         }
 
         [Test]
+        public void HudFeedback_CoversCounterAndRivalArchetypeLabels()
+        {
+            Assert.AreEqual(
+                "creature.feedback.counter",
+                CreatureStageHUD.GetFeedbackLocalizationKey(CreatureCombatFeedbackType.Counter));
+            Assert.AreEqual("Tank rival down", CreatureStageHUD.BuildRivalDefeatedLabel(" Tank "));
+            Assert.AreEqual("Rival down", CreatureStageHUD.BuildRivalDefeatedLabel(" "));
+            Assert.AreEqual("Objective complete: +24 DNA", CreatureStageHUD.BuildObjectiveCompletedLabel(24));
+            Assert.AreEqual("Objective complete: +0 DNA", CreatureStageHUD.BuildObjectiveCompletedLabel(-4));
+            Assert.AreEqual("Objective 2: +24 DNA in 31s  Streak x3", CreatureStageHUD.BuildObjectiveCompletedLabel(24, 2, 31.4f, 3));
+            Assert.AreEqual("   Next: Find rivals", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.RivalCull, false));
+            Assert.AreEqual("   Next: Target alpha", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.AlphaHunt, false));
+            Assert.AreEqual("   Next: Reach marker", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.HoldFeedingGround, false));
+            Assert.AreEqual("   Next: Hold ground", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.HoldFeedingGround, true));
+            Assert.AreEqual("   Next: Find rivals (15m)", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.RivalCull, false, 14.2f));
+            Assert.AreEqual("   Next: Target alpha (18m)", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.AlphaHunt, false, 17.1f));
+            Assert.AreEqual("   Next: Reach marker (8m)", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.HoldFeedingGround, false, 7.4f));
+            Assert.AreEqual("   Next: Hold ground", CreatureStageHUD.BuildObjectiveGuidanceSuffix(CreatureStageObjectiveType.HoldFeedingGround, true, 7.4f));
+            StringAssert.Contains("Ability: Interact", CreatureStageHUD.BuildHintText("Legacy carried forward"));
+            StringAssert.Contains("Legacy carried forward", CreatureStageHUD.BuildHintText("Legacy carried forward"));
+            Assert.AreEqual("Need stamina to attack: 12/18", CreatureStageHUD.BuildStaminaExhaustedLabel("attack", 12f, 18f));
+            Assert.AreEqual("Need stamina to use ability: 4/38", CreatureStageHUD.BuildStaminaExhaustedLabel("ability", 4f, 38f));
+            Assert.AreEqual("Need stamina to act: 0/1", CreatureStageHUD.BuildStaminaExhaustedLabel(null, -2f, 1f));
+            Assert.AreEqual("Momentum: +26 stamina", CreatureStageHUD.BuildStaminaRestoredLabel("kill", 26f));
+            Assert.AreEqual("Counter: +14 stamina", CreatureStageHUD.BuildStaminaRestoredLabel("counter", 14f));
+            Assert.AreEqual("Objective momentum: +18 stamina", CreatureStageHUD.BuildStaminaRestoredLabel("objective", 18f));
+            Assert.AreEqual("Streak x5: +4 DNA", CreatureStageHUD.BuildStreakBonusLabel(5, 4));
+        }
+
+        [Test]
+        public void HealingZonePulse_StaysNormalized()
+        {
+            Assert.That(CreatureHealingZone.ComputePulseAlpha(0f, 2f), Is.InRange(0f, 1f));
+            Assert.That(CreatureHealingZone.ComputePulseAlpha(10f, 2f), Is.InRange(0f, 1f));
+        }
+
+        [Test]
+        public void UpgradeChoiceLabels_SurfaceTagsAndTradeoffs()
+        {
+            var option = new CreatureUpgradeOption
+            {
+                Title = "Neural Overdrive",
+                Description = "Recover stamina faster.",
+                Tag = "control",
+                Tradeoff = "Lower health."
+            };
+
+            Assert.AreEqual("Neural Overdrive [control]", CreatureUpgradeChoiceUI.BuildChoiceTitle(option));
+            StringAssert.Contains("Tradeoff: Lower health.", CreatureUpgradeChoiceUI.BuildChoiceDescription(option));
+        }
+
+        [Test]
         public void ComputeNextStreak_ContinuesWhenTimerActive_OtherwiseResets()
         {
             Assert.AreEqual(4, CreatureStageEncounterManager.ComputeNextStreak(3, 0.4f));
@@ -311,6 +624,20 @@ namespace RoobsWorld.Tests.EditMode
 
             Vector3 best = CreatureStageEncounterManager.SelectBestRespawnCandidate(candidates, rivals, Vector3.zero);
             Assert.That(best.x, Is.EqualTo(-20f).Within(0.001f));
+        }
+
+        [Test]
+        public void ComputeNearestRivalDistanceFlat_IgnoresVerticalDifference()
+        {
+            Vector3[] rivals =
+            {
+                new Vector3(3f, 99f, 4f),
+                new Vector3(12f, 0f, 0f)
+            };
+
+            float nearest = CreatureStageEncounterManager.ComputeNearestRivalDistanceFlat(Vector3.zero, rivals);
+
+            Assert.That(nearest, Is.EqualTo(5f).Within(0.001f));
         }
 
         [Test]

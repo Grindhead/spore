@@ -7,8 +7,16 @@
 ## Files
 
 - `server/Dockerfile` builds the relay container.
-- `server/fly.toml` configures the Fly app, London primary region, one always-on machine, and `/healthz` checks.
-- `RoobsWorld/Assets/Resources/multiplayer-relay.json` controls the Unity client relay endpoint.
+- `server/fly.toml` configures the Europe official relay.
+- `server/fly-us.toml` configures the US East official relay.
+- `server/fly-ap.toml` configures the Tokyo mirror for the Asia Pacific official relay.
+- `server/fly-sg.toml` configures the Singapore mirror for the Asia Pacific official relay.
+- `server/fly-sa.toml` configures the South America official relay in Sao Paulo.
+- `server/fly-au.toml` configures the Oceania official relay in Sydney.
+- `server/fly-af.toml` configures the Africa official relay in Johannesburg.
+- `RoobsWorld/Assets/Resources/multiplayer-relay.json` controls the Unity client relay list.
+
+For China-adjacent coverage on Fly, use the Tokyo and Singapore mirrors under the single `Official Asia Pacific` label. For a true mainland China relay, use `docs/multiplayer-live-china.md`; Fly.io does not currently provide a mainland China region.
 
 ## First deployment
 
@@ -19,7 +27,7 @@ fly auth login
 fly apps create <unique-app-name>
 ```
 
-Then edit `server/fly.toml`:
+Then edit the matching `server/fly*.toml` app name if needed:
 
 ```toml
 app = "spore"
@@ -31,6 +39,71 @@ Set a relay token. This is a lightweight gate for the relay, not a true secret o
 fly secrets set GAME_TOKEN="<random-long-token>"
 fly deploy
 fly scale count 1 -a spore --yes
+```
+
+## Official servers
+
+The shipped client shows six official server choices. Asia Pacific is one displayed choice with Tokyo and Singapore configured as redundant relay URLs:
+
+```text
+Official Europe       wss://spore.fly.dev
+Official US East      wss://spore-us.fly.dev
+Official Asia Pacific wss://spore-ap.fly.dev, wss://spore-sg.fly.dev
+Official South America wss://spore-sa.fly.dev
+Official Oceania      wss://spore-au.fly.dev
+Official Africa       wss://spore-af.fly.dev
+```
+
+Mainland China is not a Fly.io region. Tokyo and Singapore are mirrors under the official Asia Pacific label. Host a true China official relay on a mainland China provider only after the required domain, filing, and `wss://` endpoint are ready.
+
+Deploy each official relay as its own Fly app so rooms stay region-local:
+
+```powershell
+fly apps create spore
+fly apps create spore-us
+fly apps create spore-ap
+fly apps create spore-sg
+fly apps create spore-sa
+fly apps create spore-au
+fly apps create spore-af
+
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore-us
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore-ap
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore-sg
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore-sa
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore-au
+fly secrets set GAME_TOKEN="<same-token-as-client>" -a spore-af
+
+fly deploy -c fly.toml
+fly deploy -c fly-us.toml
+fly deploy -c fly-ap.toml
+fly deploy -c fly-sg.toml
+fly deploy -c fly-sa.toml
+fly deploy -c fly-au.toml
+fly deploy -c fly-af.toml
+
+fly scale count 1 -a spore --yes
+fly scale count 1 -a spore-us --yes
+fly scale count 1 -a spore-ap --yes
+fly scale count 1 -a spore-sg --yes
+fly scale count 1 -a spore-sa --yes
+fly scale count 1 -a spore-au --yes
+fly scale count 1 -a spore-af --yes
+```
+
+Each official app seeds a server-owned `PUBLIC` lobby through `OFFICIAL_LOBBIES` in its `fly*.toml`. That lobby is advertised even at `0` players, never expires by session TTL, and remains available after the last connected player leaves. The first player to join an empty official lobby becomes the host for that live session.
+
+Before shipping, confirm all seven relay health endpoints:
+
+```powershell
+curl https://spore.fly.dev/healthz
+curl https://spore-us.fly.dev/healthz
+curl https://spore-ap.fly.dev/healthz
+curl https://spore-sg.fly.dev/healthz
+curl https://spore-sa.fly.dev/healthz
+curl https://spore-au.fly.dev/healthz
+curl https://spore-af.fly.dev/healthz
 ```
 
 ## GitHub Actions deployment
@@ -71,7 +144,7 @@ curl https://spore.fly.dev/healthz
 Expected response:
 
 ```json
-{"ok":true,"sessions":0,"clients":0}
+{"ok":true,"sessions":1,"clients":0}
 ```
 
 ## Unity build config
@@ -82,8 +155,14 @@ Before building the game, update:
 
 ```json
 {
-  "relayUrl": "wss://<unique-app-name>.fly.dev",
-  "gameToken": "<same-token-as-GAME_TOKEN>"
+  "officialServers": [
+    {
+      "name": "Official Europe",
+      "region": "London",
+      "relayUrl": "wss://spore.fly.dev",
+      "gameToken": "<same-token-as-GAME_TOKEN>"
+    }
+  ]
 }
 ```
 
@@ -93,13 +172,35 @@ For standalone desktop smoke tests, you can also override without editing the re
 RoobsWorld.exe -relayUrl wss://spore.fly.dev -gameToken <same-token-as-GAME_TOKEN>
 ```
 
+## Community-hosted servers
+
+Players can run the same `server/` relay on any WebSocket-capable host. The game lobby accepts a custom `ws://` or `wss://` URL, then lists lobbies from that community relay. Private community relays can include the token in the shared URL query string.
+
+For a simple self-hosted relay:
+
+```powershell
+cd server
+npm ci
+$env:GAME_TOKEN="<optional-server-token>"
+$env:PORT="7788"
+npm start
+```
+
+The host should publish the WebSocket endpoint to players, for example:
+
+```text
+wss://my-roobsworld-relay.example.com
+wss://my-roobsworld-relay.example.com?token=my-server-token
+```
+
 ## Smoke test
 
-1. Launch one client and host a multiplayer session.
-2. Confirm a six-character session code appears.
-3. Launch a second client and join that code.
-4. Toggle ready on the joining client.
-5. Start the game from the host.
+1. Launch one client and open multiplayer.
+2. Confirm the selected official relay shows its `PUBLIC` lobby, even if it has `0` players.
+3. Join the official lobby from the first client.
+4. Launch a second client and join the same official lobby.
+5. Toggle ready on the joining client.
+6. Start the game from the host.
 
 If the first client can host but the second cannot join, check Fly logs:
 

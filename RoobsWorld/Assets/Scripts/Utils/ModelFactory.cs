@@ -1,5 +1,6 @@
 using UnityEngine;
 using RoobsWorld.Core;
+using RoobsWorld.Creature;
 using RoobsWorld.Stages.Cell;
 
 namespace RoobsWorld.Utils
@@ -534,6 +535,11 @@ namespace RoobsWorld.Utils
 
         public static GameObject CreateGround(float size, Material material)
         {
+            return CreateGround(size, material, size / 10f);
+        }
+
+        public static GameObject CreateGround(float size, Material material, float uvTiling)
+        {
             var obj = new GameObject("Ground");
             var mf = obj.AddComponent<MeshFilter>();
 
@@ -554,7 +560,7 @@ namespace RoobsWorld.Utils
                     float pz = Mathf.Lerp(-half, half, (float)y / segs);
                     verts[v] = new Vector3(px, 0, pz);
                     normals[v] = Vector3.up;
-                    uvs[v] = new Vector2((float)x / segs * (size / 10f), (float)y / segs * (size / 10f));
+                    uvs[v] = new Vector2((float)x / segs * uvTiling, (float)y / segs * uvTiling);
                     v++;
                 }
             }
@@ -626,37 +632,22 @@ namespace RoobsWorld.Utils
         public static GameObject CreateCreatureModel(Vector3 position, Color bodyColor)
         {
             bodyColor = ProceduralTextureFactory.Opaque(bodyColor);
+            var dna = CreatureDNA.CreateDefault();
+            dna.Colors.PrimaryColor = bodyColor;
+            dna.Colors.SecondaryColor = Color.Lerp(bodyColor, Color.black, 0.35f);
+            dna.Colors.AccentColor = Color.Lerp(Color.white, bodyColor, 0.28f);
+            return CreateCreatureModel(position, dna);
+        }
+
+        public static GameObject CreateCreatureModel(Vector3 position, CreatureDNA dna)
+        {
+            dna ??= CreatureDNA.CreateDefault();
             var root = new GameObject("Creature");
             root.transform.position = position;
-
-            var bodyObj = new GameObject("Body");
-            bodyObj.transform.SetParent(root.transform, false);
-            bodyObj.transform.localPosition = Vector3.up * 0.5f;
-            var bodyMf = bodyObj.AddComponent<MeshFilter>();
-            bodyMf.mesh = CreaturePartMeshFactory.CreateSpineSegment(0.25f);
-            var bodyMr = bodyObj.AddComponent<MeshRenderer>();
-            bodyMr.material = ProceduralTextureFactory.CreateMaterialWithTexture(
-                ProceduralTextureFactory.CreateCreatureSkinTexture(bodyColor, bodyColor * 0.8f),
-                Color.white);
-
-            var headObj = new GameObject("Head");
-            headObj.transform.SetParent(root.transform, false);
-            headObj.transform.localPosition = new Vector3(0, 0.7f, 0.4f);
-            var headMf = headObj.AddComponent<MeshFilter>();
-            headMf.mesh = ProceduralMeshFactory.CreateOrganicSphere(0.18f, 10);
-            var headMr = headObj.AddComponent<MeshRenderer>();
-            headMr.material = ProceduralTextureFactory.CreateMaterialWithTexture(
-                ProceduralTextureFactory.CreateCreatureSkinTexture(bodyColor * 1.1f, bodyColor),
-                Color.white);
-
-            CreateEyePair(root.transform, new Vector3(0.1f, 0.8f, 0.55f));
-
-            Color legColor = bodyColor * 0.8f;
-            CreateModelLeg(root.transform, new Vector3(0.25f, 0, 0.15f), legColor);
-            CreateModelLeg(root.transform, new Vector3(-0.25f, 0, 0.15f), legColor);
-            CreateModelLeg(root.transform, new Vector3(0.25f, 0, -0.15f), legColor);
-            CreateModelLeg(root.transform, new Vector3(-0.25f, 0, -0.15f), legColor);
-
+            root.transform.localScale = dna.Body != null && dna.Body.BodyScale != Vector3.zero
+                ? dna.Body.BodyScale
+                : Vector3.one;
+            CreatureModelBuilder.Build(root, dna, CreaturePartCatalog.GetDefaultCatalog());
             return root;
         }
 

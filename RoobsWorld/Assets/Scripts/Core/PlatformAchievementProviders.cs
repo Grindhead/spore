@@ -1,58 +1,225 @@
+using System.Text;
 using UnityEngine;
 
 namespace RoobsWorld.Core
 {
     /// <summary>
-    /// Stub implementation for Steam achievement reporting via Steamworks.NET.
-    /// Replace the body of <see cref="ReportUnlock"/> with actual SDK calls when Steamworks.NET is integrated.
-    /// Typical integration: Steamworks.SteamUserStats.SetAchievement(MapToSteamId(achievementId)); Steamworks.SteamUserStats.StoreStats();
+    /// Steamworks.NET-backed platform provider. It compiles as a safe no-op until
+    /// Steamworks.NET is imported and the ROOBSWORLD_STEAM scripting define is enabled.
     /// </summary>
-    public sealed class SteamAchievementProvider : IPlatformAchievementProvider
+    public class SteamPlatformProvider : IPlatformAchievementProvider, IPlatformUserProvider, IPlatformCloudSaveProvider, IPlatformRichPresenceProvider
     {
-        /// <summary>
-        /// Maps an in-game achievement id (e.g. "cell_first_eat") to the Steam achievement API name
-        /// as configured in the Steamworks dashboard. Override this mapping to match your Steam app config.
-        /// </summary>
-        private static string MapToSteamId(string gameId) => gameId.ToUpperInvariant().Replace('.', '_');
+        public bool IsAvailable => SteamClientIntegration.IsInitialized;
+        public string PlatformName => "Steam";
+
+        public string UserId
+        {
+            get
+            {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+                return IsAvailable ? Steamworks.SteamUser.GetSteamID().m_SteamID.ToString() : null;
+#else
+                return null;
+#endif
+            }
+        }
+
+        public string DisplayName
+        {
+            get
+            {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+                return IsAvailable ? Steamworks.SteamFriends.GetPersonaName() : null;
+#else
+                return null;
+#endif
+            }
+        }
+
+        public bool IsOverlayEnabled
+        {
+            get
+            {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+                return IsAvailable && Steamworks.SteamUtils.IsOverlayEnabled();
+#else
+                return false;
+#endif
+            }
+        }
+
+        public bool RequestCurrentStats()
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            return IsAvailable;
+#else
+            return false;
+#endif
+        }
 
         public void ReportUnlock(string achievementId)
         {
-            // TODO: integrate Steamworks.NET
-            // var steamId = MapToSteamId(achievementId);
-            // Steamworks.SteamUserStats.SetAchievement(steamId);
-            // Steamworks.SteamUserStats.StoreStats();
-            Debug.Log($"[SteamAchievements] Would unlock: {achievementId} (Steamworks.NET not yet integrated)");
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (!IsAvailable)
+                return;
+
+            string steamId = AchievementCatalog.GetSteamApiName(achievementId);
+            if (string.IsNullOrWhiteSpace(steamId))
+                return;
+
+            if (!Steamworks.SteamUserStats.SetAchievement(steamId))
+            {
+                Debug.LogWarning($"[Steam] Failed to set achievement {steamId} from {achievementId}");
+                return;
+            }
+
+            if (!Steamworks.SteamUserStats.StoreStats())
+                Debug.LogWarning($"[Steam] Failed to store stats after unlocking {steamId}");
+#else
+            Debug.Log($"[Steam] Would unlock: {achievementId} (Steamworks.NET is not active for this target)");
+#endif
+        }
+
+        public void SyncUnlockedAchievements(AchievementTracker tracker)
+        {
+            PlatformAchievementSync.ReportUnlockedAchievements(tracker, this);
+        }
+
+        public void ActivateGameOverlay(string dialog = "Friends")
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (IsAvailable)
+                Steamworks.SteamFriends.ActivateGameOverlay(dialog);
+#endif
+        }
+
+        public void ActivateStorePage()
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (IsAvailable)
+                Steamworks.SteamFriends.ActivateGameOverlayToStore(
+                    new Steamworks.AppId_t(SteamClientIntegration.AppId),
+                    Steamworks.EOverlayToStoreFlag.k_EOverlayToStoreFlag_None);
+#endif
+        }
+
+        public bool TryWriteText(string remoteFileName, string contents)
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (!IsCloudAvailable() || string.IsNullOrWhiteSpace(remoteFileName))
+                return false;
+
+            byte[] bytes = Encoding.UTF8.GetBytes(contents ?? string.Empty);
+            return Steamworks.SteamRemoteStorage.FileWrite(remoteFileName, bytes, bytes.Length);
+#else
+            return false;
+#endif
+        }
+
+        public bool TryReadText(string remoteFileName, out string contents)
+        {
+            contents = null;
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (!IsCloudAvailable() || string.IsNullOrWhiteSpace(remoteFileName))
+                return false;
+            if (!Steamworks.SteamRemoteStorage.FileExists(remoteFileName))
+                return false;
+
+            int size = Steamworks.SteamRemoteStorage.GetFileSize(remoteFileName);
+            if (size <= 0)
+                return false;
+
+            byte[] bytes = new byte[size];
+            int read = Steamworks.SteamRemoteStorage.FileRead(remoteFileName, bytes, size);
+            if (read <= 0)
+                return false;
+
+            contents = Encoding.UTF8.GetString(bytes, 0, read);
+            return true;
+#else
+            return false;
+#endif
+        }
+
+        public void SetRichPresence(GameStageType stage)
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (!IsAvailable)
+                return;
+
+            Steamworks.SteamFriends.SetRichPresence("steam_display", PlatformServicesConfig.SteamRichPresenceDisplayToken);
+            Steamworks.SteamFriends.SetRichPresence("status", BuildRichPresenceStatus(stage));
+            Steamworks.SteamFriends.SetRichPresence("stage", BuildRichPresenceStageKey(stage));
+#endif
+        }
+
+        public void ClearRichPresence()
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            if (!IsAvailable)
+                return;
+
+            Steamworks.SteamFriends.ClearRichPresence();
+#endif
+        }
+
+        public static string BuildRichPresenceStatus(GameStageType stage)
+        {
+            return stage switch
+            {
+                GameStageType.Cell => "Exploring the primordial ocean",
+                GameStageType.Creature => "Hunting in Creature Stage",
+                _ => "In the main menu"
+            };
+        }
+
+        public static string BuildRichPresenceStageKey(GameStageType stage)
+        {
+            return stage switch
+            {
+                GameStageType.Cell => "cell",
+                GameStageType.Creature => "creature",
+                _ => "menu"
+            };
+        }
+
+        private bool IsCloudAvailable()
+        {
+#if STEAMWORKS_NET && !UNITY_WEBGL
+            return IsAvailable
+                && Steamworks.SteamRemoteStorage.IsCloudEnabledForAccount()
+                && Steamworks.SteamRemoteStorage.IsCloudEnabledForApp();
+#else
+            return false;
+#endif
         }
     }
 
-    /// <summary>
-    /// Stub implementation for Xbox Live / GDK achievement reporting.
-    /// Replace the body of <see cref="ReportUnlock"/> with actual GDK calls when the Xbox GDK is integrated.
-    /// Typical integration: XblAchievementsManagerUpdateAchievement(xboxUserId, achievementId, 100);
-    /// </summary>
+    public sealed class SteamAchievementProvider : SteamPlatformProvider { }
+
     public sealed class XboxAchievementProvider : IPlatformAchievementProvider
     {
         public void ReportUnlock(string achievementId)
         {
-            // TODO: integrate Xbox GDK / XSAPI
-            // XblAchievementsManagerUpdateAchievement(userId, MapToXboxId(achievementId), 100 /*percent complete*/);
-            Debug.Log($"[XboxAchievements] Would unlock: {achievementId} (Xbox GDK not yet integrated)");
+            string xboxId = AchievementCatalog.GetXboxAchievementId(achievementId);
+#if ROOBSWORLD_XBOX
+            Debug.LogWarning($"[Xbox] SDK bridge is not linked in this workspace. Achievement queued for platform wiring: {xboxId}");
+#else
+            Debug.Log($"[Xbox] Would unlock: {xboxId} (enable ROOBSWORLD_XBOX after installing Xbox GDK/XSAPI)");
+#endif
         }
     }
 
-    /// <summary>
-    /// Stub implementation for PlayStation trophy reporting via the PS5 SDK / Unity PS Plugin.
-    /// Replace the body of <see cref="ReportUnlock"/> with actual Sony SDK calls when the PS plugin is integrated.
-    /// Typical integration: Sony.PS5.Trophies.UnlockTrophyRequest; or equivalent PS4/PS5 API.
-    /// </summary>
     public sealed class PlayStationAchievementProvider : IPlatformAchievementProvider
     {
         public void ReportUnlock(string achievementId)
         {
-            // TODO: integrate Sony PS5 / PS4 trophy SDK
-            // var trophyId = MapToTrophyId(achievementId);
-            // Sony.PS5.Trophies.UnlockTrophy(trophyId, onComplete: (res) => { ... });
-            Debug.Log($"[PSNTrophies] Would unlock: {achievementId} (Sony SDK not yet integrated)");
+            string trophyId = AchievementCatalog.GetPlayStationTrophyId(achievementId);
+#if ROOBSWORLD_PLAYSTATION
+            Debug.LogWarning($"[PlayStation] SDK bridge is not linked in this workspace. Trophy queued for platform wiring: {trophyId}");
+#else
+            Debug.Log($"[PlayStation] Would unlock: {trophyId} (enable ROOBSWORLD_PLAYSTATION after installing the PlayStation Unity SDK/plugin)");
+#endif
         }
     }
 

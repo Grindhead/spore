@@ -10,6 +10,29 @@ namespace RoobsWorld.Stages.Cell
     /// </summary>
     public static class Biome
     {
+        public readonly struct BiomeProfile
+        {
+            public readonly BiomeType Type;
+            public readonly string VisitReasonKey;
+            public readonly string LeaveReasonKey;
+            public readonly float RiskLevel;
+            public readonly FoodType PreferredFood;
+
+            public BiomeProfile(
+                BiomeType type,
+                string visitReasonKey,
+                string leaveReasonKey,
+                float riskLevel,
+                FoodType preferredFood)
+            {
+                Type = type;
+                VisitReasonKey = visitReasonKey;
+                LeaveReasonKey = leaveReasonKey;
+                RiskLevel = Mathf.Clamp01(riskLevel);
+                PreferredFood = preferredFood;
+            }
+        }
+
         /// <summary>Environmental zone type; determines trait bonuses/penalties.</summary>
         public enum BiomeType
         {
@@ -88,6 +111,42 @@ namespace RoobsWorld.Stages.Cell
             {
                 case BiomeType.ToxicZone: return BalanceConstants.CellBiomeFoodEfficiencyMultiplierToxic;
                 default: return BalanceConstants.CellBiomeFoodEfficiencyMultiplierDefault;
+            }
+        }
+
+        /// <summary>Player-facing biome identity: why to visit, why to leave, and expected risk.</summary>
+        public static BiomeProfile GetProfile(BiomeType biome)
+        {
+            switch (biome)
+            {
+                case BiomeType.AlgaeForest:
+                    return new BiomeProfile(
+                        biome,
+                        "cell.biome.reason.algaeforest.visit",
+                        "cell.biome.reason.algaeforest.leave",
+                        0.55f,
+                        FoodType.Plant);
+                case BiomeType.DeepZone:
+                    return new BiomeProfile(
+                        biome,
+                        "cell.biome.reason.deepzone.visit",
+                        "cell.biome.reason.deepzone.leave",
+                        0.35f,
+                        FoodType.Meat);
+                case BiomeType.ToxicZone:
+                    return new BiomeProfile(
+                        biome,
+                        "cell.biome.reason.toxiczone.visit",
+                        "cell.biome.reason.toxiczone.leave",
+                        0.85f,
+                        FoodType.Toxin);
+                default:
+                    return new BiomeProfile(
+                        BiomeType.OpenWater,
+                        "cell.biome.reason.openwater.visit",
+                        "cell.biome.reason.openwater.leave",
+                        0.2f,
+                        FoodType.Plant);
             }
         }
     }

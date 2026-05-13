@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using RoobsWorld.Core;
 using UnityEngine;
 
 namespace RoobsWorld.Multiplayer
@@ -76,8 +77,22 @@ namespace RoobsWorld.Multiplayer
                 _playbacks[packet.PlayerId] = playback;
             }
 
+            if (!TryGetDistanceToRemotePlayer(packet.PlayerId, out float distance))
+            {
+                playback.Volume = 0f;
+                playback.Clear();
+                return;
+            }
+
+            if (!IsWithinVoiceRadius(distance))
+            {
+                playback.Volume = 0f;
+                playback.Clear();
+                return;
+            }
+
             playback.Enqueue(packet.Pcm16);
-            UpdatePlaybackVolume(packet.PlayerId, playback);
+            playback.Volume = CalculateVolume(distance);
         }
 
         private void Update()
@@ -102,10 +117,31 @@ namespace RoobsWorld.Multiplayer
                 return;
             }
 
-            _microphoneDevice = Microphone.devices[0];
+            _microphoneDevice = ResolvePreferredMicrophoneDevice(Microphone.devices);
             _microphoneClip = Microphone.Start(_microphoneDevice, loop: true, lengthSec: 1, frequency: SampleRate);
             _lastMicPosition = 0;
             _captureStarted = _microphoneClip != null;
+        }
+
+        private static string ResolvePreferredMicrophoneDevice(string[] availableDevices)
+        {
+            if (availableDevices == null || availableDevices.Length == 0)
+                return null;
+
+            string preferred = null;
+            if (SettingsManager.HasInstance && SettingsManager.Instance.Current != null)
+                preferred = SettingsManager.Instance.Current.MicrophoneDeviceName;
+
+            if (!string.IsNullOrWhiteSpace(preferred))
+            {
+                for (int i = 0; i < availableDevices.Length; i++)
+                {
+                    if (string.Equals(availableDevices[i], preferred, StringComparison.Ordinal))
+                        return availableDevices[i];
+                }
+            }
+
+            return availableDevices[0];
         }
 
         private void StopCapture()
@@ -187,16 +223,38 @@ namespace RoobsWorld.Multiplayer
             if (playback == null || _localPlayer == null)
                 return;
 
-            Transform remote = _remoteTransformProvider?.Invoke(playerId);
-            if (remote == null)
+            if (!TryGetDistanceToRemotePlayer(playerId, out float distance))
             {
                 playback.Volume = 0f;
+                playback.Clear();
                 return;
             }
 
-            float distance = Vector3.Distance(_localPlayer.position, remote.position);
+            if (!IsWithinVoiceRadius(distance))
+            {
+                playback.Volume = 0f;
+                playback.Clear();
+                return;
+            }
+
             playback.Volume = CalculateVolume(distance);
         }
+
+        private bool TryGetDistanceToRemotePlayer(int playerId, out float distance)
+        {
+            distance = 0f;
+            if (_localPlayer == null)
+                return false;
+
+            Transform remote = _remoteTransformProvider?.Invoke(playerId);
+            if (remote == null)
+                return false;
+
+            distance = Vector3.Distance(_localPlayer.position, remote.position);
+            return true;
+        }
+
+        public static bool IsWithinVoiceRadius(float distance) => distance <= VoiceRadius;
 
         public static float CalculateVolume(float distance)
         {
@@ -254,6 +312,14 @@ namespace RoobsWorld.Multiplayer
 
                     while (_samples.Count > _maxQueuedSamples)
                         _samples.Dequeue();
+                }
+            }
+
+            public void Clear()
+            {
+                lock (_lock)
+                {
+                    _samples.Clear();
                 }
             }
 

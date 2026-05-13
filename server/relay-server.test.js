@@ -12,6 +12,7 @@ const {
     RateLimiter,
     validateCode,
     validateClanName,
+    validateServerName,
     validateClanTag,
     validateBase64,
     validatePlayerId,
@@ -115,6 +116,18 @@ describe('validateClanName', () => {
     });
 });
 
+describe('validateServerName', () => {
+    it('accepts display-safe server names', () => {
+        assert.ok(validateServerName('Tide Pool'));
+        assert.ok(validateServerName('  Open Water  '));
+    });
+
+    it('rejects server names outside the allowed length', () => {
+        assert.equal(validateServerName('ab'), false);
+        assert.equal(validateServerName('x'.repeat(33)), false);
+    });
+});
+
 describe('validateClanTag', () => {
     it('accepts uppercase alphanumeric tags between two and five chars', () => {
         assert.ok(validateClanTag('AB'));
@@ -167,19 +180,16 @@ describe('validateBase64', () => {
 // ---- validatePlayerId ----
 
 describe('validatePlayerId', () => {
-    it('accepts ids 0–3', () => {
+    it('accepts any non-negative integer id', () => {
         assert.ok(validatePlayerId(0));
         assert.ok(validatePlayerId(1));
         assert.ok(validatePlayerId(3));
+        assert.ok(validatePlayerId(4));
+        assert.ok(validatePlayerId(100));
     });
 
     it('rejects negative ids', () => {
         assert.equal(validatePlayerId(-1), false);
-    });
-
-    it('rejects ids above 3', () => {
-        assert.equal(validatePlayerId(4), false);
-        assert.equal(validatePlayerId(100), false);
     });
 
     it('rejects non-integer numbers', () => {
@@ -203,10 +213,10 @@ describe('validateRelayTarget', () => {
     it('accepts valid player IDs', () => {
         assert.ok(validateRelayTarget(0));
         assert.ok(validateRelayTarget(3));
+        assert.ok(validateRelayTarget(100));
     });
 
     it('rejects invalid player IDs', () => {
-        assert.equal(validateRelayTarget(5), false);
         assert.equal(validateRelayTarget(-1), false);
     });
 });
@@ -255,6 +265,80 @@ describe('Session lobbies', () => {
         assert.equal(ws._lobbyId, 'cell-0_1');
         assert.equal(session.isPlayerInLobby(playerId, 'session'), false);
         assert.ok(session.isPlayerInLobby(playerId, 'cell-0_1'));
+    });
+});
+
+// ---- Public lobby discovery ----
+
+describe('Public lobby discovery', () => {
+    it('lists joinable sessions with player counts', () => {
+        const { Session, sessions, CFG, getPublicLobbies, encodePublicLobbies } = require('./relay-server');
+        const previousOfficialLobbies = CFG.OFFICIAL_LOBBIES;
+        CFG.OFFICIAL_LOBBIES = '';
+        sessions.clear();
+
+        const session = new Session('ABC123', 'Tide Pool');
+        session.add({ readyState: 1, send() {} });
+        sessions.set(session.code, session);
+
+        assert.deepEqual(getPublicLobbies(), [
+            { code: 'ABC123', serverName: 'Tide Pool', players: 1, maxPlayers: 0 },
+        ]);
+        assert.equal(encodePublicLobbies(), 'ABC123,1,0,Tide%20Pool');
+
+        sessions.clear();
+        CFG.OFFICIAL_LOBBIES = previousOfficialLobbies;
+    });
+
+    it('uses maxPlayers zero to indicate unlimited sessions', () => {
+        const { Session, sessions, CFG, getPublicLobbies } = require('./relay-server');
+        const previousOfficialLobbies = CFG.OFFICIAL_LOBBIES;
+        CFG.OFFICIAL_LOBBIES = '';
+        sessions.clear();
+
+        const session = new Session('OPEN12');
+        for (let i = 0; i < 8; i++)
+            session.add({ readyState: 1, send() {} });
+        sessions.set(session.code, session);
+
+        assert.deepEqual(getPublicLobbies(), [
+            { code: 'OPEN12', serverName: 'Public Server', players: 8, maxPlayers: CFG.MAX_PLAYERS },
+        ]);
+
+        sessions.clear();
+        CFG.OFFICIAL_LOBBIES = previousOfficialLobbies;
+    });
+
+    it('lists official server-owned lobbies even when empty', () => {
+        const { sessions, CFG, getPublicLobbies, encodePublicLobbies } = require('./relay-server');
+        const previousOfficialLobbies = CFG.OFFICIAL_LOBBIES;
+        CFG.OFFICIAL_LOBBIES = 'PUBLIC:Official Europe';
+        sessions.clear();
+
+        assert.deepEqual(getPublicLobbies(), [
+            { code: 'PUBLIC', serverName: 'Official Europe', players: 0, maxPlayers: CFG.MAX_PLAYERS },
+        ]);
+        assert.equal(encodePublicLobbies(), 'PUBLIC,0,0,Official%20Europe');
+
+        sessions.clear();
+        CFG.OFFICIAL_LOBBIES = previousOfficialLobbies;
+    });
+
+    it('keeps official sessions after the last player leaves', () => {
+        const { sessions, Session, handleLeave } = require('./relay-server');
+        sessions.clear();
+        const session = new Session('PUBLIC', 'Official Europe', { official: true });
+        const ws = { readyState: 1, send() {} };
+        session.add(ws);
+        sessions.set(session.code, session);
+
+        handleLeave(ws);
+
+        assert.equal(session.size, 0);
+        assert.equal(sessions.get('PUBLIC'), session);
+        assert.equal(session.official, true);
+
+        sessions.clear();
     });
 });
 

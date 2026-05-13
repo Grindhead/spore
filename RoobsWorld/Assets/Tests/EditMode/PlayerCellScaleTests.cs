@@ -63,5 +63,33 @@ namespace RoobsWorld.Tests
                 Object.DestroyImmediate(go);
             }
         }
+
+        [Test]
+        public void OrganismPredationProbeRadius_TracksActualCollider()
+        {
+            var go = new GameObject("OrganismPredationProbeRadius_Test");
+            try
+            {
+                go.transform.localScale = Vector3.one * 1.2f;
+                var collider = go.AddComponent<SphereCollider>();
+                collider.radius = 0.5f;
+
+                float probeRadius = Organism.ComputePredationProbeRadius(go.transform.lossyScale, collider);
+
+                Assert.AreEqual(0.72f, probeRadius, 0.001f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void CellAIPredationProbeRadius_UsesMinimumForTinyCells()
+        {
+            float probeRadius = CellAI.ComputePredationProbeRadius(Vector3.one * 0.1f, null);
+
+            Assert.AreEqual(0.26f, probeRadius, 0.001f);
+        }
     }
 }

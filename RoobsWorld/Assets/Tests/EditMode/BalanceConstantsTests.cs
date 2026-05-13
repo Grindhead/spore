@@ -22,6 +22,17 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void CellAISpeedCaps_ArePlayerRelativeAndSane()
+        {
+            Assert.Greater(BalanceConstants.CellPlayerFallbackCruiseSpeed, 0f);
+            Assert.Greater(BalanceConstants.CellOrganismMaxSpeedToPlayerRatio, 0f);
+            Assert.Greater(BalanceConstants.CellNpcMaxSpeedToPlayerRatio, 0f);
+            Assert.Greater(BalanceConstants.CellPredatorMaxSpeedToPlayerRatio, 0f);
+            Assert.Greater(BalanceConstants.CellPredatorBurstMaxSpeedToPlayerRatio, BalanceConstants.CellPredatorMaxSpeedToPlayerRatio);
+            Assert.LessOrEqual(BalanceConstants.CellNpcMaxSpeedToPlayerRatio, BalanceConstants.CellOrganismMaxSpeedToPlayerRatio);
+        }
+
+        [Test]
         public void CellSpatialGridCellSize_IsPositive()
         {
             Assert.Greater(BalanceConstants.CellSpatialGridCellSize, 0f);
@@ -62,6 +73,30 @@ namespace RoobsWorld.Tests
         {
             Assert.Greater(BalanceConstants.CellDNAPointsPerGoalComplete, 0,
                 "Micro goal completion should grant a positive DNA reward.");
+        }
+
+        [Test]
+        public void DNARewards_CreateReadableProgressionBudget()
+        {
+            Assert.Less(BalanceConstants.CellDNAPointsPerFood, BalanceConstants.CellDNAPointsPerGoalComplete);
+            Assert.LessOrEqual(BalanceConstants.CellDNAPointsPerGoalComplete, BalanceConstants.CellDNAPointsPerCellConsume);
+            Assert.Greater(BalanceConstants.CreatureDNAPointsObjectiveComplete, BalanceConstants.CreatureDNAPointsPerRivalDefeat);
+            Assert.LessOrEqual(BalanceConstants.CreatureDNAPointsObjectiveComplete, 25);
+        }
+
+        [Test]
+        public void PassFiveGameplayTuningConstants_AreSane()
+        {
+            Assert.GreaterOrEqual(BalanceConstants.CellRepeatableRiskGoalRewardMultiplier, 2);
+            Assert.Greater(BalanceConstants.CreaturePlayerMaxStamina, 0f);
+            Assert.Greater(BalanceConstants.CreaturePlayerStaminaRecoveryPerSecond, 0f);
+            Assert.Greater(BalanceConstants.CreaturePlayerAttackStaminaCost, 0f);
+            Assert.Greater(BalanceConstants.CreaturePlayerGuardStaminaCost, 0f);
+            Assert.Greater(BalanceConstants.CreaturePlayerAbilityStaminaCost, BalanceConstants.CreaturePlayerAttackStaminaCost);
+            Assert.Greater(BalanceConstants.CreaturePlayerAbilityCooldownSeconds, 0f);
+            Assert.Greater(BalanceConstants.CreaturePlayerStaminaRestoredOnKill, 0f);
+            Assert.Greater(BalanceConstants.CreaturePlayerStaminaRestoredOnCounter, 0f);
+            Assert.Less(BalanceConstants.CreaturePlayerStaminaRestoredOnCounter, BalanceConstants.CreaturePlayerStaminaRestoredOnKill);
         }
 
         [Test]

@@ -176,6 +176,23 @@ namespace RoobsWorld.Stages.Cell
                     ? Random.Range(12f, 20f)
                     : Random.Range(15f, 30f);
 
+            TryStartEvent(eventType, duration);
+        }
+
+        /// <summary>
+        /// Starts a specific environment event immediately when no event is active.
+        /// Returns false if the manager is inactive, another event is running, or authority blocks event spawning.
+        /// </summary>
+        public bool TryStartEvent(CellEnvironmentEventType eventType, float durationSeconds)
+        {
+            if (!_active || eventType == CellEnvironmentEventType.None)
+                return false;
+            if (ActiveEvent != CellEnvironmentEventType.None)
+                return false;
+            if (_authority != null && !_authority.CanFireEnvironmentEvent())
+                return false;
+
+            float duration = Mathf.Max(0.1f, durationSeconds);
             ActiveEvent = eventType;
             _activeEventEndsAt = Time.time + duration;
             EventBus.Publish(new CellEnvironmentEventTriggered
@@ -186,7 +203,9 @@ namespace RoobsWorld.Stages.Cell
             });
 
             ApplyEventEffect(eventType);
-            StartCoroutine(EndEventAfter(eventType, duration));
+            if (Application.isPlaying)
+                StartCoroutine(EndEventAfter(eventType, duration));
+            return true;
         }
 
         private void ApplyEventEffect(CellEnvironmentEventType eventType)

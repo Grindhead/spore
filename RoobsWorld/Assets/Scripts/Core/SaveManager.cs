@@ -68,6 +68,7 @@ namespace RoobsWorld.Core
                 File.WriteAllText(path, json);
                 Debug.Log($"[SaveManager] Game saved to {path}");
                 EventBus.Publish(new GameSavedEvent { SavePath = path });
+                PlatformCloudSaveSync.TryUploadJson(slotName, json);
             }
             catch (Exception ex)
             {
@@ -86,8 +87,11 @@ namespace RoobsWorld.Core
 
             if (!File.Exists(path))
             {
-                Debug.LogWarning($"[SaveManager] No save found at {path}");
-                return null;
+                if (!PlatformCloudSaveSync.TryRestoreSlotToLocalFile(slotName, path))
+                {
+                    Debug.LogWarning($"[SaveManager] No save found at {path}");
+                    return null;
+                }
             }
 
             try

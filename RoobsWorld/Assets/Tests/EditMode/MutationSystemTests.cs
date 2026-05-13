@@ -124,5 +124,29 @@ namespace RoobsWorld.Tests
             var b = MutationSystem.MutateTraits(GeneticTraits.Photosynthetic, false, new SystemRandom(77));
             Assert.AreEqual(a, b);
         }
+
+        [Test]
+        public void CreateStrategicMutationChoices_GuaranteesDistinctBuildRoles()
+        {
+            var parent = Genome.Default();
+            var options = MutationSystem.CreateStrategicMutationChoices(
+                parent,
+                new BehaviourBias(),
+                GeneticTraits.Electric,
+                new SystemRandom(42));
+
+            Assert.AreEqual(3, options.Length);
+            Assert.Greater(options[0].Attack, parent.Attack);
+            Assert.Greater(options[0].Spikes, parent.Spikes);
+            Assert.IsTrue(options[0].HasTrait(GeneticTraits.Toxic));
+
+            Assert.Greater(options[1].Speed, parent.Speed);
+            Assert.Greater(options[1].Flagella, parent.Flagella);
+            Assert.IsTrue(options[1].HasTrait(GeneticTraits.Armoured));
+
+            Assert.Greater(options[2].Digestion, parent.Digestion);
+            Assert.Less(options[2].MetabolismCost, parent.MetabolismCost);
+            Assert.IsTrue(options[2].HasTrait(GeneticTraits.Electric));
+        }
     }
 }

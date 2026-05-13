@@ -5,6 +5,15 @@ using UnityEngine.UI;
 
 namespace RoobsWorld.Stages.Cell
 {
+    public enum CellThreatCueType
+    {
+        None,
+        Predator,
+        Leviathan,
+        Virus,
+        ToxicHazard
+    }
+
     /// <summary>
     /// Visual threat indicator system that displays danger when predators are nearby.
     /// Shows a red pulsing border and optional aura around the player cell.
@@ -29,6 +38,7 @@ namespace RoobsWorld.Stages.Cell
         private float _scanTimer;
         private float _nearestThreatDistance = float.PositiveInfinity;
         private Vector3 _primaryThreatDirection = Vector3.zero;
+        private CellThreatCueType _primaryThreatType = CellThreatCueType.None;
         private bool _isInitialized;
         private readonly List<PredatorCell> _predatorBuffer = new List<PredatorCell>(24);
         private readonly List<LeviathanCell> _leviathanBuffer = new List<LeviathanCell>(4);
@@ -36,6 +46,7 @@ namespace RoobsWorld.Stages.Cell
         public float ThreatIntensity => _threatIntensity;
         public float NearestThreatDistance => _nearestThreatDistance;
         public Vector3 PrimaryThreatDirection => _primaryThreatDirection;
+        public CellThreatCueType PrimaryThreatType => _primaryThreatType;
         public bool IsThreatDetected => _threatIntensity > 0.05f;
 
         public static ThreatIndicator CreateRuntime(PlayerCell player)
@@ -136,6 +147,7 @@ namespace RoobsWorld.Stages.Cell
             float targetIntensity = 0f;
             float nearestDistanceSqr = float.PositiveInfinity;
             Vector3 primaryDirection = Vector3.zero;
+            CellThreatCueType primaryType = CellThreatCueType.None;
 
             // Prefer registry snapshots (low allocation), fallback to scene scans for compatibility.
             int predatorCount = PredatorPackCoordinator.CopyRegisteredPredators(_predatorBuffer);
@@ -155,12 +167,14 @@ namespace RoobsWorld.Stages.Cell
                 if (predator == null) continue;
                 EvaluateThreatCandidate(
                     predator.transform.position,
+                    CellThreatCueType.Predator,
                     _threatDetectionRadius,
                     _threatWarningRadius,
                     0.6f,
                     ref targetIntensity,
                     ref nearestDistanceSqr,
-                    ref primaryDirection);
+                    ref primaryDirection,
+                    ref primaryType);
             }
 
             // Also check for leviathan encounters (more dangerous and visible from further away).
@@ -181,18 +195,55 @@ namespace RoobsWorld.Stages.Cell
                 if (leviathan == null) continue;
                 EvaluateThreatCandidate(
                     leviathan.transform.position,
+                    CellThreatCueType.Leviathan,
                     _threatDetectionRadius * 1.4f,
                     _threatWarningRadius * 1.8f,
                     0.9f,
                     ref targetIntensity,
                     ref nearestDistanceSqr,
-                    ref primaryDirection);
+                    ref primaryDirection,
+                    ref primaryType);
+            }
+
+            var viruses = FindObjectsByType<ViralParticle>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < viruses.Length; i++)
+            {
+                var virus = viruses[i];
+                if (virus == null) continue;
+                EvaluateThreatCandidate(
+                    virus.transform.position,
+                    CellThreatCueType.Virus,
+                    _threatDetectionRadius * 0.7f,
+                    _threatWarningRadius * 0.9f,
+                    0.72f,
+                    ref targetIntensity,
+                    ref nearestDistanceSqr,
+                    ref primaryDirection,
+                    ref primaryType);
+            }
+
+            var toxins = FindObjectsByType<ToxinCloud>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < toxins.Length; i++)
+            {
+                var toxin = toxins[i];
+                if (toxin == null) continue;
+                EvaluateThreatCandidate(
+                    toxin.transform.position,
+                    CellThreatCueType.ToxicHazard,
+                    _threatDetectionRadius * 0.45f,
+                    _threatWarningRadius * 0.7f,
+                    0.5f,
+                    ref targetIntensity,
+                    ref nearestDistanceSqr,
+                    ref primaryDirection,
+                    ref primaryType);
             }
 
             _nearestThreatDistance = float.IsPositiveInfinity(nearestDistanceSqr)
                 ? float.PositiveInfinity
                 : Mathf.Sqrt(nearestDistanceSqr);
             _primaryThreatDirection = primaryDirection;
+            _primaryThreatType = primaryType;
             _targetThreatIntensity = targetIntensity;
 
             _predatorBuffer.Clear();
@@ -201,12 +252,14 @@ namespace RoobsWorld.Stages.Cell
 
         private void EvaluateThreatCandidate(
             Vector3 threatPosition,
+            CellThreatCueType threatType,
             float detectionRadius,
             float warningRadius,
             float warningZoneMaxIntensity,
             ref float maxIntensity,
             ref float nearestDistanceSqr,
-            ref Vector3 primaryDirection)
+            ref Vector3 primaryDirection,
+            ref CellThreatCueType primaryType)
         {
             Vector3 delta = threatPosition - _player.transform.position;
             delta.y = 0f;
@@ -220,6 +273,7 @@ namespace RoobsWorld.Stages.Cell
                 primaryDirection = delta.sqrMagnitude > 0.0001f
                     ? delta.normalized
                     : Vector3.zero;
+                primaryType = threatType;
             }
 
             float intensity = EvaluateThreatIntensityFromSqrDistance(
@@ -261,6 +315,18 @@ namespace RoobsWorld.Stages.Cell
 
             float distance = Mathf.Sqrt(Mathf.Max(0f, sqrDistance));
             return EvaluateThreatIntensity(distance, detectionRadius, warningRadius, warningZoneMaxIntensity);
+        }
+
+        public static string GetThreatCueLabel(CellThreatCueType threatType)
+        {
+            switch (threatType)
+            {
+                case CellThreatCueType.Leviathan: return "Leviathan";
+                case CellThreatCueType.Virus: return "Virus";
+                case CellThreatCueType.ToxicHazard: return "Toxin";
+                case CellThreatCueType.Predator: return "Predator";
+                default: return "Threat";
+            }
         }
 
         private void UpdateVisuals()

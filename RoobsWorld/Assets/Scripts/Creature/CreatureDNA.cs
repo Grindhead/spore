@@ -16,6 +16,9 @@ namespace RoobsWorld.Creature
         public List<PartPlacement> Parts = new List<PartPlacement>();
         public List<CreatureUpgradeRecord> Upgrades = new List<CreatureUpgradeRecord>();
         public CreatureColors Colors = new CreatureColors();
+        public int LegacyTraitMask;
+        public string LegacyAbilityId;
+        public string LegacySummary;
 
         public string ToJson()
         {
@@ -71,6 +74,7 @@ namespace RoobsWorld.Creature
         public int SpineSegments = 3;
         public SymmetryType Symmetry = SymmetryType.Bilateral;
         public Vector3 BodyScale = Vector3.one;
+        public float FrontPull = 0f;
     }
 
     /// <summary>

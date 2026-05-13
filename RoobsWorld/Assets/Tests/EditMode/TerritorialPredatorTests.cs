@@ -133,6 +133,75 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void ComputeGoalPredatorSpawnPosition_PlacesPredatorBehindPlayerWithinThreatRange()
+        {
+            Vector3 playerPosition = Vector3.zero;
+            Vector3 playerForward = Vector3.forward;
+            float threatRadius = RoobsWorld.Core.BalanceConstants.CellGoalPredatorThreatRadius;
+
+            Vector3 spawn = CellStage.ComputeGoalPredatorSpawnPosition(
+                playerPosition,
+                playerForward,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f,
+                threatRadius: threatRadius);
+
+            Vector3 toSpawn = spawn - playerPosition;
+            Assert.Less(toSpawn.magnitude, threatRadius);
+            Assert.Greater(toSpawn.magnitude, 8f);
+            Assert.LessOrEqual(Vector3.Dot(toSpawn.normalized, playerForward), 0f);
+        }
+
+        [Test]
+        public void ComputeGoalPredatorSpawnPosition_ClampsNearArenaEdge()
+        {
+            Vector3 spawn = CellStage.ComputeGoalPredatorSpawnPosition(
+                playerPosition: new Vector3(48f, 0f, 0f),
+                playerForward: Vector3.right,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f,
+                threatRadius: RoobsWorld.Core.BalanceConstants.CellGoalPredatorThreatRadius);
+
+            Assert.LessOrEqual(spawn.magnitude, 50f * 0.95f + 0.001f);
+            Assert.AreEqual(0f, spawn.y, 0.001f);
+        }
+
+        [Test]
+        public void ComputeGoalLargerPreySpawnPosition_PlacesPreyAheadAndInsideArena()
+        {
+            Vector3 playerPosition = Vector3.zero;
+            Vector3 playerForward = Vector3.forward;
+
+            Vector3 spawn = CellStage.ComputeGoalLargerPreySpawnPosition(
+                playerPosition,
+                playerForward,
+                arenaCenter: Vector3.zero,
+                arenaRadius: 50f);
+
+            Vector3 toSpawn = spawn - playerPosition;
+            Assert.Greater(Vector3.Dot(toSpawn.normalized, playerForward), 0.65f);
+            Assert.Greater(toSpawn.magnitude, 8f);
+            Assert.LessOrEqual(spawn.magnitude, 50f * 0.95f + 0.001f);
+            Assert.AreEqual(0f, spawn.y, 0.001f);
+        }
+
+        [Test]
+        public void BuildGoalLargerPreyGenome_CreatesVulnerableConsumableLargerTarget()
+        {
+            Genome baseGenome = Genome.Default();
+            float playerScale = 1f;
+
+            Genome preyGenome = CellStage.BuildGoalLargerPreyGenome(baseGenome, playerScale);
+            float preyScale = CellStage.EstimateOrganismWorldScale(preyGenome);
+
+            Assert.Greater(preyScale, playerScale);
+            Assert.IsTrue(PlayerCell.CanConsumeGoalLargerPreyTarget(playerScale, preyScale));
+            Assert.Less(preyGenome.Attack, baseGenome.Attack);
+            Assert.Less(preyGenome.Defence, baseGenome.Defence);
+            Assert.AreEqual(GeneticTraits.None, preyGenome.Traits);
+        }
+
+        [Test]
         public void ShouldRefreshPlayerReference_ReturnsTrue_WhenNoPlayerOrInactiveOrDead()
         {
             bool noPlayer = PredatorCell.ShouldRefreshPlayerReference(

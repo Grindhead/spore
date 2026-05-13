@@ -22,6 +22,7 @@ namespace RoobsWorld.Stages.Creature
         [SerializeField] private float _spawnRadiusMin = 8f;
         [SerializeField] private float _spawnRadiusMax = 20f;
         [SerializeField] private float _arenaClampRadius = 48f;
+        [SerializeField] private CreatureStageArena _arena;
 
         private const float RivalTierScaleStep = 0.03f;
         private const float RivalTierScaleMaxBonus = 0.12f;
@@ -29,16 +30,23 @@ namespace RoobsWorld.Stages.Creature
         private readonly Dictionary<string, CreatureRivalAI> _trackedRivals = new Dictionary<string, CreatureRivalAI>();
         private Transform _player;
         private int _defeatedCount;
+        private int _alphaDefeatedCount;
         private int _killStreakCount;
         private int _totalSpawnedRivals;
         private int _spawnSequence;
         private float _respawnCooldownTimer;
         private float _killStreakTimerRemaining;
         private bool _initialized;
+        private CreatureStageObjectiveType _objectiveType = CreatureStageObjectiveType.RivalCull;
+        private int _objectiveRivalDefeatTarget = 1;
+        private int _objectiveLocalAlphaDefeatedCount;
+        private int _objectiveLocalSpawnCount;
 
         public int ActiveRivalCount => CountLivingTrackedRivals();
         public int DefeatedCount => _defeatedCount;
+        public int AlphaDefeatedCount => _alphaDefeatedCount;
         public int KillStreakCount => _killStreakCount;
+        public float KillStreakSecondsRemaining => _killStreakTimerRemaining;
         public int TotalSpawnedRivals => _totalSpawnedRivals;
 
         public void Initialize(Transform player)
@@ -48,15 +56,30 @@ namespace RoobsWorld.Stages.Creature
 
             _player = player;
             _defeatedCount = 0;
+            _alphaDefeatedCount = 0;
             _killStreakCount = 0;
             _trackedRivals.Clear();
             _totalSpawnedRivals = 0;
             _spawnSequence = 0;
+            _objectiveType = CreatureStageObjectiveType.RivalCull;
+            _objectiveRivalDefeatTarget = 1;
+            _objectiveLocalAlphaDefeatedCount = 0;
+            _objectiveLocalSpawnCount = 0;
             _respawnCooldownTimer = 0f;
             _killStreakTimerRemaining = 0f;
             EventBus.Subscribe<CreatureDiedEvent>(OnCreatureDied);
             SpawnInitialRivals();
             _initialized = true;
+        }
+
+        public void SetObjectiveFocus(CreatureStageObjective objective)
+        {
+            _objectiveType = objective.Type;
+            _objectiveRivalDefeatTarget = Mathf.Max(1, objective.RivalDefeatTarget);
+            _objectiveLocalAlphaDefeatedCount = 0;
+            _objectiveLocalSpawnCount = 0;
+            if (_objectiveType == CreatureStageObjectiveType.AlphaHunt)
+                PromoteFirstTrackedRivalToAlpha();
         }
 
         public void SetPlayerTarget(Transform player)
@@ -65,6 +88,23 @@ namespace RoobsWorld.Stages.Creature
             var rivals = FindObjectsByType<CreatureRivalAI>(FindObjectsInactive.Exclude);
             for (int i = 0; i < rivals.Length; i++)
                 rivals[i].SetPlayerTarget(player);
+        }
+
+        public void SetArena(CreatureStageArena arena)
+        {
+            _arena = arena;
+        }
+
+        public float GetNearestTrackedRivalDistance(bool alphaOnly = false)
+        {
+            if (_player == null)
+                return -1f;
+
+            var positions = GetAliveRivalPositions(alphaOnly);
+            if (positions.Count == 0)
+                return -1f;
+
+            return ComputeNearestRivalDistanceFlat(_player.position, positions.ToArray());
         }
 
         /// <summary>
@@ -77,7 +117,7 @@ namespace RoobsWorld.Stages.Creature
             var rivals = GetAliveRivalPositions();
             if (rivals.Count == 0)
             {
-                safePosition = fallback;
+                safePosition = SnapToArenaSurface(fallback);
                 return true;
             }
 
@@ -89,7 +129,7 @@ namespace RoobsWorld.Stages.Creature
                 candidates[i] = ClampToArena(GetRandomSpawnPosition(fallback, _spawnRadiusMin, _spawnRadiusMax, _arenaClampRadius));
 
             Vector3[] rivalPositions = rivals.ToArray();
-            safePosition = SelectBestRespawnCandidate(candidates, rivalPositions, fallback);
+            safePosition = SnapToArenaSurface(SelectBestRespawnCandidate(candidates, rivalPositions, fallback));
 
             float nearest = ComputeNearestRivalDistanceFlat(safePosition, rivalPositions);
             return nearest >= Mathf.Max(0.1f, _respawnSafeDistanceFromRivals);
@@ -116,10 +156,18 @@ namespace RoobsWorld.Stages.Creature
             if (_player == null)
                 return;
 
-            Vector3 spawnPos = GetRandomSpawnPosition(_player.position, _spawnRadiusMin, _spawnRadiusMax, _arenaClampRadius);
+            Vector3 spawnPos = GetRandomSpawnPosition(
+                _player.position,
+                _player.forward,
+                _spawnRadiusMin,
+                _spawnRadiusMax,
+                _arenaClampRadius);
+            spawnPos = SnapToArenaSurface(spawnPos);
             int rivalTier = ComputeRivalTier(_defeatedCount, _defeatsPerRivalTier);
             var playerCreature = _player.GetComponent<RoobsWorld.Creature.CreatureInstance>();
-            var dna = BuildRivalDNA(_spawnSequence, rivalTier, playerCreature?.DNA);
+            var archetype = GetRivalArchetype(_spawnSequence, rivalTier);
+            bool isAlpha = ShouldSpawnAlphaRival(_objectiveType, _objectiveLocalSpawnCount);
+            var dna = BuildRivalDNA(_spawnSequence, rivalTier, playerCreature?.DNA, archetype, isAlpha);
             _spawnSequence++;
             var rivalObject = RoobsWorld.Creature.CreatureFactory.Instance.SpawnCreature(dna, spawnPos, false);
             if (rivalObject == null)
@@ -128,20 +176,40 @@ namespace RoobsWorld.Stages.Creature
             var ai = rivalObject.GetComponent<CreatureRivalAI>();
             if (ai == null)
                 ai = rivalObject.AddComponent<CreatureRivalAI>();
+            ai.ConfigureArchetype(archetype);
+            if (isAlpha)
+                ai.ConfigureAlphaRival();
             ai.SetPlayerTarget(_player);
 
             _trackedRivals[dna.CreatureId] = ai;
             _totalSpawnedRivals++;
+            _objectiveLocalSpawnCount++;
         }
 
         private void OnCreatureDied(CreatureDiedEvent evt)
         {
             if (evt.IsPlayer || string.IsNullOrWhiteSpace(evt.CreatureId))
                 return;
+            if (!_trackedRivals.TryGetValue(evt.CreatureId, out var defeatedRival))
+                return;
+            string archetypeName = defeatedRival != null
+                ? BuildRivalLabel(defeatedRival.Archetype, defeatedRival.IsAlpha)
+                : string.Empty;
+            bool wasAlpha = defeatedRival != null && defeatedRival.IsAlpha;
             if (!_trackedRivals.Remove(evt.CreatureId))
                 return;
 
             _defeatedCount++;
+            if (wasAlpha)
+                _alphaDefeatedCount++;
+            if (_objectiveType == CreatureStageObjectiveType.AlphaHunt && wasAlpha)
+                _objectiveLocalAlphaDefeatedCount++;
+            EventBus.Publish(new CreatureRivalDefeatedEvent
+            {
+                CreatureId = evt.CreatureId,
+                ArchetypeName = archetypeName,
+                IsAlpha = wasAlpha
+            });
             _killStreakCount = ComputeNextStreak(_killStreakCount, _killStreakTimerRemaining);
             _killStreakTimerRemaining = Mathf.Max(0f, _killStreakWindowSeconds);
 
@@ -161,12 +229,28 @@ namespace RoobsWorld.Stages.Creature
             }
 
             if (streakBonusDna > 0)
+            {
+                EventBus.Publish(new CreatureStreakBonusEvent
+                {
+                    StreakCount = _killStreakCount,
+                    DnaBonus = streakBonusDna
+                });
                 RoobsWorld.UI.TutorialOverlay.Instance?.ShowContextualTip("creature.streak.bonus.tip", 1.8f);
+            }
 
             _respawnCooldownTimer = Mathf.Max(_respawnCooldownTimer, _respawnDelaySeconds);
+            if (_objectiveType == CreatureStageObjectiveType.AlphaHunt &&
+                wasAlpha &&
+                _objectiveLocalAlphaDefeatedCount < _objectiveRivalDefeatTarget)
+                PromoteFirstTrackedRivalToAlpha();
         }
 
-        public void UpdatePopulation(float deltaTime, int desiredActiveRivals, int objectiveDefeats)
+        public void UpdatePopulation(
+            float deltaTime,
+            int desiredActiveRivals,
+            int objectiveDefeats,
+            int objectiveDefeatProgress = -1,
+            int objectiveSpawnProgress = -1)
         {
             if (!_initialized)
                 return;
@@ -182,9 +266,9 @@ namespace RoobsWorld.Stages.Creature
             bool shouldSpawn = ShouldSpawnReplacement(
                 activeRivals: ActiveRivalCount,
                 desiredActiveRivals: desiredActiveRivals,
-                defeatedRivals: _defeatedCount,
+                defeatedRivals: objectiveDefeatProgress >= 0 ? objectiveDefeatProgress : _defeatedCount,
                 objectiveDefeats: objectiveDefeats,
-                totalSpawnedRivals: _totalSpawnedRivals,
+                totalSpawnedRivals: objectiveSpawnProgress >= 0 ? objectiveSpawnProgress : _totalSpawnedRivals,
                 maxSpawnedRivals: Mathf.Max(_startingRivals, _maxSpawnedRivals),
                 respawnCooldownTimer: _respawnCooldownTimer);
 
@@ -195,18 +279,35 @@ namespace RoobsWorld.Stages.Creature
             _respawnCooldownTimer = _respawnDelaySeconds;
         }
 
+        public static CreatureRivalArchetype GetRivalArchetype(int spawnIndex, int rivalTier)
+        {
+            int slot = Mathf.Abs(spawnIndex + rivalTier) % 4;
+            return slot switch
+            {
+                0 => CreatureRivalArchetype.Charger,
+                1 => CreatureRivalArchetype.Stalker,
+                2 => CreatureRivalArchetype.Tank,
+                _ => CreatureRivalArchetype.Skirmisher
+            };
+        }
+
         private static RoobsWorld.Creature.CreatureDNA BuildRivalDNA(
             int index,
             int rivalTier,
-            RoobsWorld.Creature.CreatureDNA playerDna)
+            RoobsWorld.Creature.CreatureDNA playerDna,
+            CreatureRivalArchetype archetype,
+            bool isAlpha = false)
         {
             var dna = RoobsWorld.Creature.CreatureDNA.CreateDefault();
             int safeTier = Mathf.Max(0, rivalTier);
-            dna.CreatureName = $"Rival {index + 1}";
+            dna.CreatureName = isAlpha ? $"Alpha {archetype} Rival {index + 1}" : $"{archetype} Rival {index + 1}";
             dna.Body.BodyScale = ComputeRivalBodyScale(playerDna, safeTier);
             float tierLerp = Mathf.Clamp01(safeTier * 0.2f + Random.value * 0.25f);
             dna.Colors.PrimaryColor = Color.Lerp(new Color(0.78f, 0.22f, 0.2f), new Color(0.58f, 0.16f, 0.1f), tierLerp);
             dna.Colors.SecondaryColor = Color.Lerp(new Color(0.32f, 0.14f, 0.1f), new Color(0.16f, 0.08f, 0.07f), tierLerp);
+            ApplyRivalArchetypeVisuals(dna, archetype);
+            if (isAlpha)
+                ApplyAlphaVisuals(dna);
 
             // Add extra offensive parts so encounters become meaningful.
             dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
@@ -280,6 +381,160 @@ namespace RoobsWorld.Stages.Creature
             return dna;
         }
 
+        public static bool ShouldSpawnAlphaRival(CreatureStageObjectiveType objectiveType, int objectiveLocalSpawnCount)
+        {
+            int localSpawnCount = Mathf.Max(0, objectiveLocalSpawnCount);
+            return objectiveType == CreatureStageObjectiveType.AlphaHunt && localSpawnCount % 2 == 0;
+        }
+
+        public static string BuildRivalLabel(CreatureRivalArchetype archetype, bool isAlpha)
+        {
+            return isAlpha ? $"Alpha {archetype}" : archetype.ToString();
+        }
+
+        private void PromoteFirstTrackedRivalToAlpha()
+        {
+            foreach (var pair in _trackedRivals)
+            {
+                var ai = pair.Value;
+                if (ai == null || ai.IsAlpha)
+                    continue;
+
+                var instance = ai.GetComponent<RoobsWorld.Creature.CreatureInstance>();
+                if (instance == null || !instance.IsAlive)
+                    continue;
+
+                ApplyAlphaVisuals(instance.DNA);
+                var stats = RoobsWorld.Creature.StatCalculator.Calculate(
+                    instance.DNA,
+                    RoobsWorld.Creature.CreaturePartCatalog.GetDefaultCatalog());
+                instance.ApplyEvolution(instance.DNA, stats);
+                ApplyAlphaRendererTint(instance.gameObject);
+                ai.ConfigureAlphaRival();
+                _objectiveLocalSpawnCount = Mathf.Max(_objectiveLocalSpawnCount, 1);
+                return;
+            }
+        }
+
+        private static void ApplyAlphaRendererTint(GameObject root)
+        {
+            if (root == null)
+                return;
+
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null && renderers[i].material != null)
+                    renderers[i].material.color = new Color(0.95f, 0.62f, 0.18f);
+            }
+        }
+
+        private static void ApplyAlphaVisuals(RoobsWorld.Creature.CreatureDNA dna)
+        {
+            if (dna == null)
+                return;
+            if (dna.Body != null)
+            {
+                Vector3 scale = dna.Body.BodyScale == Vector3.zero ? Vector3.one : dna.Body.BodyScale;
+                dna.Body.BodyScale = Vector3.Scale(scale, new Vector3(1.18f, 1.14f, 1.2f));
+            }
+            if (dna.Colors != null)
+            {
+                dna.Colors.PrimaryColor = new Color(0.95f, 0.62f, 0.18f);
+                dna.Colors.SecondaryColor = new Color(0.35f, 0.12f, 0.08f);
+                dna.Colors.AccentColor = new Color(1f, 0.88f, 0.28f);
+            }
+            dna.Parts ??= new List<RoobsWorld.Creature.PartPlacement>();
+            dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+            {
+                PartId = "horn_basic",
+                AttachBone = 0,
+                Offset = new Vector3(0f, 0.48f, 0.52f),
+                Scale = 1.22f
+            });
+            dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+            {
+                PartId = "shell_basic",
+                AttachBone = 1,
+                Offset = new Vector3(0f, 0.32f, -0.1f),
+                Scale = 1.12f
+            });
+        }
+
+        private static void ApplyRivalArchetypeVisuals(
+            RoobsWorld.Creature.CreatureDNA dna,
+            CreatureRivalArchetype archetype)
+        {
+            if (dna == null)
+                return;
+
+            Vector3 scale = dna.Body != null ? dna.Body.BodyScale : Vector3.one;
+            if (scale == Vector3.zero)
+                scale = Vector3.one;
+
+            switch (archetype)
+            {
+                case CreatureRivalArchetype.Stalker:
+                    dna.Colors.PrimaryColor = new Color(0.42f, 0.16f, 0.56f);
+                    dna.Colors.SecondaryColor = new Color(0.14f, 0.08f, 0.18f);
+                    scale = Vector3.Scale(scale, new Vector3(0.92f, 0.9f, 1.2f));
+                    dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+                    {
+                        PartId = "tail_basic",
+                        AttachBone = 2,
+                        Offset = new Vector3(0f, 0.08f, -0.72f),
+                        Scale = 1.08f
+                    });
+                    break;
+                case CreatureRivalArchetype.Tank:
+                    dna.Colors.PrimaryColor = new Color(0.52f, 0.34f, 0.18f);
+                    dna.Colors.SecondaryColor = new Color(0.18f, 0.12f, 0.08f);
+                    scale = Vector3.Scale(scale, new Vector3(1.18f, 1.12f, 1.08f));
+                    dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+                    {
+                        PartId = "shell_basic",
+                        AttachBone = 1,
+                        Offset = new Vector3(0f, 0.24f, -0.08f),
+                        Scale = 1.1f
+                    });
+                    break;
+                case CreatureRivalArchetype.Skirmisher:
+                    dna.Colors.PrimaryColor = new Color(0.2f, 0.62f, 0.72f);
+                    dna.Colors.SecondaryColor = new Color(0.08f, 0.18f, 0.22f);
+                    scale = Vector3.Scale(scale, new Vector3(0.88f, 0.95f, 1.05f));
+                    dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+                    {
+                        PartId = "leg_basic",
+                        AttachBone = 1,
+                        Offset = new Vector3(0.42f, 0.05f, 0.04f),
+                        Scale = 0.9f
+                    });
+                    dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+                    {
+                        PartId = "leg_basic",
+                        AttachBone = 1,
+                        Offset = new Vector3(-0.42f, 0.05f, 0.04f),
+                        Scale = 0.9f
+                    });
+                    break;
+                default:
+                    dna.Colors.PrimaryColor = new Color(0.82f, 0.2f, 0.15f);
+                    dna.Colors.SecondaryColor = new Color(0.22f, 0.08f, 0.05f);
+                    scale = Vector3.Scale(scale, new Vector3(1.02f, 0.96f, 1.16f));
+                    dna.Parts.Add(new RoobsWorld.Creature.PartPlacement
+                    {
+                        PartId = "horn_basic",
+                        AttachBone = 0,
+                        Offset = new Vector3(0f, 0.36f, 0.42f),
+                        Scale = 1.08f
+                    });
+                    break;
+            }
+
+            if (dna.Body != null)
+                dna.Body.BodyScale = scale;
+        }
+
         public static Vector3 ComputeRivalBodyScale(RoobsWorld.Creature.CreatureDNA playerDna, int rivalTier)
         {
             Vector3 playerScale = playerDna?.Body != null ? playerDna.Body.BodyScale : Vector3.one;
@@ -305,12 +560,14 @@ namespace RoobsWorld.Stages.Creature
             return alive;
         }
 
-        private List<Vector3> GetAliveRivalPositions()
+        private List<Vector3> GetAliveRivalPositions(bool alphaOnly = false)
         {
             var positions = new List<Vector3>();
             foreach (var pair in _trackedRivals)
             {
                 if (pair.Value == null)
+                    continue;
+                if (alphaOnly && !pair.Value.IsAlpha)
                     continue;
 
                 var creature = pair.Value.GetComponent<RoobsWorld.Creature.CreatureInstance>();
@@ -331,6 +588,14 @@ namespace RoobsWorld.Stages.Creature
 
             float y = _player != null ? _player.position.y : position.y;
             return new Vector3(flat.x, y, flat.z);
+        }
+
+        private Vector3 SnapToArenaSurface(Vector3 position)
+        {
+            if (_arena == null)
+                return position;
+
+            return _arena.SnapToIslandSurface(position);
         }
 
         private void PruneInvalidTrackedRivals()
@@ -365,6 +630,16 @@ namespace RoobsWorld.Stages.Creature
             float maxRadius,
             float clampRadius)
         {
+            return GetRandomSpawnPosition(center, Vector3.zero, minRadius, maxRadius, clampRadius);
+        }
+
+        public static Vector3 GetRandomSpawnPosition(
+            Vector3 center,
+            Vector3 playerForward,
+            float minRadius,
+            float maxRadius,
+            float clampRadius)
+        {
             float minR = Mathf.Max(0.1f, minRadius);
             float maxR = Mathf.Max(minR + 0.1f, maxRadius);
 
@@ -372,6 +647,7 @@ namespace RoobsWorld.Stages.Creature
             float dist = Random.Range(minR, maxR);
             Vector3 offset = new Vector3(Mathf.Cos(angle) * dist, 0f, Mathf.Sin(angle) * dist);
             Vector3 candidate = center + offset;
+            candidate = RoobsWorld.Stages.Cell.CellStage.MovePointBehindPlayer(center, playerForward, candidate, minR);
 
             float maxClamp = Mathf.Max(1f, clampRadius);
             Vector3 flat = new Vector3(candidate.x, 0f, candidate.z);
@@ -476,7 +752,7 @@ namespace RoobsWorld.Stages.Creature
             return best;
         }
 
-        private static float ComputeNearestRivalDistanceFlat(Vector3 position, Vector3[] rivalPositions)
+        public static float ComputeNearestRivalDistanceFlat(Vector3 position, Vector3[] rivalPositions)
         {
             if (rivalPositions == null || rivalPositions.Length == 0)
                 return float.MaxValue;

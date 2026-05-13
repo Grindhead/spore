@@ -116,35 +116,37 @@ namespace RoobsWorld.UI
             var dimmer = CreateFullRect(canvasObj.transform, "Dimmer");
             dimmer.AddComponent<Image>().color = UIStyleGuide.Colors.OverlayDim;
 
-            AddPanelAtmosphere(canvasObj.transform);
+            UIStyleGuide.AddScreenAtmosphere(canvasObj.transform, "Pause", 1.1f);
 
-            // Panel border (slightly larger, accent colour)
             var panelBorder = new GameObject("PanelBorder");
             panelBorder.transform.SetParent(canvasObj.transform, false);
             var pbRect = panelBorder.AddComponent<RectTransform>();
             pbRect.anchorMin = new Vector2(0.5f, 0.5f);
             pbRect.anchorMax = new Vector2(0.5f, 0.5f);
-            pbRect.sizeDelta = new Vector2(370, 472);
-            panelBorder.AddComponent<Image>().color = UIStyleGuide.Colors.PanelBorder;
+            pbRect.sizeDelta = new Vector2(430, 562);
+            var borderImage = panelBorder.AddComponent<Image>();
+            borderImage.sprite = UIStyleGuide.GetPaintedPanelSprite();
+            borderImage.type = Image.Type.Sliced;
+            borderImage.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.22f);
+            borderImage.raycastTarget = false;
 
             var panel = new GameObject("PausePanel");
             panel.transform.SetParent(canvasObj.transform, false);
             var panelRect = panel.AddComponent<RectTransform>();
             panelRect.anchorMin = new Vector2(0.5f, 0.5f);
             panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-            panelRect.sizeDelta = new Vector2(360, 460);
-            panel.AddComponent<Image>().color = UIStyleGuide.Colors.PanelBackgroundStrong;
+            panelRect.sizeDelta = new Vector2(404, 536);
+            UIStyleGuide.ApplyPaintedPanelChrome(panel, strong: true, alpha: 0.97f);
 
-            // Accent header bar at top of panel
             var headerBar = new GameObject("HeaderBar");
             headerBar.transform.SetParent(panel.transform, false);
             var hbRect = headerBar.AddComponent<RectTransform>();
-            hbRect.anchorMin = new Vector2(0f, 1f);
-            hbRect.anchorMax = new Vector2(1f, 1f);
+            hbRect.anchorMin = new Vector2(0.12f, 0.88f);
+            hbRect.anchorMax = new Vector2(0.88f, 0.895f);
             hbRect.pivot = new Vector2(0.5f, 1f);
             hbRect.anchoredPosition = Vector2.zero;
-            hbRect.sizeDelta = new Vector2(0, 5);
-            headerBar.AddComponent<Image>().color = new Color(UIStyleGuide.Colors.Accent.r, UIStyleGuide.Colors.Accent.g, UIStyleGuide.Colors.Accent.b, 0.85f);
+            hbRect.sizeDelta = Vector2.zero;
+            headerBar.AddComponent<Image>().color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilAmber, 0.72f);
 
             var titleObj = new GameObject("Title");
             titleObj.transform.SetParent(panel.transform, false);
@@ -152,24 +154,24 @@ namespace RoobsWorld.UI
             titleRect.anchorMin = new Vector2(0, 1);
             titleRect.anchorMax = new Vector2(1, 1);
             titleRect.pivot = new Vector2(0.5f, 1);
-            titleRect.anchoredPosition = new Vector2(0, -12);
-            titleRect.sizeDelta = new Vector2(0, 42);
+            titleRect.anchoredPosition = new Vector2(0, -24);
+            titleRect.sizeDelta = new Vector2(-36, 54);
             var title = titleObj.AddComponent<Text>();
             title.font = _font;
             title.text = Localization.Get("pause.title").ToUpperInvariant();
-            title.fontSize = Mathf.RoundToInt(UIStyleGuide.Typography.TitleLarge * textScale);
-            title.color = UIStyleGuide.Colors.Accent;
+            title.fontSize = Mathf.RoundToInt(UIStyleGuide.Typography.TitleXL * textScale);
+            title.color = UIStyleGuide.Colors.FossilGoldBright;
             title.alignment = TextAnchor.MiddleCenter;
             title.fontStyle = FontStyle.Bold;
             var titleOutline = titleObj.AddComponent<Outline>();
-            titleOutline.effectColor = new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.8f);
+            titleOutline.effectColor = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.8f);
             titleOutline.effectDistance = new Vector2(1.5f, -1.5f);
             var titleShadow = titleObj.AddComponent<Shadow>();
-            titleShadow.effectColor = new Color(0f, 0f, 0f, 0.3f);
+            titleShadow.effectColor = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.Shadow, 0.3f);
             titleShadow.effectDistance = new Vector2(0f, -1.4f);
 
-            float startY = 0.65f;
-            float spacing = 0.12f;
+            float startY = 0.69f;
+            float spacing = 0.105f;
 
             CreatePauseButton(panel.transform, Localization.Get("pause.resume"), startY, OnResume, textScale, isPrimary: true);
             CreatePauseButton(panel.transform, Localization.Get("menu.settings"), startY - spacing, OnSettings, textScale);
@@ -182,15 +184,28 @@ namespace RoobsWorld.UI
             _savedToast.transform.SetParent(panel.transform, false);
             var toastRect = _savedToast.AddComponent<RectTransform>();
             toastRect.anchorMin = new Vector2(0.5f, 0.04f);
-            toastRect.anchorMax = new Vector2(0.5f, 0.1f);
-            toastRect.sizeDelta = new Vector2(220, 28);
-            var toastText = _savedToast.AddComponent<Text>();
+            toastRect.anchorMax = new Vector2(0.5f, 0.105f);
+            toastRect.sizeDelta = new Vector2(230, 34);
+            var toastBg = _savedToast.AddComponent<Image>();
+            toastBg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            toastBg.type = Image.Type.Sliced;
+            toastBg.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.86f);
+
+            var toastTextObj = new GameObject("Text");
+            toastTextObj.transform.SetParent(_savedToast.transform, false);
+            var toastTextRect = toastTextObj.AddComponent<RectTransform>();
+            toastTextRect.anchorMin = Vector2.zero;
+            toastTextRect.anchorMax = Vector2.one;
+            toastTextRect.offsetMin = Vector2.zero;
+            toastTextRect.offsetMax = Vector2.zero;
+            var toastText = toastTextObj.AddComponent<Text>();
             toastText.font = _font;
             toastText.text = Localization.Get("pause.saved");
             toastText.fontSize = Mathf.RoundToInt(19 * textScale);
             toastText.color = UIStyleGuide.Colors.Success;
             toastText.alignment = TextAnchor.MiddleCenter;
             toastText.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(toastTextObj, 0.32f);
             _savedToast.SetActive(false);
         }
 
@@ -200,50 +215,33 @@ namespace RoobsWorld.UI
             var btnObj = new GameObject($"Btn_{label}");
             btnObj.transform.SetParent(parent, false);
             var rect = btnObj.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.1f, yAnchor - 0.04f);
-            rect.anchorMax = new Vector2(0.9f, yAnchor + 0.04f);
+            rect.anchorMin = new Vector2(0.11f, yAnchor - 0.037f);
+            rect.anchorMax = new Vector2(0.89f, yAnchor + 0.037f);
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
             var bg = btnObj.AddComponent<Image>();
-            bg.color = Color.white;
             var btn = btnObj.AddComponent<Button>();
             btn.targetGraphic = bg;
-            UIStyleGuide.ApplyButtonStyle(btn, isPrimary ? UIButtonVariant.Primary : UIButtonVariant.Secondary);
+            var variant = isPrimary ? UIButtonVariant.Primary : UIButtonVariant.Secondary;
+            UIStyleGuide.ApplyPaintedButtonChrome(btn, variant);
+            UIStyleGuide.AddButtonPearl(btnObj, variant, isPrimary ? 32f : 23f);
             btn.onClick.AddListener(() => onClick?.Invoke());
-
-            // Left accent bar
-            var accentBar = new GameObject("AccentBar");
-            accentBar.transform.SetParent(btnObj.transform, false);
-            var abRect = accentBar.AddComponent<RectTransform>();
-            abRect.anchorMin = new Vector2(0f, 0.12f);
-            abRect.anchorMax = new Vector2(0f, 0.88f);
-            abRect.pivot = new Vector2(0f, 0.5f);
-            abRect.anchoredPosition = Vector2.zero;
-            abRect.sizeDelta = new Vector2(4, 0);
-            accentBar.AddComponent<Image>().color = isPrimary
-                ? new Color(UIStyleGuide.Colors.Success.r, UIStyleGuide.Colors.Success.g, UIStyleGuide.Colors.Success.b, 0.9f)
-                : new Color(UIStyleGuide.Colors.Accent.r, UIStyleGuide.Colors.Accent.g, UIStyleGuide.Colors.Accent.b, 0.7f);
 
             var textObj = new GameObject("Text");
             textObj.transform.SetParent(btnObj.transform, false);
             var textRect = textObj.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(8, 0);
-            textRect.offsetMax = Vector2.zero;
+            textRect.offsetMin = new Vector2(34, 0);
+            textRect.offsetMax = new Vector2(-10, 0);
             var text = textObj.AddComponent<Text>();
             text.font = _font;
             text.text = label;
             text.fontSize = Mathf.RoundToInt(22 * textScale);
-            text.color = Color.white;
+            UIStyleGuide.ApplyButtonLabel(text, variant);
             text.alignment = TextAnchor.MiddleCenter;
-            text.fontStyle = isPrimary ? FontStyle.Bold : FontStyle.Normal;
-            var textShadow = textObj.AddComponent<Shadow>();
-            textShadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
-            textShadow.effectDistance = new Vector2(1.5f, -1.5f);
-
-            AddButtonInteractionAnimation(btnObj, isPrimary);
+            UIStyleGuide.ApplyTextShadow(textObj, isPrimary ? 0.18f : 0.34f);
         }
 
         private static void AddButtonInteractionAnimation(GameObject btnObj, bool isPrimary)
@@ -280,8 +278,8 @@ namespace RoobsWorld.UI
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
-            CreateGlowRect(atmosphere.transform, "TopAura", new Vector2(0f, 0.62f), new Vector2(1f, 1f), new Color(UIStyleGuide.Colors.FossilAmber.r, UIStyleGuide.Colors.FossilAmber.g, UIStyleGuide.Colors.FossilAmber.b, 0.1f));
-            CreateGlowRect(atmosphere.transform, "CentreAura", new Vector2(0.25f, 0.2f), new Vector2(0.75f, 0.8f), new Color(UIStyleGuide.Colors.TideTeal.r, UIStyleGuide.Colors.TideTeal.g, UIStyleGuide.Colors.TideTeal.b, 0.09f));
+            CreateGlowRect(atmosphere.transform, "TopAura", new Vector2(0f, 0.62f), new Vector2(1f, 1f), UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilAmber, 0.1f));
+            CreateGlowRect(atmosphere.transform, "CentreAura", new Vector2(0.25f, 0.2f), new Vector2(0.75f, 0.8f), UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTeal, 0.09f));
         }
 
         private static void CreateGlowRect(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Color color)

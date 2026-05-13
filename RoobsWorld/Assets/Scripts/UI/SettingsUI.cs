@@ -1,6 +1,8 @@
 using RoobsWorld.Core;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using System;
 
 namespace RoobsWorld.UI
 {
@@ -9,27 +11,36 @@ namespace RoobsWorld.UI
     /// </summary>
     public class SettingsUI : MonoBehaviour
     {
-        private const float PANEL_WIDTH = 700f;
-        private const float PANEL_HEIGHT = 600f;
-        private const float ROW_HEIGHT = 40f;
-        private const float LABEL_WIDTH = 220f;
+        private const float PANEL_WIDTH = 760f;
+        private const float PANEL_HEIGHT = 660f;
+        private const float ROW_HEIGHT = 32f;
+        private const float LABEL_WIDTH = 245f;
         private const float SLIDER_WIDTH = 300f;
-        private const float TAB_HEIGHT = 40f;
+        private const float TAB_HEIGHT = 44f;
+        private const float SECTION_HEIGHT = 20f;
 
         private Canvas _canvas;
         private GameObject _panelRoot;
         private GameObject _graphicsTab;
         private GameObject _audioTab;
         private GameObject _controlsTab;
+        private GameObject _accessibilityTab;
 
         private Button _graphicsTabBtn;
         private Button _audioTabBtn;
         private Button _controlsTabBtn;
+        private Button _accessibilityTabBtn;
 
         private Slider _masterSlider;
         private Slider _musicSlider;
         private Slider _sfxSlider;
         private Slider _ambientSlider;
+        private Text _microphoneLabel;
+        private int _microphoneIndex;
+        private string[] _microphoneOptions = Array.Empty<string>();
+        private Text _audioOutputLabel;
+        private int _audioOutputIndex;
+        private string[] _audioOutputOptions = Array.Empty<string>();
         private Slider _sensitivitySlider;
         private Toggle _invertYToggle;
         private Toggle _fullscreenToggle;
@@ -46,6 +57,8 @@ namespace RoobsWorld.UI
         private Text _colorBlindLabel;
         private int _colorBlindIndex;
         private Toggle _highContrastToggle;
+        private Toggle _subtitlesToggle;
+        private Slider _uiTextScaleSlider;
 
         private GameSettings _editingSettings;
 
@@ -68,6 +81,7 @@ namespace RoobsWorld.UI
         private ResolutionOption[] _resolutionOptions;
         private static readonly int[] FpsLimitValues = { 0, 60, 120, -1 };
         private static readonly string[] FpsLimitKeys = { "settings.fps_default", "settings.fps_60", "settings.fps_120", "settings.fps_unlimited" };
+        private static readonly string DeviceDefaultValue = string.Empty;
 
         public System.Action OnClosed;
 
@@ -130,6 +144,7 @@ namespace RoobsWorld.UI
 
             var dimmer = CreateFullRect(canvasObj.transform, "Dimmer");
             dimmer.AddComponent<Image>().color = UIStyleGuide.Colors.OverlayDim;
+            UIStyleGuide.AddScreenAtmosphere(canvasObj.transform, "Settings", 0.9f);
 
             _panelRoot = CreateCenteredPanel(canvasObj.transform);
             CreateTitle(_panelRoot.transform);
@@ -137,6 +152,7 @@ namespace RoobsWorld.UI
             CreateGraphicsTab(_panelRoot.transform);
             CreateAudioTab(_panelRoot.transform);
             CreateControlsTab(_panelRoot.transform);
+            CreateAccessibilityTab(_panelRoot.transform);
             CreateBottomButtons(_panelRoot.transform);
 
             ShowTab("graphics");
@@ -150,9 +166,11 @@ namespace RoobsWorld.UI
             var rect = panel.AddComponent<RectTransform>();
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
             rect.sizeDelta = new Vector2(PANEL_WIDTH, PANEL_HEIGHT);
-            var img = panel.AddComponent<Image>();
-            img.color = UIStyleGuide.Colors.PanelBackgroundStrong;
+            panel.AddComponent<Image>();
+            UIStyleGuide.ApplyPaintedPanelChrome(panel, strong: true, alpha: 0.98f);
+            AddPanelAtmosphere(panel.transform);
             return panel;
         }
 
@@ -164,16 +182,17 @@ namespace RoobsWorld.UI
             rect.anchorMin = new Vector2(0, 1);
             rect.anchorMax = new Vector2(1, 1);
             rect.pivot = new Vector2(0.5f, 1);
-            rect.anchoredPosition = new Vector2(0, -10);
-            rect.sizeDelta = new Vector2(0, 40);
+            rect.anchoredPosition = new Vector2(0, -12);
+            rect.sizeDelta = new Vector2(-64, 48);
 
             var text = obj.AddComponent<Text>();
             text.font = _font;
             text.text = Localization.Get("settings.title");
-            text.fontSize = UIStyleGuide.Typography.TitleMedium;
-            text.color = UIStyleGuide.Colors.Accent;
+            text.fontSize = UIStyleGuide.Typography.TitleLarge;
+            text.color = UIStyleGuide.Colors.AccentStrong;
             text.alignment = TextAnchor.MiddleCenter;
             text.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(obj, 0.55f);
         }
 
         private void CreateTabs(Transform parent)
@@ -184,17 +203,19 @@ namespace RoobsWorld.UI
             barRect.anchorMin = new Vector2(0, 1);
             barRect.anchorMax = new Vector2(1, 1);
             barRect.pivot = new Vector2(0.5f, 1);
-            barRect.anchoredPosition = new Vector2(0, -55);
-            barRect.sizeDelta = new Vector2(-40, TAB_HEIGHT);
+            barRect.anchoredPosition = new Vector2(0, -68);
+            barRect.sizeDelta = new Vector2(-64, TAB_HEIGHT);
 
             var layout = tabBar.AddComponent<HorizontalLayoutGroup>();
             layout.spacing = UIStyleGuide.Layout.TightSpacing;
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = true;
+            layout.padding = new RectOffset(2, 2, 2, 2);
 
             _graphicsTabBtn = CreateTabButton(tabBar.transform, Localization.Get("settings.graphics"), () => ShowTab("graphics"));
             _audioTabBtn = CreateTabButton(tabBar.transform, Localization.Get("settings.audio"), () => ShowTab("audio"));
             _controlsTabBtn = CreateTabButton(tabBar.transform, Localization.Get("settings.controls"), () => ShowTab("controls"));
+            _accessibilityTabBtn = CreateTabButton(tabBar.transform, Localization.Get("settings.accessibility"), () => ShowTab("accessibility"));
         }
 
         private Button CreateTabButton(Transform parent, string label, System.Action onClick)
@@ -206,7 +227,7 @@ namespace RoobsWorld.UI
             img.color = UIStyleGuide.Colors.TabInactive;
             var btn = obj.AddComponent<Button>();
             btn.targetGraphic = img;
-            UIStyleGuide.ApplyButtonStyle(btn, UIButtonVariant.Tab);
+            UIStyleGuide.ApplyPaintedButtonChrome(btn, UIButtonVariant.Tab, animated: true);
             btn.onClick.AddListener(() => onClick?.Invoke());
 
             var textObj = new GameObject("Text");
@@ -220,9 +241,11 @@ namespace RoobsWorld.UI
             var text = textObj.AddComponent<Text>();
             text.font = _font;
             text.text = label;
-            text.fontSize = UIStyleGuide.Typography.BodyMedium;
-            text.color = Color.white;
+            text.fontSize = UIStyleGuide.Typography.BodySmall;
+            text.color = UIStyleGuide.Colors.TextOnCool;
             text.alignment = TextAnchor.MiddleCenter;
+            text.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.3f);
 
             return btn;
         }
@@ -232,10 +255,12 @@ namespace RoobsWorld.UI
             if (_graphicsTab != null) _graphicsTab.SetActive(tabName == "graphics");
             if (_audioTab != null) _audioTab.SetActive(tabName == "audio");
             if (_controlsTab != null) _controlsTab.SetActive(tabName == "controls");
+            if (_accessibilityTab != null) _accessibilityTab.SetActive(tabName == "accessibility");
 
             SetTabColor(_graphicsTabBtn, tabName == "graphics");
             SetTabColor(_audioTabBtn, tabName == "audio");
             SetTabColor(_controlsTabBtn, tabName == "controls");
+            SetTabColor(_accessibilityTabBtn, tabName == "accessibility");
         }
 
         private void SetTabColor(Button btn, bool active)
@@ -243,16 +268,24 @@ namespace RoobsWorld.UI
             if (btn == null) return;
             var img = btn.GetComponent<Image>();
             if (img != null) img.color = active ? UIStyleGuide.Colors.TabActive : UIStyleGuide.Colors.TabInactive;
+            var outline = btn.GetComponent<Outline>();
+            if (outline != null)
+            {
+                outline.effectColor = active
+                    ? UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AccentStrong, 0.62f)
+                    : UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.2f);
+            }
         }
 
         #region Graphics Tab
 
         private void CreateGraphicsTab(Transform parent)
         {
-            _graphicsTab = CreateTabContent(parent, "GraphicsContent", -140);
+            _graphicsTab = CreateTabContent(parent, "GraphicsContent", -112);
             float y = 0;
             BuildResolutionOptions();
 
+            CreateSectionHeader(_graphicsTab.transform, "DISPLAY", ref y);
             (_resolutionLabel, _) = CreateCycleRow(_graphicsTab.transform, Localization.Get("settings.resolution"), ref y,
                 () => CycleResolution(-1), () => CycleResolution(1));
 
@@ -263,14 +296,13 @@ namespace RoobsWorld.UI
                 () => CycleQuality(-1), () => CycleQuality(1));
 
             _fullscreenToggle = CreateToggleRow(_graphicsTab.transform, Localization.Get("settings.fullscreen"), ref y, OnFullscreenChanged);
+
+            CreateSectionHeader(_graphicsTab.transform, "PERFORMANCE", ref y);
             _vsyncToggle = CreateToggleRow(_graphicsTab.transform, Localization.Get("settings.vsync"), ref y, OnVSyncChanged);
             (_fpsLimitLabel, _) = CreateCycleRow(_graphicsTab.transform, Localization.Get("settings.target_fps"), ref y,
                 () => CycleFpsLimit(-1), () => CycleFpsLimit(1));
             _fpsToggle = CreateToggleRow(_graphicsTab.transform, Localization.Get("settings.show_fps"), ref y, OnFPSChanged);
-            (_colorBlindLabel, _) = CreateCycleRow(_graphicsTab.transform, Localization.Get("settings.colorblind_mode"), ref y,
-                () => CycleColorBlindMode(-1), () => CycleColorBlindMode(1));
-            _highContrastToggle = CreateToggleRow(_graphicsTab.transform, Localization.Get("settings.high_contrast"), ref y,
-                val => _editingSettings.HighContrastMode = val);
+
         }
 
         private void BuildResolutionOptions()
@@ -389,17 +421,47 @@ namespace RoobsWorld.UI
 
         #endregion
 
+        #region Accessibility Tab
+
+        private void CreateAccessibilityTab(Transform parent)
+        {
+            _accessibilityTab = CreateTabContent(parent, "AccessibilityContent", -124);
+            float y = 0;
+
+            CreateSectionHeader(_accessibilityTab.transform, "VISION", ref y);
+            (_colorBlindLabel, _) = CreateCycleRow(_accessibilityTab.transform, Localization.Get("settings.colorblind_mode"), ref y,
+                () => CycleColorBlindMode(-1), () => CycleColorBlindMode(1));
+            _highContrastToggle = CreateToggleRow(_accessibilityTab.transform, Localization.Get("settings.high_contrast"), ref y,
+                val => _editingSettings.HighContrastMode = val);
+            _uiTextScaleSlider = CreateSliderRow(_accessibilityTab.transform, Localization.Get("settings.ui_text_scale"), ref y,
+                val => _editingSettings.UITextScale = val, 0.5f, 2f);
+
+            CreateSectionHeader(_accessibilityTab.transform, "CAPTIONS", ref y);
+            _subtitlesToggle = CreateToggleRow(_accessibilityTab.transform, Localization.Get("settings.subtitles"), ref y,
+                val => _editingSettings.SubtitlesEnabled = val);
+        }
+
+        #endregion
+
         #region Audio Tab
 
         private void CreateAudioTab(Transform parent)
         {
-            _audioTab = CreateTabContent(parent, "AudioContent", -100);
+            _audioTab = CreateTabContent(parent, "AudioContent", -112);
             float y = 0;
 
+            CreateSectionHeader(_audioTab.transform, "MIX", ref y);
             _masterSlider = CreateSliderRow(_audioTab.transform, Localization.Get("settings.volume_master"), ref y, OnMasterChanged);
             _musicSlider = CreateSliderRow(_audioTab.transform, Localization.Get("settings.volume_music"), ref y, OnMusicChanged);
             _sfxSlider = CreateSliderRow(_audioTab.transform, Localization.Get("settings.volume_sfx"), ref y, OnSFXChanged);
             _ambientSlider = CreateSliderRow(_audioTab.transform, Localization.Get("settings.volume_ambient"), ref y, OnAmbientChanged);
+
+            CreateSectionHeader(_audioTab.transform, "DEVICES", ref y);
+            RefreshAudioDeviceOptions();
+            (_microphoneLabel, _) = CreateCycleRow(_audioTab.transform, Localization.Get("settings.microphone_device"), ref y,
+                () => CycleMicrophone(-1), () => CycleMicrophone(1));
+            (_audioOutputLabel, _) = CreateCycleRow(_audioTab.transform, Localization.Get("settings.audio_output_device"), ref y,
+                () => CycleAudioOutput(-1), () => CycleAudioOutput(1));
         }
 
         private void OnMasterChanged(float val) => _editingSettings.MasterVolume = val;
@@ -407,15 +469,66 @@ namespace RoobsWorld.UI
         private void OnSFXChanged(float val) => _editingSettings.SFXVolume = val;
         private void OnAmbientChanged(float val) => _editingSettings.AmbientVolume = val;
 
+        private void RefreshAudioDeviceOptions()
+        {
+            var microphones = Microphone.devices;
+            var microphoneOptions = new System.Collections.Generic.List<string> { DeviceDefaultValue };
+            if (microphones != null)
+            {
+                for (int i = 0; i < microphones.Length; i++)
+                {
+                    if (!string.IsNullOrWhiteSpace(microphones[i]) && !microphoneOptions.Contains(microphones[i]))
+                        microphoneOptions.Add(microphones[i]);
+                }
+            }
+            _microphoneOptions = microphoneOptions.ToArray();
+            _audioOutputOptions = GetAvailableAudioOutputs();
+        }
+
+        private static string[] GetAvailableAudioOutputs()
+        {
+            var detectedOutputs = WindowsAudioOutputDeviceProvider.GetAvailableOutputs();
+            var options = new System.Collections.Generic.List<string> { DeviceDefaultValue };
+            if (detectedOutputs != null)
+            {
+                string defaultLabel = Localization.Get("settings.audio_output_system_default");
+                for (int i = 0; i < detectedOutputs.Length; i++)
+                {
+                    if (!string.IsNullOrWhiteSpace(detectedOutputs[i]) &&
+                        !string.Equals(detectedOutputs[i], defaultLabel, StringComparison.Ordinal) &&
+                        !options.Contains(detectedOutputs[i]))
+                        options.Add(detectedOutputs[i]);
+                }
+            }
+            return options.ToArray();
+        }
+
+        private void CycleMicrophone(int dir)
+        {
+            if (_microphoneOptions == null || _microphoneOptions.Length == 0) return;
+            _microphoneIndex = Mathf.Clamp(_microphoneIndex + dir, 0, _microphoneOptions.Length - 1);
+            _editingSettings.MicrophoneDeviceName = _microphoneOptions[_microphoneIndex];
+            if (_microphoneLabel != null) _microphoneLabel.text = GetMicrophoneDisplayName(_editingSettings.MicrophoneDeviceName);
+        }
+
+        private void CycleAudioOutput(int dir)
+        {
+            if (_audioOutputOptions == null || _audioOutputOptions.Length == 0) return;
+            _audioOutputIndex = Mathf.Clamp(_audioOutputIndex + dir, 0, _audioOutputOptions.Length - 1);
+            _editingSettings.AudioOutputDeviceName = _audioOutputOptions[_audioOutputIndex];
+            if (_audioOutputLabel != null) _audioOutputLabel.text = GetAudioOutputDisplayName(_editingSettings.AudioOutputDeviceName);
+        }
+
         #endregion
 
         #region Controls Tab
 
         private void CreateControlsTab(Transform parent)
         {
-            _controlsTab = CreateTabContent(parent, "ControlsContent", -100);
+            _controlsTab = CreateTabContent(parent, "ControlsContent", -112);
             float y = 0;
 
+            CreateSectionHeader(_controlsTab.transform, "CAMERA", ref y);
             _sensitivitySlider = CreateSliderRow(_controlsTab.transform, Localization.Get("settings.camera_sensitivity"), ref y,
                 val => _editingSettings.CameraSensitivity = val, 0.1f, 3f);
             _invertYToggle = CreateToggleRow(_controlsTab.transform, Localization.Get("settings.invert_y"), ref y,
@@ -434,18 +547,18 @@ namespace RoobsWorld.UI
             barRect.anchorMin = new Vector2(0, 0);
             barRect.anchorMax = new Vector2(1, 0);
             barRect.pivot = new Vector2(0.5f, 0);
-            barRect.anchoredPosition = new Vector2(0, 15);
-            barRect.sizeDelta = new Vector2(-40, 45);
+            barRect.anchoredPosition = new Vector2(0, 18);
+            barRect.sizeDelta = new Vector2(-64, 50);
 
             var layout = bar.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 20;
+            layout.spacing = UIStyleGuide.Layout.StandardSpacing;
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = true;
             layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.padding = new RectOffset(0, 0, 2, 2);
 
-            CreateActionButton(bar.transform, Localization.Get("settings.apply"), OnApply);
-            CreateActionButton(bar.transform, Localization.Get("settings.reset"), OnResetDefaults);
-            CreateActionButton(bar.transform, Localization.Get("tutorial.reset"), OnResetTutorial);
+            CreateActionButton(bar.transform, Localization.Get("settings.apply"), OnApply, UIButtonVariant.Primary);
+            CreateActionButton(bar.transform, Localization.Get("settings.reset"), OnResetDefaults, UIButtonVariant.Danger);
             CreateActionButton(bar.transform, Localization.Get("settings.back"), OnBack);
         }
 
@@ -465,11 +578,15 @@ namespace RoobsWorld.UI
             current.MusicVolume = _editingSettings.MusicVolume;
             current.SFXVolume = _editingSettings.SFXVolume;
             current.AmbientVolume = _editingSettings.AmbientVolume;
+            current.MicrophoneDeviceName = _editingSettings.MicrophoneDeviceName;
+            current.AudioOutputDeviceName = _editingSettings.AudioOutputDeviceName;
             current.CameraSensitivity = _editingSettings.CameraSensitivity;
             current.InvertY = _editingSettings.InvertY;
             current.ShowFPS = _editingSettings.ShowFPS;
             current.ColorBlindModeIndex = _editingSettings.ColorBlindModeIndex;
             current.HighContrastMode = _editingSettings.HighContrastMode;
+            current.SubtitlesEnabled = _editingSettings.SubtitlesEnabled;
+            current.UITextScale = _editingSettings.UITextScale;
 
             SettingsManager.Instance.Apply();
             SettingsManager.Instance.Save();
@@ -479,18 +596,17 @@ namespace RoobsWorld.UI
         private void OnResetDefaults()
         {
             _editingSettings = new GameSettings();
-            SyncUIFromSettings();
 
             if (SettingsManager.HasInstance)
+            {
                 SettingsManager.Instance.ResetToDefaults();
+                _editingSettings = JsonUtility.FromJson<GameSettings>(
+                    JsonUtility.ToJson(SettingsManager.Instance.Current));
+            }
+
+            SyncUIFromSettings();
 
             Debug.Log("[SettingsUI] Settings reset to defaults");
-        }
-
-        private void OnResetTutorial()
-        {
-            TutorialOverlay.Instance?.ResetProgress();
-            Debug.Log("[SettingsUI] Tutorial progress reset");
         }
 
         private void OnBack()
@@ -501,7 +617,7 @@ namespace RoobsWorld.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             {
                 OnBack();
             }
@@ -542,11 +658,29 @@ namespace RoobsWorld.UI
             if (_colorBlindLabel != null)
                 _colorBlindLabel.text = Localization.Get(ColorBlindKeys[_colorBlindIndex]);
             if (_highContrastToggle != null) _highContrastToggle.isOn = _editingSettings.HighContrastMode;
+            if (_subtitlesToggle != null) _subtitlesToggle.isOn = _editingSettings.SubtitlesEnabled;
+            if (_uiTextScaleSlider != null) _uiTextScaleSlider.value = _editingSettings.UITextScale;
 
             if (_masterSlider != null) _masterSlider.value = _editingSettings.MasterVolume;
             if (_musicSlider != null) _musicSlider.value = _editingSettings.MusicVolume;
             if (_sfxSlider != null) _sfxSlider.value = _editingSettings.SFXVolume;
             if (_ambientSlider != null) _ambientSlider.value = _editingSettings.AmbientVolume;
+            if (_microphoneLabel != null || _audioOutputLabel != null)
+            {
+                RefreshAudioDeviceOptions();
+            }
+            _microphoneIndex = FindOptionIndex(_microphoneOptions, _editingSettings.MicrophoneDeviceName);
+            _audioOutputIndex = FindOptionIndex(_audioOutputOptions, _editingSettings.AudioOutputDeviceName);
+            if (_microphoneOptions.Length > 0)
+            {
+                _editingSettings.MicrophoneDeviceName = _microphoneOptions[_microphoneIndex];
+                if (_microphoneLabel != null) _microphoneLabel.text = GetMicrophoneDisplayName(_editingSettings.MicrophoneDeviceName);
+            }
+            if (_audioOutputOptions.Length > 0)
+            {
+                _editingSettings.AudioOutputDeviceName = _audioOutputOptions[_audioOutputIndex];
+                if (_audioOutputLabel != null) _audioOutputLabel.text = GetAudioOutputDisplayName(_editingSettings.AudioOutputDeviceName);
+            }
 
             if (_sensitivitySlider != null) _sensitivitySlider.value = _editingSettings.CameraSensitivity;
             if (_invertYToggle != null) _invertYToggle.isOn = _editingSettings.InvertY;
@@ -567,6 +701,34 @@ namespace RoobsWorld.UI
             return 0;
         }
 
+        private static int FindOptionIndex(string[] options, string value)
+        {
+            if (options == null || options.Length == 0) return 0;
+            if (string.IsNullOrEmpty(value)) return 0;
+            for (int i = 0; i < options.Length; i++)
+            {
+                if (string.Equals(options[i], value, StringComparison.Ordinal))
+                    return i;
+            }
+            return 0;
+        }
+
+        private string GetMicrophoneDisplayName(string value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                return value;
+            return _microphoneOptions != null && _microphoneOptions.Length > 1
+                ? Localization.Get("settings.audio_output_system_default")
+                : Localization.Get("settings.audio_device_none");
+        }
+
+        private static string GetAudioOutputDisplayName(string value)
+        {
+            return string.IsNullOrEmpty(value)
+                ? Localization.Get("settings.audio_output_system_default")
+                : value;
+        }
+
         private GameObject CreateTabContent(Transform parent, string name, float topOffset)
         {
             var obj = new GameObject(name);
@@ -574,9 +736,52 @@ namespace RoobsWorld.UI
             var rect = obj.AddComponent<RectTransform>();
             rect.anchorMin = new Vector2(0, 0);
             rect.anchorMax = new Vector2(1, 1);
-            rect.offsetMin = new Vector2(20, 70);
+            rect.offsetMin = new Vector2(32, 76);
             rect.offsetMax = new Vector2(-20, topOffset);
             return obj;
+        }
+
+        private void CreateSectionHeader(Transform parent, string label, ref float y)
+        {
+            var obj = new GameObject($"Section_{label}");
+            obj.transform.SetParent(parent, false);
+            var rect = obj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0, 1);
+            rect.anchorMax = new Vector2(1, 1);
+            rect.pivot = new Vector2(0.5f, 1);
+            rect.anchoredPosition = new Vector2(0, -y);
+            rect.sizeDelta = new Vector2(0, SECTION_HEIGHT);
+
+            var lineObj = new GameObject("Rule");
+            lineObj.transform.SetParent(obj.transform, false);
+            var lineRect = lineObj.AddComponent<RectTransform>();
+            lineRect.anchorMin = new Vector2(0, 0.5f);
+            lineRect.anchorMax = new Vector2(1, 0.5f);
+            lineRect.pivot = new Vector2(0.5f, 0.5f);
+            lineRect.anchoredPosition = new Vector2(0, -2f);
+            lineRect.sizeDelta = new Vector2(0, 1f);
+            var line = lineObj.AddComponent<Image>();
+            line.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.26f);
+            line.raycastTarget = false;
+
+            var textObj = new GameObject("Text");
+            textObj.transform.SetParent(obj.transform, false);
+            var textRect = textObj.AddComponent<RectTransform>();
+            textRect.anchorMin = new Vector2(0, 0);
+            textRect.anchorMax = new Vector2(0, 1);
+            textRect.pivot = new Vector2(0, 0.5f);
+            textRect.anchoredPosition = new Vector2(8, 0);
+            textRect.sizeDelta = new Vector2(180, 0);
+            var text = textObj.AddComponent<Text>();
+            text.font = _font;
+            text.text = label;
+            text.fontSize = UIStyleGuide.Typography.Caption;
+            text.color = UIStyleGuide.Colors.AccentWarm;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.35f);
+
+            y += SECTION_HEIGHT + UIStyleGuide.Layout.TightSpacing;
         }
 
         private Slider CreateSliderRow(Transform parent, string label, ref float y,
@@ -591,7 +796,7 @@ namespace RoobsWorld.UI
             sliderRect.anchorMax = new Vector2(0, 0.5f);
             sliderRect.pivot = new Vector2(0, 0.5f);
             sliderRect.anchoredPosition = new Vector2(LABEL_WIDTH, 0);
-            sliderRect.sizeDelta = new Vector2(SLIDER_WIDTH, 20);
+            sliderRect.sizeDelta = new Vector2(SLIDER_WIDTH, 16);
 
             var bgObj = new GameObject("Background");
             bgObj.transform.SetParent(sliderObj.transform, false);
@@ -601,7 +806,10 @@ namespace RoobsWorld.UI
             bgRect.offsetMin = Vector2.zero;
             bgRect.offsetMax = Vector2.zero;
             var bgImg = bgObj.AddComponent<Image>();
-            bgImg.color = UIStyleGuide.Colors.SurfaceMuted;
+            bgImg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            bgImg.type = Image.Type.Sliced;
+            bgImg.color = UIStyleGuide.Colors.HudMeterBackground;
+            UIStyleGuide.ApplyOutline(bgObj, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.34f), new Vector2(1f, -1f));
 
             var fillArea = new GameObject("FillArea");
             fillArea.transform.SetParent(sliderObj.transform, false);
@@ -616,10 +824,13 @@ namespace RoobsWorld.UI
             var fillRect = fillObj.AddComponent<RectTransform>();
             fillRect.anchorMin = Vector2.zero;
             fillRect.anchorMax = Vector2.one;
-            fillRect.offsetMin = Vector2.zero;
-            fillRect.offsetMax = Vector2.zero;
+            fillRect.offsetMin = new Vector2(1f, 1f);
+            fillRect.offsetMax = new Vector2(-1f, -1f);
             var fillImg = fillObj.AddComponent<Image>();
-            fillImg.color = UIStyleGuide.Colors.Accent;
+            fillImg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            fillImg.type = Image.Type.Sliced;
+            fillImg.color = UIStyleGuide.Colors.AccentStrong;
+            UIStyleGuide.ApplyOutline(fillObj, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AccentStrong, 0.32f), new Vector2(1f, -1f));
 
             var handleArea = new GameObject("HandleSlideArea");
             handleArea.transform.SetParent(sliderObj.transform, false);
@@ -632,9 +843,12 @@ namespace RoobsWorld.UI
             var handleObj = new GameObject("Handle");
             handleObj.transform.SetParent(handleArea.transform, false);
             var handleRect = handleObj.AddComponent<RectTransform>();
-            handleRect.sizeDelta = new Vector2(16, 24);
+            handleRect.sizeDelta = new Vector2(12, 24);
             var handleImg = handleObj.AddComponent<Image>();
-            handleImg.color = Color.white;
+            handleImg.sprite = UIStyleGuide.GetPaintedButtonSprite();
+            handleImg.type = Image.Type.Sliced;
+            handleImg.color = UIStyleGuide.Colors.FossilGoldBright;
+            UIStyleGuide.ApplyOutline(handleObj, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.ShellBrown, 0.55f), new Vector2(1f, -1f));
 
             var slider = sliderObj.AddComponent<Slider>();
             slider.fillRect = fillRect;
@@ -654,9 +868,10 @@ namespace RoobsWorld.UI
             valRect.sizeDelta = new Vector2(60, ROW_HEIGHT);
             var valText = valueObj.AddComponent<Text>();
             valText.font = _font;
-            valText.fontSize = 16;
-            valText.color = UIStyleGuide.Colors.BodyText;
+            valText.fontSize = UIStyleGuide.Typography.Caption;
+            valText.color = UIStyleGuide.Colors.FossilGoldBright;
             valText.alignment = TextAnchor.MiddleLeft;
+            valText.fontStyle = FontStyle.Bold;
 
             slider.onValueChanged.AddListener(v =>
             {
@@ -679,7 +894,7 @@ namespace RoobsWorld.UI
             toggleRect.anchorMax = new Vector2(0, 0.5f);
             toggleRect.pivot = new Vector2(0, 0.5f);
             toggleRect.anchoredPosition = new Vector2(LABEL_WIDTH, 0);
-            toggleRect.sizeDelta = new Vector2(30, 30);
+            toggleRect.sizeDelta = new Vector2(74, 26);
 
             var bgObj = new GameObject("Background");
             bgObj.transform.SetParent(toggleObj.transform, false);
@@ -689,22 +904,54 @@ namespace RoobsWorld.UI
             bgRect.offsetMin = Vector2.zero;
             bgRect.offsetMax = Vector2.zero;
             var bgImg = bgObj.AddComponent<Image>();
-            bgImg.color = UIStyleGuide.Colors.SurfaceMuted;
+            bgImg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            bgImg.type = Image.Type.Sliced;
+            bgImg.color = UIStyleGuide.Colors.HudMeterBackground;
+            UIStyleGuide.ApplyOutline(bgObj, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.34f), new Vector2(1f, -1f));
 
             var checkObj = new GameObject("Checkmark");
             checkObj.transform.SetParent(bgObj.transform, false);
             var checkRect = checkObj.AddComponent<RectTransform>();
-            checkRect.anchorMin = new Vector2(0.1f, 0.1f);
-            checkRect.anchorMax = new Vector2(0.9f, 0.9f);
-            checkRect.offsetMin = Vector2.zero;
-            checkRect.offsetMax = Vector2.zero;
+            checkRect.anchorMin = new Vector2(0, 0.5f);
+            checkRect.anchorMax = new Vector2(0, 0.5f);
+            checkRect.pivot = new Vector2(0, 0.5f);
+            checkRect.anchoredPosition = new Vector2(4, 0);
+            checkRect.sizeDelta = new Vector2(66, 18);
             var checkImg = checkObj.AddComponent<Image>();
-            checkImg.color = UIStyleGuide.Colors.Accent;
+            checkImg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            checkImg.type = Image.Type.Sliced;
+            checkImg.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.88f);
+            UIStyleGuide.ApplyOutline(checkObj, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.AlgaeLime, 0.34f), new Vector2(1f, -1f));
+
+            var textObj = new GameObject("Text");
+            textObj.transform.SetParent(toggleObj.transform, false);
+            var textRect = textObj.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+            var text = textObj.AddComponent<Text>();
+            text.font = _font;
+            text.fontSize = UIStyleGuide.Typography.Caption;
+            text.color = UIStyleGuide.Colors.TextOnCool;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.28f);
+            text.text = "OFF";
+            text.color = UIStyleGuide.Colors.BodyTextMuted;
 
             var toggle = toggleObj.AddComponent<Toggle>();
             toggle.targetGraphic = bgImg;
             toggle.graphic = checkImg;
-            toggle.onValueChanged.AddListener(val => onChange?.Invoke(val));
+            toggle.onValueChanged.AddListener(val =>
+            {
+                text.text = val ? "ON" : "OFF";
+                text.color = val ? UIStyleGuide.Colors.TextOnWarm : UIStyleGuide.Colors.BodyTextMuted;
+                bgImg.color = val
+                    ? UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilAmber, 0.9f)
+                    : UIStyleGuide.Colors.HudMeterBackground;
+                onChange?.Invoke(val);
+            });
 
             return toggle;
         }
@@ -714,7 +961,21 @@ namespace RoobsWorld.UI
         {
             var row = CreateRow(parent, label, ref y);
 
-            CreateArrowButton(row.transform, "<", LABEL_WIDTH - 5, onPrev);
+            var valueBackplate = new GameObject("ValueBackplate");
+            valueBackplate.transform.SetParent(row.transform, false);
+            var plateRect = valueBackplate.AddComponent<RectTransform>();
+            plateRect.anchorMin = new Vector2(0, 0.5f);
+            plateRect.anchorMax = new Vector2(0, 0.5f);
+            plateRect.pivot = new Vector2(0, 0.5f);
+            plateRect.anchoredPosition = new Vector2(LABEL_WIDTH, 0);
+            plateRect.sizeDelta = new Vector2(292, 28);
+            var plate = valueBackplate.AddComponent<Image>();
+            plate.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            plate.type = Image.Type.Sliced;
+            plate.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.HudMeterBackground, 0.74f);
+            UIStyleGuide.ApplyOutline(valueBackplate, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.28f), new Vector2(1f, -1f));
+
+            CreateArrowButton(row.transform, "<", LABEL_WIDTH + 4, onPrev);
 
             var valueObj = new GameObject("Value");
             valueObj.transform.SetParent(row.transform, false);
@@ -722,15 +983,16 @@ namespace RoobsWorld.UI
             valRect.anchorMin = new Vector2(0, 0.5f);
             valRect.anchorMax = new Vector2(0, 0.5f);
             valRect.pivot = new Vector2(0, 0.5f);
-            valRect.anchoredPosition = new Vector2(LABEL_WIDTH + 35, 0);
-            valRect.sizeDelta = new Vector2(200, ROW_HEIGHT);
+            valRect.anchoredPosition = new Vector2(LABEL_WIDTH + 38, 0);
+            valRect.sizeDelta = new Vector2(216, ROW_HEIGHT);
             var valText = valueObj.AddComponent<Text>();
             valText.font = _font;
-            valText.fontSize = 18;
+            valText.fontSize = UIStyleGuide.Typography.BodySmall;
             valText.color = UIStyleGuide.Colors.BodyText;
             valText.alignment = TextAnchor.MiddleCenter;
+            valText.fontStyle = FontStyle.Bold;
 
-            CreateArrowButton(row.transform, ">", LABEL_WIDTH + 245, onNext);
+            CreateArrowButton(row.transform, ">", LABEL_WIDTH + 258, onNext);
 
             return (valText, row);
         }
@@ -744,13 +1006,12 @@ namespace RoobsWorld.UI
             rect.anchorMax = new Vector2(0, 0.5f);
             rect.pivot = new Vector2(0, 0.5f);
             rect.anchoredPosition = new Vector2(x, 0);
-            rect.sizeDelta = new Vector2(30, 30);
+            rect.sizeDelta = new Vector2(28, 28);
 
             var img = obj.AddComponent<Image>();
-            img.color = Color.white;
             var btn = obj.AddComponent<Button>();
             btn.targetGraphic = img;
-            UIStyleGuide.ApplyButtonStyle(btn, UIButtonVariant.Secondary);
+            UIStyleGuide.ApplyPaintedButtonChrome(btn, UIButtonVariant.Secondary);
             btn.onClick.AddListener(() => onClick?.Invoke());
 
             var textObj = new GameObject("Text");
@@ -763,22 +1024,25 @@ namespace RoobsWorld.UI
             var text = textObj.AddComponent<Text>();
             text.font = _font;
             text.text = label;
-            text.fontSize = UIStyleGuide.Typography.BodyMedium;
-            text.color = Color.white;
+            text.fontSize = UIStyleGuide.Typography.BodySmall;
+            text.color = UIStyleGuide.Colors.TextOnCool;
             text.alignment = TextAnchor.MiddleCenter;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.3f);
         }
 
-        private void CreateActionButton(Transform parent, string label, System.Action onClick)
+        private void CreateActionButton(Transform parent, string label, System.Action onClick, UIButtonVariant variant = UIButtonVariant.Secondary)
         {
             var obj = new GameObject($"Btn_{label}");
             obj.transform.SetParent(parent, false);
-            obj.AddComponent<LayoutElement>();
+            var layoutElement = obj.AddComponent<LayoutElement>();
+            layoutElement.minWidth = variant == UIButtonVariant.Primary ? 160f : 130f;
+            layoutElement.preferredWidth = variant == UIButtonVariant.Primary ? 180f : 150f;
 
             var img = obj.AddComponent<Image>();
-            img.color = Color.white;
             var btn = obj.AddComponent<Button>();
             btn.targetGraphic = img;
-            UIStyleGuide.ApplyButtonStyle(btn, UIButtonVariant.Secondary);
+            UIStyleGuide.ApplyPaintedButtonChrome(btn, variant);
+            UIStyleGuide.AddButtonPearl(obj, variant, variant == UIButtonVariant.Primary ? 28f : 21f);
             btn.onClick.AddListener(() => onClick?.Invoke());
 
             var textObj = new GameObject("Text");
@@ -786,14 +1050,15 @@ namespace RoobsWorld.UI
             var textRect = textObj.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            textRect.offsetMin = new Vector2(26f, 0f);
+            textRect.offsetMax = new Vector2(-8f, 0f);
             var text = textObj.AddComponent<Text>();
             text.font = _font;
             text.text = label;
-            text.fontSize = UIStyleGuide.Typography.BodyMedium;
-            text.color = Color.white;
+            text.fontSize = UIStyleGuide.Typography.BodySmall;
+            UIStyleGuide.ApplyButtonLabel(text, variant, bold: true);
             text.alignment = TextAnchor.MiddleCenter;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.3f);
         }
 
         private GameObject CreateRow(Transform parent, string label, ref float y)
@@ -805,10 +1070,15 @@ namespace RoobsWorld.UI
             rect.anchorMax = new Vector2(1, 1);
             rect.pivot = new Vector2(0.5f, 1);
             rect.anchoredPosition = new Vector2(0, -y);
-            rect.sizeDelta = new Vector2(0, ROW_HEIGHT);
+            rect.sizeDelta = new Vector2(-8, ROW_HEIGHT);
 
             var bg = row.AddComponent<Image>();
-            bg.color = (Mathf.FloorToInt(y / ROW_HEIGHT) % 2 == 0) ? UIStyleGuide.Colors.RowStripe : Color.clear;
+            bg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            bg.type = Image.Type.Sliced;
+            bg.color = (Mathf.FloorToInt(y / ROW_HEIGHT) % 2 == 0)
+                ? UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.RowStripe, 0.58f)
+                : UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.24f);
+            UIStyleGuide.ApplyOutline(row, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.12f), new Vector2(0.6f, -0.6f));
 
             var labelObj = new GameObject("Label");
             labelObj.transform.SetParent(row.transform, false);
@@ -816,16 +1086,16 @@ namespace RoobsWorld.UI
             labelRect.anchorMin = new Vector2(0, 0);
             labelRect.anchorMax = new Vector2(0, 1);
             labelRect.pivot = new Vector2(0, 0.5f);
-            labelRect.anchoredPosition = new Vector2(10, 0);
-            labelRect.sizeDelta = new Vector2(LABEL_WIDTH, 0);
+            labelRect.anchoredPosition = new Vector2(14, 0);
+            labelRect.sizeDelta = new Vector2(LABEL_WIDTH - 18, 0);
             var text = labelObj.AddComponent<Text>();
             text.font = _font;
             text.text = label;
-            text.fontSize = UIStyleGuide.Typography.BodySmall;
-            text.color = UIStyleGuide.Colors.BodyTextMuted;
+            text.fontSize = UIStyleGuide.Typography.Caption;
+            text.color = UIStyleGuide.Colors.BodyText;
             text.alignment = TextAnchor.MiddleLeft;
 
-            y += ROW_HEIGHT + 5;
+            y += ROW_HEIGHT + UIStyleGuide.Layout.TightSpacing;
             return row;
         }
 
@@ -839,6 +1109,31 @@ namespace RoobsWorld.UI
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             return obj;
+        }
+
+        private static void AddPanelAtmosphere(Transform parent)
+        {
+            CreateAtmosphereBand(parent, "SettingsTopTide", new Vector2(0f, 0.88f), Vector2.one,
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTealBright, 0.12f));
+            CreateAtmosphereBand(parent, "SettingsBottomFossil", Vector2.zero, new Vector2(1f, 0.16f),
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilAmber, 0.08f));
+            CreateAtmosphereBand(parent, "SettingsCenterGlow", new Vector2(0.15f, 0.18f), new Vector2(0.85f, 0.86f),
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTeal, 0.05f));
+        }
+
+        private static void CreateAtmosphereBand(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Color color)
+        {
+            var band = new GameObject(name);
+            band.transform.SetParent(parent, false);
+            var rect = band.AddComponent<RectTransform>();
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            var image = band.AddComponent<Image>();
+            image.color = color;
+            image.raycastTarget = false;
+            band.transform.SetAsFirstSibling();
         }
 
         #endregion

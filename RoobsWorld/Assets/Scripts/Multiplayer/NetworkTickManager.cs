@@ -60,6 +60,7 @@ namespace RoobsWorld.Multiplayer
         private bool _lastSentEatInput;
 
         private readonly Dictionary<int, RemotePlayerCell> _remotePlayers  = new();
+        private readonly Dictionary<int, uint> _lastRemoteInputTicks = new();
         private readonly Dictionary<EntityId, Organism>         _orgById        = new();
         private readonly Dictionary<EntityId, uint> _organismGenomeChecksums = new();
         private readonly List<Organism> _organismCache = new(128);
@@ -84,7 +85,7 @@ namespace RoobsWorld.Multiplayer
             if (_session?.RemotePlayers != null)
             {
                 foreach (var player in _session.RemotePlayers)
-                    EnsureRemotePlayerGhost(player.PlayerId);
+                    EnsureRemotePlayerGhost(player.PlayerId, player.DisplayName);
             }
 
             _voiceChat = gameObject.GetComponent<ProximityVoiceChat>()
@@ -108,6 +109,7 @@ namespace RoobsWorld.Multiplayer
             foreach (var cell in _remotePlayers.Values)
                 if (cell != null) Destroy(cell.gameObject);
             _remotePlayers.Clear();
+            _lastRemoteInputTicks.Clear();
             _orgById.Clear();
             _organismGenomeChecksums.Clear();
             _organismCache.Clear();
@@ -195,19 +197,26 @@ namespace RoobsWorld.Multiplayer
                     PlayerId = kv.Key,
                     PosX     = pos.x,
                     PosY     = pos.z,
-                    IsAlive  = kv.Value.gameObject.activeSelf
+                    Mass     = kv.Value.LastKnownMass,
+                    IsAlive  = kv.Value.IsAliveSnapshot
                 });
             }
 
             // ---- organisms ----
             RefreshObjectCachesIfNeeded();
-            var orgStates = new OrganismNetState[_organismCache.Count];
-            for (int i = 0; i < _organismCache.Count; i++)
+            var orgStates = new List<OrganismNetState>(_organismCache.Count);
+            for (int i = _organismCache.Count - 1; i >= 0; i--)
             {
                 var o   = _organismCache[i];
+                if (o == null)
+                {
+                    _organismCache.RemoveAt(i);
+                    continue;
+                }
+
                 var pos = o.transform.position;
                 var id  = o.gameObject.GetEntityId();
-                orgStates[i] = new OrganismNetState
+                orgStates.Add(new OrganismNetState
                 {
                     OrgId          = id,
                     PosX           = pos.x,
@@ -215,31 +224,43 @@ namespace RoobsWorld.Multiplayer
                     GenomeChecksum = GetOrganismGenomeChecksum(id, o.Genome),
                     SpeciesId      = o.SpeciesId,
                     IsAlive        = !o.IsDead
-                };
+                });
             }
+            orgStates.Reverse();
 
             // ---- food ----
-            var foodStates = new FoodNetState[_foodCache.Length];
+            var foodStates = new List<FoodNetState>(_foodCache.Length);
+            bool foodCacheHadDestroyedItems = false;
             for (int i = 0; i < _foodCache.Length; i++)
             {
                 var f   = _foodCache[i];
+                if (f == null)
+                {
+                    foodCacheHadDestroyedItems = true;
+                    continue;
+                }
+
                 var pos = f.transform.position;
-                foodStates[i] = new FoodNetState
+                foodStates.Add(new FoodNetState
                 {
                     FoodId   = f.FoodManagerId,
                     PosX     = pos.x,
                     PosY     = pos.z,
                     FoodType = f.Type,
                     Exists   = f.gameObject.activeSelf
-                };
+                });
             }
+            if (foodCacheHadDestroyedItems)
+                _foodCache = foodStates.Count == 0
+                    ? Array.Empty<FoodItem>()
+                    : Array.FindAll(_foodCache, f => f != null);
 
             return new SessionNetState
             {
                 Tick      = tick,
                 Players   = players.ToArray(),
-                Organisms = orgStates,
-                Foods     = foodStates
+                Organisms = orgStates.ToArray(),
+                Foods     = foodStates.ToArray()
             };
         }
 
@@ -268,6 +289,7 @@ namespace RoobsWorld.Multiplayer
                 MoveX    = move.x,
                 MoveY    = move.y,
                 EatInput = eatInput,
+                Mass     = _localPlayer.CurrentMass,
                 Tick     = _tick
             };
 
@@ -341,24 +363,37 @@ namespace RoobsWorld.Multiplayer
             if (playerId < 0) return;
             if (fromId >= 0 && playerId != fromId) return;
             if (playerId == _session.LocalPlayerId) return;
+            bool hasLastTick = _lastRemoteInputTicks.TryGetValue(playerId, out uint lastAcceptedTick);
+            if (!ShouldAcceptRemoteInputTick(hasLastTick, lastAcceptedTick, input.Tick))
+                return;
+
+            _lastRemoteInputTicks[playerId] = input.Tick;
 
             var move = new Vector2(input.MoveX, input.MoveY);
             if (move.sqrMagnitude > 1f)
                 move.Normalize();
-            if (move.sqrMagnitude <= 0.0001f)
-                return;
 
             EnsureRemotePlayerGhost(playerId);
             if (!_remotePlayers.TryGetValue(playerId, out var ghost) || ghost == null)
                 return;
 
+            float localMass = _localPlayer != null ? _localPlayer.CurrentMass : -1f;
+            ghost.ApplyMassSnapshot(input.Mass, localMass);
+
+            if (move.sqrMagnitude <= 0.0001f)
+                return;
+
             float dt = Mathf.Clamp(Time.deltaTime, 0f, 0.05f);
-            var delta = new Vector3(move.x, 0f, move.y) * (RemoteInputMoveSpeed * dt);
+            float moveSpeed = ComputeRemoteInputMoveSpeed(RemoteInputMoveSpeed, input.Mass);
+            var delta = new Vector3(move.x, 0f, move.y) * (moveSpeed * dt);
             ghost.MoveAuthoritative(delta);
         }
 
         private void ApplySessionState(in SessionNetState state)
         {
+            if (state.Tick > _tick)
+                _tick = state.Tick;
+
             // Apply remote player positions
             if (state.Players != null)
             {
@@ -367,7 +402,11 @@ namespace RoobsWorld.Multiplayer
                     if (ps.PlayerId == _session.LocalPlayerId) continue; // skip self
                     EnsureRemotePlayerGhost(ps.PlayerId);
                     if (_remotePlayers.TryGetValue(ps.PlayerId, out var ghost) && ghost != null)
-                        ghost.ApplyState(ps);
+                    {
+                        ghost.SetDisplayName(GetRemotePlayerDisplayName(ps.PlayerId));
+                        float localMass = _localPlayer != null ? _localPlayer.CurrentMass : -1f;
+                        ghost.ApplyState(ps, localMass);
+                    }
                 }
             }
 
@@ -463,16 +502,39 @@ namespace RoobsWorld.Multiplayer
             EnsureRemotePlayerGhost(e.PlayerId);
         }
 
-        private void EnsureRemotePlayerGhost(int playerId)
+        private void EnsureRemotePlayerGhost(int playerId, string displayName = null)
         {
             if (playerId == _session?.LocalPlayerId) return; // ignore self
+            string resolvedDisplayName = string.IsNullOrWhiteSpace(displayName)
+                ? GetRemotePlayerDisplayName(playerId)
+                : displayName;
+
+            if (_remotePlayers.TryGetValue(playerId, out var existing) && existing != null)
+            {
+                existing.SetDisplayName(resolvedDisplayName);
+                return;
+            }
             if (_remotePlayers.ContainsKey(playerId)) return;
 
             // Spawn ghost slightly offset so it doesn't overlap local player
             var spawnPos = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0f, UnityEngine.Random.Range(-3f, 3f));
-            var ghost = RemotePlayerCell.Create(playerId, spawnPos);
+            var ghost = RemotePlayerCell.Create(playerId, spawnPos, resolvedDisplayName);
             _remotePlayers[playerId] = ghost;
             Debug.Log($"[NetworkTick] Remote player {playerId} joined — ghost spawned");
+        }
+
+        private string GetRemotePlayerDisplayName(int playerId)
+        {
+            if (_session?.RemotePlayers != null)
+            {
+                foreach (var player in _session.RemotePlayers)
+                {
+                    if (player != null && player.PlayerId == playerId)
+                        return player.DisplayName;
+                }
+            }
+
+            return RemotePlayerCell.NormalizeDisplayName(playerId, null);
         }
 
         private Transform GetRemotePlayerTransform(int playerId)
@@ -488,6 +550,7 @@ namespace RoobsWorld.Multiplayer
             {
                 if (ghost != null) Destroy(ghost.gameObject);
                 _remotePlayers.Remove(e.PlayerId);
+                _lastRemoteInputTicks.Remove(e.PlayerId);
                 Debug.Log($"[NetworkTick] Remote player {e.PlayerId} left — ghost destroyed");
             }
         }
@@ -514,5 +577,15 @@ namespace RoobsWorld.Multiplayer
 
         /// <summary>Returns the type tag byte from a packet without copying.</summary>
         public static byte GetTag(byte[] packet) => packet != null && packet.Length > 0 ? packet[0] : (byte)0;
+
+        public static bool ShouldAcceptRemoteInputTick(bool hasLastAcceptedTick, uint lastAcceptedTick, uint incomingTick)
+        {
+            return !hasLastAcceptedTick || incomingTick >= lastAcceptedTick;
+        }
+
+        public static float ComputeRemoteInputMoveSpeed(float baseSpeed, float remoteMass)
+        {
+            return Mathf.Max(0f, baseSpeed) * PlayerCell.ComputeSizeSpeedPenalty(remoteMass);
+        }
     }
 }

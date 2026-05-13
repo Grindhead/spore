@@ -176,6 +176,60 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void TryStartEvent_NutrientBloom_StartsImmediatelyAndSpawnsFood()
+        {
+            var root = new GameObject("EnvEventManager_TryStart_TestRoot");
+            var foodGo = new GameObject("FoodManager_ForTryStartTest");
+            foodGo.transform.SetParent(root.transform, false);
+
+            var foodManager = foodGo.AddComponent<FoodManager>();
+            var manager = root.AddComponent<CellEnvironmentEventManager>();
+            manager.Activate(foodManager, arenaRadius: 35f, arenaCenter: new Vector3(10f, 0f, -6f));
+
+            UnityEngine.Random.State previousRandomState = UnityEngine.Random.state;
+            try
+            {
+                UnityEngine.Random.InitState(42);
+                bool started = manager.TryStartEvent(CellEnvironmentEventType.NutrientBloom, 12f);
+
+                Assert.IsTrue(started);
+                Assert.AreEqual(CellEnvironmentEventType.NutrientBloom, manager.ActiveEvent);
+                Assert.Greater(foodManager.FoodCount, 0);
+                Assert.Greater(manager.ActiveEventRemainingSeconds, 0f);
+            }
+            finally
+            {
+                UnityEngine.Random.state = previousRandomState;
+                manager.Deactivate();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void TryStartEvent_ReturnsFalse_WhenAnotherEventIsActive()
+        {
+            var root = new GameObject("EnvEventManager_TryStartBusy_TestRoot");
+            var foodGo = new GameObject("FoodManager_ForTryStartBusyTest");
+            foodGo.transform.SetParent(root.transform, false);
+
+            var foodManager = foodGo.AddComponent<FoodManager>();
+            var manager = root.AddComponent<CellEnvironmentEventManager>();
+            manager.Activate(foodManager, arenaRadius: 35f);
+
+            try
+            {
+                Assert.IsTrue(manager.TryStartEvent(CellEnvironmentEventType.OxygenSurge, 12f));
+                Assert.IsFalse(manager.TryStartEvent(CellEnvironmentEventType.NutrientBloom, 12f));
+                Assert.AreEqual(CellEnvironmentEventType.OxygenSurge, manager.ActiveEvent);
+            }
+            finally
+            {
+                manager.Deactivate();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void BloomPingSuffix_EmptyHotspots_ReturnsEmpty()
         {
             string suffix = CellStageHUD.BuildBloomPingSuffix(Vector3.zero, new List<Vector3>(), 3);

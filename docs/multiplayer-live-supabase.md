@@ -18,10 +18,10 @@ The live relay expects:
 - `PORT` supplied by the hosting platform.
 - HTTP health checks at `/healthz`.
 
-The Unity lobby currently defaults to `ws://localhost:7788` in:
+The Unity lobby defaults to the hosted Fly relay:
 
+- `RoobsWorld/Assets/Resources/multiplayer-relay.json`
 - `RoobsWorld/Assets/Scripts/Multiplayer/MultiplayerLobbyUI.cs`
-- `RoobsWorld/Assets/Scripts/Multiplayer/WebSocketNetworkTransport.cs`
 
 ## Recommended first live path
 

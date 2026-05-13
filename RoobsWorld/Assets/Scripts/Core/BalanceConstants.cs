@@ -17,7 +17,7 @@
         /// <summary>Scale factor for player cell visual size per mass unit.</summary>
         public const float CellMassToScaleFactor = 0.05f;
         /// <summary>Global visual size multiplier applied to cell-stage entities. Increase to make all entities appear larger.</summary>
-        public const float CellEntityVisualScaleMultiplier = 2.0f;
+        public const float CellEntityVisualScaleMultiplier = 2.5f;
         /// <summary>DNA points awarded when player cell consumes a food item.</summary>
         public const int CellDNAPointsPerFood = 1;
         /// <summary>DNA points awarded when player cell consumes another (smaller) cell.</summary>
@@ -26,10 +26,60 @@
         public const int CellDNAPointsPerEvolutionChoice = 5;
         /// <summary>DNA points awarded when player completes a micro goal (e.g. Eat N algae, Eat N dead cells).</summary>
         public const int CellDNAPointsPerGoalComplete = 3;
+        /// <summary>Minimum multiplier used by repeatable risk-route Cell goals.</summary>
+        public const int CellRepeatableRiskGoalRewardMultiplier = 2;
+        /// <summary>Completed Cell goals before repeatable risk-route rewards begin ramping.</summary>
+        public const int CellRepeatableRewardRampStartGoalCount = 9;
+        /// <summary>Completed repeatable Cell goals between each additional risk-route reward multiplier.</summary>
+        public const int CellRepeatableRewardRampInterval = 4;
+        /// <summary>Maximum additional multiplier from late-run repeatable Cell goal reward ramping.</summary>
+        public const int CellRepeatableRewardRampMaxBonus = 2;
+        /// <summary>Consecutive varied Cell goal categories needed before adaptive-chain bonus DNA starts.</summary>
+        public const int CellGoalVarietyBonusStartChain = 2;
+        public const int CellGoalVarietyBonusDnaPerStep = 1;
+        public const int CellGoalVarietyBonusMaxDna = 3;
+        /// <summary>Boost-duration multiplier granted after the player fully escapes Cell-stage predator threat range.</summary>
+        public const float CellPredatorEscapeBoostDurationMultiplier = 1.35f;
+        /// <summary>Arena-radius increase per extra multiplayer cell-stage player.</summary>
+        public const float CellMultiplayerArenaRadiusPerExtraPlayerFraction = 0.08f;
+        /// <summary>Maximum arena-radius increase for multiplayer cell-stage sessions.</summary>
+        public const float CellMultiplayerArenaRadiusMaxBonusFraction = 0.24f;
+        /// <summary>Extra starting food spawned for each additional multiplayer player.</summary>
+        public const int CellMultiplayerFoodPerExtraPlayer = 14;
+        public const int CellMultiplayerFoodMaxBonus = 42;
+        /// <summary>Extra decorative NPC cells spawned for each additional multiplayer player.</summary>
+        public const int CellMultiplayerDecorativeNpcPerExtraPlayer = 4;
+        public const int CellMultiplayerDecorativeNpcMaxBonus = 12;
+        /// <summary>Extra simulated organisms spawned for each additional multiplayer player.</summary>
+        public const int CellMultiplayerOrganismPerExtraPlayer = 5;
+        public const int CellMultiplayerOrganismMaxBonus = 15;
+        /// <summary>Extra starting part pickups spawned for each additional multiplayer player.</summary>
+        public const int CellMultiplayerPartPickupPerExtraPlayer = 1;
+        public const int CellMultiplayerPartPickupMaxBonus = 3;
+        /// <summary>Number of extra multiplayer players needed before adding one extra starting predator.</summary>
+        public const int CellMultiplayerPredatorExtraPlayersPerBonus = 2;
+        public const int CellMultiplayerPredatorMaxBonus = 2;
         /// <summary>DNA points awarded for defeating a rival creature in Creature stage.</summary>
         public const int CreatureDNAPointsPerRivalDefeat = 4;
         /// <summary>DNA points awarded when completing the Creature-stage encounter objective.</summary>
         public const int CreatureDNAPointsObjectiveComplete = 20;
+        /// <summary>Creature-stage stamina budget for attack, guard, and inherited abilities.</summary>
+        public const float CreaturePlayerMaxStamina = 100f;
+        public const float CreaturePlayerStaminaRecoveryPerSecond = 24f;
+        public const float CreaturePlayerAttackStaminaCost = 18f;
+        public const float CreaturePlayerGuardStaminaCost = 24f;
+        public const float CreaturePlayerAbilityStaminaCost = 38f;
+        public const float CreaturePlayerAbilityCooldownSeconds = 6f;
+        public const float CreaturePlayerStaminaRestoredOnKill = 26f;
+        public const float CreaturePlayerStaminaRestoredOnCounter = 14f;
+        public const float CreatureObjectivePaceBonusSecondsPerDefeat = 18f;
+        public const float CreatureObjectivePaceBonusHoldGraceFraction = 0.2f;
+        public const int CreatureObjectivePaceBonusMaxDna = 6;
+        public const float CreatureObjectiveMomentumDelayReductionPerClear = 0.45f;
+        public const float CreatureObjectiveMomentumMinimumDelaySeconds = 3.5f;
+        public const float CreatureObjectiveStaminaRestoreBase = 18f;
+        public const float CreatureObjectiveStaminaRestorePaceBonusMultiplier = 1.5f;
+        public const float CreatureObjectiveStaminaRestoreMax = 30f;
         /// <summary>Energy below this threshold triggers SeekFood when food is available (cell AI behaviour).</summary>
         public const float CellBehaviourEnergyLowThreshold = 30f;
         /// <summary>Energy required to reproduce (spawn offspring with mutated genome).</summary>
@@ -48,6 +98,16 @@
         public const float CellSpeciationGeneticDistanceThreshold = 8f;
         /// <summary>Seconds between AI decisions for cell organisms (Step 9). Update less often than rendering for scale.</summary>
         public const float CellAITickIntervalSeconds = 0.2f;
+        /// <summary>Fallback unboosted player cruise speed used when no live player can be sampled.</summary>
+        public const float CellPlayerFallbackCruiseSpeed = 5.6f;
+        /// <summary>Maximum normal organism speed as a fraction of current player cruise speed.</summary>
+        public const float CellOrganismMaxSpeedToPlayerRatio = 1.05f;
+        /// <summary>Maximum legacy NPC cell speed as a fraction of current player cruise speed.</summary>
+        public const float CellNpcMaxSpeedToPlayerRatio = 0.92f;
+        /// <summary>Maximum predator chase speed as a fraction of current player cruise speed.</summary>
+        public const float CellPredatorMaxSpeedToPlayerRatio = 1.12f;
+        /// <summary>Maximum short predator burst speed as a fraction of current player cruise speed.</summary>
+        public const float CellPredatorBurstMaxSpeedToPlayerRatio = 1.38f;
         /// <summary>Cell size for spatial grid partitioning (Step 9). Larger = fewer cells, faster queries with less precision.</summary>
         public const float CellSpatialGridCellSize = 5f;
         /// <summary>Evolution Documentary Mode time-scale options (1Ã—, 2Ã—, 4Ã—). RightBracket cycles through these.</summary>
@@ -150,7 +210,7 @@
         /// <summary>Number of viral particles spawned when a VirusOutbreak event starts.</summary>
         public const int ViralParticleSpawnCount = 18;
         /// <summary>Visual scale of each viral particle (world units). Much smaller than a normal cell.</summary>
-        public const float ViralParticleScale = 0.25f;
+        public const float ViralParticleScale = 0.32f;
         /// <summary>Movement speed of a viral particle seeking its target (units/s).</summary>
         public const float ViralParticleSpeed = 9f;
         /// <summary>Seconds a viral particle exists before self-destructing if it hasn't hit anything.</summary>

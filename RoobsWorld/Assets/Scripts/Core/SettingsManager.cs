@@ -42,6 +42,10 @@ namespace RoobsWorld.Core
         public float MusicVolume = 0.7f;
         public float SFXVolume = 1f;
         public float AmbientVolume = 1f;
+        /// <summary>Preferred microphone device name. Empty uses the first available device.</summary>
+        public string MicrophoneDeviceName = "";
+        /// <summary>Preferred audio output device name. Empty uses the system default output.</summary>
+        public string AudioOutputDeviceName = "";
         public float CameraSensitivity = 1f;
         public bool InvertY = false;
         public bool ShowFPS = false;
@@ -84,6 +88,12 @@ namespace RoobsWorld.Core
             return Mathf.Clamp(Instance._current.UITextScale, 0.5f, 2f);
         }
 
+        public static bool AreSubtitlesEnabled()
+        {
+            if (!HasInstance || Instance._current == null) return true;
+            return Instance._current.SubtitlesEnabled;
+        }
+
         /// <summary>
         /// Loads settings from disk and applies them on startup.
         /// </summary>
@@ -122,6 +132,8 @@ namespace RoobsWorld.Core
         /// </summary>
         public void Apply()
         {
+            SanitizeLoadedSettings();
+
             FullScreenMode mode = _current.Fullscreen
                 ? (FullScreenMode)Mathf.Clamp(_current.FullscreenModeIndex, 0, 3)
                 : FullScreenMode.Windowed;
@@ -149,6 +161,7 @@ namespace RoobsWorld.Core
                 AudioManager.Instance.MusicVolume = _current.MusicVolume;
                 AudioManager.Instance.SFXVolume = _current.SFXVolume;
                 AudioManager.Instance.AmbientVolume = _current.AmbientVolume;
+                AudioManager.Instance.PreferredOutputDeviceName = _current.AudioOutputDeviceName;
             }
         }
 
@@ -175,8 +188,19 @@ namespace RoobsWorld.Core
             _current.ResolutionWidth = Mathf.Max(640, _current.ResolutionWidth);
             _current.ResolutionHeight = Mathf.Max(360, _current.ResolutionHeight);
             _current.FullscreenModeIndex = Mathf.Clamp(_current.FullscreenModeIndex, 0, 3);
-            _current.QualityLevel = Mathf.Clamp(_current.QualityLevel, 0, QualitySettings.names.Length - 1);
+            int maxQuality = Mathf.Max(0, QualitySettings.names.Length - 1);
+            _current.QualityLevel = Mathf.Clamp(_current.QualityLevel, 0, maxQuality);
+            _current.MasterVolume = Mathf.Clamp01(_current.MasterVolume);
+            _current.MusicVolume = Mathf.Clamp01(_current.MusicVolume);
+            _current.SFXVolume = Mathf.Clamp01(_current.SFXVolume);
+            _current.AmbientVolume = Mathf.Clamp01(_current.AmbientVolume);
+            _current.CameraSensitivity = Mathf.Clamp(_current.CameraSensitivity, 0.1f, 3f);
+            _current.MicrophoneDeviceName = _current.MicrophoneDeviceName ?? string.Empty;
+            _current.AudioOutputDeviceName = _current.AudioOutputDeviceName ?? string.Empty;
             _current.UITextScale = Mathf.Clamp(_current.UITextScale, 0.5f, 2f);
+            _current.ColorBlindModeIndex = Mathf.Clamp(_current.ColorBlindModeIndex, 0, 3);
+            if (_current.TargetFrameRate != 0 && _current.TargetFrameRate != 60 && _current.TargetFrameRate != 120 && _current.TargetFrameRate != -1)
+                _current.TargetFrameRate = 0;
         }
 
         private static int GetCurrentRefreshRate()
@@ -194,7 +218,7 @@ namespace RoobsWorld.Core
         /// </summary>
         public void ResetToDefaults()
         {
-            _current = new GameSettings();
+            _current = CreateDefaultForCurrentDisplay();
             Apply();
             Save();
         }

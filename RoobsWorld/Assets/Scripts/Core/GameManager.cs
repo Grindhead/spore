@@ -12,6 +12,8 @@ namespace RoobsWorld.Core
         private bool _isPaused;
         private AchievementTracker _achievementTracker;
         private IPlatformAchievementProvider _platformAchievementProvider;
+        private IPlatformUserProvider _platformUserProvider;
+        private IPlatformRichPresenceProvider _platformRichPresenceProvider;
 
         /// <summary>
         /// The active multiplayer session, or null when playing offline.
@@ -43,6 +45,7 @@ namespace RoobsWorld.Core
         public SaveData CurrentSave => _currentSave;
         public bool IsPaused => _isPaused;
         public AchievementTracker Achievements => _achievementTracker ??= new AchievementTracker();
+        public IPlatformUserProvider PlatformUser => _platformUserProvider;
         /// <summary>Baseline balance multipliers used by every run.</summary>
         public GameBalanceModifiers Modifiers => GameBalanceModifiers.Default;
 
@@ -190,6 +193,25 @@ namespace RoobsWorld.Core
         public void SetPlatformAchievementProvider(IPlatformAchievementProvider provider)
         {
             _platformAchievementProvider = provider;
+        }
+
+        public void SetPlatformUserProvider(IPlatformUserProvider provider)
+        {
+            _platformUserProvider = provider;
+        }
+
+        public void SetPlatformRichPresenceProvider(IPlatformRichPresenceProvider provider)
+        {
+            _platformRichPresenceProvider = provider;
+            UpdatePlatformRichPresence(StageManager.HasInstance ? StageManager.Instance.CurrentStageType : GameStageType.None);
+        }
+
+        public void UpdatePlatformRichPresence(GameStageType stage)
+        {
+            if (_platformRichPresenceProvider == null || !_platformRichPresenceProvider.IsAvailable)
+                return;
+
+            _platformRichPresenceProvider.SetRichPresence(stage);
         }
 
         /// <summary>

@@ -21,8 +21,9 @@
  * Protocol (all messages are JSON text frames):
  *
  *   Client → Server:
- *     { type: "create" }
+ *     { type: "create", serverName: "Tide Pool" }
  *     { type: "join",    code: "ABCD12" }
+ *     { type: "list_public_lobbies" }
  *     { type: "join_lobby", lobbyId: "cell" }
  *     { type: "relay",   to: <playerId|null>,  data: "<base64 ≤16 KB>" }
  *     { type: "leave" }
@@ -31,6 +32,7 @@
  *   Server → Client:
  *     { type: "created",       code, playerId }
  *     { type: "joined",        code, playerId, hostPlayerId }
+ *     { type: "public_lobbies", lobbies: "ABCD12,1,0,Tide%20Pool;EFGH34,2,0,Open%20Water" } // max 0 = unlimited
  *     { type: "player_joined", playerId }
  *     { type: "player_left",   playerId, wasHost }
  *     { type: "host_migrated", newHostId }
@@ -46,6 +48,7 @@ const {
     RateLimiter,
     validateCode,
     validateClanName,
+    validateServerName,
     validateClanTag,
     validateBase64,
     validateRelayTarget,
@@ -58,8 +61,9 @@ const {
 
 const CFG = {
     PORT:               parseInt(process.env.PORT               ?? '7788'),
-    MAX_PLAYERS:        parseInt(process.env.MAX_PLAYERS        ?? '4'),
+    MAX_PLAYERS:        parseInt(process.env.MAX_PLAYERS        ?? '0'), // 0 or less = unlimited
     GAME_TOKEN:              process.env.GAME_TOKEN             ?? '',   // empty = dev mode (open)
+    OFFICIAL_LOBBIES:        process.env.OFFICIAL_LOBBIES       ?? 'PUBLIC:Official Lobby',
     // Payload
     MAX_PAYLOAD_BYTES:  parseInt(process.env.MAX_PAYLOAD_BYTES  ?? String(64 * 1024)),  // 64 KB ws frame
     MAX_RELAY_BYTES:    parseInt(process.env.MAX_RELAY_BYTES    ?? String(16 * 1024)),  // 16 KB relay data
@@ -70,7 +74,7 @@ const CFG = {
     // Rate limits
     CONN_RATE_WINDOW_MS:parseInt(process.env.CONN_RATE_WINDOW   ?? '60000'),
     CONN_RATE_MAX:      parseInt(process.env.CONN_RATE_MAX      ?? '20'),   // 20 new conn/min per IP
-    MAX_CONNS_PER_IP:   parseInt(process.env.MAX_CONNS_PER_IP   ?? '4'),    // 4 simultaneous per IP
+    MAX_CONNS_PER_IP:   parseInt(process.env.MAX_CONNS_PER_IP   ?? '0'),    // 0 or less = unlimited
     MSG_RATE_WINDOW_MS: parseInt(process.env.MSG_RATE_WINDOW    ?? '1000'), // 1-second window
     MSG_RATE_MAX:       parseInt(process.env.MSG_RATE_MAX       ?? '120'),  // gameplay input + voice chunks
     JOIN_RATE_WINDOW_MS:parseInt(process.env.JOIN_RATE_WINDOW   ?? '60000'),
@@ -92,10 +96,22 @@ const sessions = new Map();
 const connsByIp = new Map(); // ip → Set<ws>
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const OPEN = 1;
+const PING_TEXT = JSON.stringify({ type: 'ping' });
+
+function hasPlayerLimit() {
+    return Number.isInteger(CFG.MAX_PLAYERS) && CFG.MAX_PLAYERS > 0;
+}
+
+function hasConnectionLimitPerIp() {
+    return Number.isInteger(CFG.MAX_CONNS_PER_IP) && CFG.MAX_CONNS_PER_IP > 0;
+}
 
 class Session {
-    constructor(code) {
+    constructor(code, serverName = 'Public Server', options = {}) {
         this.code      = code;
+        this.serverName = normalizeServerName(serverName);
+        this.official  = Boolean(options.official);
         /** @type {Map<number, import('ws')>} */
         this.players   = new Map(); // playerId → ws
         this.lobbies   = new Map(); // lobbyId -> Set<playerId>
@@ -115,7 +131,7 @@ class Session {
 
     get size() { return this.players.size; }
 
-    get isExpired() { return Date.now() - this.createdAt > CFG.SESSION_TTL_MS; }
+    get isExpired() { return !this.official && Date.now() - this.createdAt > CFG.SESSION_TTL_MS; }
 
     add(ws) {
         const id = this.size === 0 ? 0 : this.nextId++;
@@ -210,7 +226,7 @@ class Session {
         const text = JSON.stringify(msg);
         for (const [id, client] of this.players) {
             if (id === excludeId) continue;
-            if (client.readyState === 1) client.send(text);
+            if (client.readyState === OPEN) client.send(text);
         }
     }
 
@@ -222,7 +238,7 @@ class Session {
         for (const id of lobby) {
             if (id === excludeId) continue;
             const client = this.players.get(id);
-            if (client?.readyState === 1) client.send(text);
+            if (client?.readyState === OPEN) client.send(text);
         }
     }
 
@@ -232,14 +248,14 @@ class Session {
 
     sendTo(toId, msg) {
         const client = this.players.get(toId);
-        if (client?.readyState === 1) client.send(JSON.stringify(msg));
+        if (client?.readyState === OPEN) client.send(JSON.stringify(msg));
     }
 
     /** Forcibly close all sockets (called on TTL expiry). */
     destroy(reason) {
         const msg = JSON.stringify({ type: 'error', reason });
         for (const client of this.players.values()) {
-            if (client.readyState === 1) client.send(msg);
+            if (client.readyState === OPEN) client.send(msg);
             client.terminate();
         }
         this.players.clear();
@@ -251,9 +267,10 @@ class Session {
 
 function genCode() {
     for (let attempt = 0; attempt < 100; attempt++) {
-        const code = Array.from({ length: 6 }, () =>
-            CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
-        ).join('');
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+        }
         if (!sessions.has(code)) return code;
     }
     throw new Error('Failed to generate unique session code'); // extremely unlikely
@@ -268,7 +285,7 @@ function log(level, ...parts) {
 }
 
 function send(ws, obj) {
-    if (ws.readyState === 1) ws.send(JSON.stringify(obj));
+    if (ws.readyState === OPEN) ws.send(JSON.stringify(obj));
 }
 
 function closeUnauthorized(ws) {
@@ -291,6 +308,64 @@ function untrackConn(ip, ws) {
 
 function connCountForIp(ip) {
     return connsByIp.get(ip)?.size ?? 0;
+}
+
+function normalizeServerName(name) {
+    return validateServerName(name) ? name.trim() : 'Public Server';
+}
+
+function parseOfficialLobbySpecs(raw = CFG.OFFICIAL_LOBBIES) {
+    if (typeof raw !== 'string' || raw.trim().length === 0) return [];
+
+    return raw
+        .split(';')
+        .map(part => part.trim())
+        .filter(Boolean)
+        .map(part => {
+            const separator = part.indexOf(':');
+            const code = (separator >= 0 ? part.slice(0, separator) : part).trim().toUpperCase();
+            const serverName = separator >= 0 ? part.slice(separator + 1).trim() : 'Official Lobby';
+            return { code, serverName };
+        })
+        .filter(spec => validateCode(spec.code));
+}
+
+function ensureOfficialSessions(specs = parseOfficialLobbySpecs()) {
+    for (const spec of specs) {
+        let session = sessions.get(spec.code);
+        if (session) {
+            session.official = true;
+            session.serverName = normalizeServerName(spec.serverName);
+            continue;
+        }
+
+        session = new Session(spec.code, spec.serverName, { official: true });
+        sessions.set(session.code, session);
+    }
+}
+
+function getPublicLobbies() {
+    ensureOfficialSessions();
+
+    const lobbies = [];
+    for (const session of sessions.values()) {
+        if (session.isExpired || (!session.official && session.size <= 0)) continue;
+        lobbies.push({
+            code: session.code,
+            serverName: session.serverName,
+            players: session.size,
+            maxPlayers: CFG.MAX_PLAYERS,
+        });
+    }
+
+    lobbies.sort((a, b) => a.code.localeCompare(b.code));
+    return lobbies;
+}
+
+function encodePublicLobbies(lobbies = getPublicLobbies()) {
+    return lobbies
+        .map(lobby => `${lobby.code},${lobby.players},${lobby.maxPlayers},${encodeURIComponent(lobby.serverName)}`)
+        .join(';');
 }
 
 // ---- WebSocket server ----
@@ -324,6 +399,7 @@ let housekeepingTimer = null;
 
 function startRelayServer() {
     if (server.listening) return;
+    ensureOfficialSessions();
     server.listen(CFG.PORT, () => {
         log('info', `RoobsWorld relay server listening on ws://0.0.0.0:${CFG.PORT}${devMode ? ' (dev mode - no token required)' : ''}`);
     });
@@ -334,11 +410,10 @@ function startRelayServer() {
 function startHousekeeping() {
     if (housekeepingTimer) return;
     housekeepingTimer = setInterval(() => {
-    const ping = JSON.stringify({ type: 'ping' });
     const now  = Date.now();
 
     for (const ws of wss.clients) {
-        if (ws.readyState !== 1) continue;
+        if (ws.readyState !== OPEN) continue;
 
         // Idle timeout
         if (now - ws._lastActivity > CFG.IDLE_MS) {
@@ -347,7 +422,7 @@ function startHousekeeping() {
             continue;
         }
 
-        ws.send(ping);
+        ws.send(PING_TEXT);
     }
 
     // Expired sessions
@@ -358,6 +433,7 @@ function startHousekeeping() {
             sessions.delete(code);
         }
     }
+    ensureOfficialSessions();
 
     // Rate limiter memory
     connRateLimiter.cleanup();
@@ -387,7 +463,7 @@ wss.on('connection', (ws, req) => {
     }
 
     // ---- per-IP connection cap ----
-    if (connCountForIp(ip) >= CFG.MAX_CONNS_PER_IP) {
+    if (hasConnectionLimitPerIp() && connCountForIp(ip) >= CFG.MAX_CONNS_PER_IP) {
         log('warn', `connection cap exceeded ip=${ip}`);
         ws.close(1008, 'Too many connections');
         return;
@@ -422,17 +498,22 @@ wss.on('connection', (ws, req) => {
 
         switch (msg.type) {
 
+            // ---- public lobby discovery ----
+            case 'list_public_lobbies':
+                send(ws, { type: 'public_lobbies', lobbies: encodePublicLobbies() });
+                break;
+
             // ---- create session ----
             case 'create': {
                 if (ws._session) {
                     return send(ws, { type: 'error', reason: 'already_in_session' });
                 }
                 const code    = genCode();
-                const session = new Session(code);
+                const session = new Session(code, msg.serverName);
                 sessions.set(code, session);
                 const playerId = session.add(ws);
-                log('info', `created code=${code} ip=${ip}`);
-                send(ws, { type: 'created', code, playerId });
+                log('info', `created code=${code} name=${session.serverName} ip=${ip}`);
+                send(ws, { type: 'created', code, playerId, serverName: session.serverName });
                 break;
             }
 
@@ -453,7 +534,7 @@ wss.on('connection', (ws, req) => {
                 if (!session) {
                     return send(ws, { type: 'error', reason: 'not_found' });
                 }
-                if (session.size >= CFG.MAX_PLAYERS) {
+                if (hasPlayerLimit() && session.size >= CFG.MAX_PLAYERS) {
                     return send(ws, { type: 'error', reason: 'full' });
                 }
                 const playerId = session.add(ws);
@@ -471,12 +552,17 @@ wss.on('connection', (ws, req) => {
                 session.broadcast(playerId, { type: 'player_joined', playerId });
                 session.broadcast(-1, { type: 'player_ready', playerId, isReady: false });
                 for (const clan of session.clans.values()) {
-                    send(ws, {
+                    const clanPayload = {
                         type: 'clan_created',
                         clanId: clan.clanId,
                         name: clan.name,
                         tag: clan.tag,
                         leaderPlayerId: clan.leaderPlayerId,
+                    };
+                    send(ws, clanPayload);
+                    send(ws, {
+                        ...clanPayload,
+                        type: 'party_created',
                     });
                 }
                 for (const [existingId, client] of session.players) {
@@ -507,26 +593,33 @@ wss.on('connection', (ws, req) => {
                 break;
             }
 
-            // ---- create clan ----
-            case 'create_clan': {
+            // ---- create clan / party ----
+            case 'create_clan':
+            case 'create_party': {
                 const session = ws._session;
+                const isPartyRequest = msg.type === 'create_party';
                 if (!session) return;
                 if (!validateClanName(msg.name) || !validateClanTag(msg.tag)) {
-                    return send(ws, { type: 'error', reason: 'invalid_clan' });
+                    return send(ws, { type: 'error', reason: isPartyRequest ? 'invalid_party' : 'invalid_clan' });
                 }
                 const clan = session.createClan(ws._playerId, msg.name, msg.tag);
                 if (!clan) {
-                    return send(ws, { type: 'error', reason: 'already_in_clan' });
+                    return send(ws, { type: 'error', reason: isPartyRequest ? 'already_in_party' : 'already_in_clan' });
                 }
-                const payload = {
+                const clanPayload = {
                     type: 'clan_created',
                     clanId: clan.clanId,
                     name: clan.name,
                     tag: clan.tag,
                     leaderPlayerId: clan.leaderPlayerId,
                 };
-                log('info', `clan created code=${session.code} clan=${clan.tag} player=${ws._playerId}`);
-                session.broadcast(-1, payload);
+                const partyPayload = {
+                    ...clanPayload,
+                    type: 'party_created',
+                };
+                log('info', `${isPartyRequest ? 'party' : 'clan'} created code=${session.code} clan=${clan.tag} player=${ws._playerId}`);
+                session.broadcast(-1, clanPayload);
+                session.broadcast(-1, partyPayload);
                 break;
             }
 
@@ -612,8 +705,10 @@ function handleLeave(ws) {
     log('info', `left code=${session.code} player=${playerId} wasHost=${wasHost}`);
 
     if (session.size === 0) {
-        sessions.delete(session.code);
-        log('info', `destroyed code=${session.code}`);
+        if (!session.official) {
+            sessions.delete(session.code);
+            log('info', `destroyed code=${session.code}`);
+        }
         return;
     }
 
@@ -644,4 +739,18 @@ if (require.main === module) {
 }
 
 // Export for testing
-module.exports = { sessions, Session, genCode, CFG, server, wss, startRelayServer, startHousekeeping };
+module.exports = {
+    sessions,
+    Session,
+    genCode,
+    CFG,
+    server,
+    wss,
+    startRelayServer,
+    startHousekeeping,
+    handleLeave,
+    parseOfficialLobbySpecs,
+    ensureOfficialSessions,
+    getPublicLobbies,
+    encodePublicLobbies,
+};

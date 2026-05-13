@@ -9,6 +9,20 @@ namespace RoobsWorld.Stages.Cell
     /// </summary>
     public static class CellPartPickupPlanner
     {
+        public readonly struct SpawnBand
+        {
+            public readonly float MinRadiusFraction;
+            public readonly float MaxRadiusFraction;
+            public readonly bool AllowToxicZone;
+
+            public SpawnBand(float minRadiusFraction, float maxRadiusFraction, bool allowToxicZone)
+            {
+                MinRadiusFraction = Clamp01(minRadiusFraction);
+                MaxRadiusFraction = Clamp01(Math.Max(minRadiusFraction, maxRadiusFraction));
+                AllowToxicZone = allowToxicZone;
+            }
+        }
+
         public static List<CellPartType> BuildPlan(int pickupCount, Random rng = null)
         {
             if (pickupCount <= 0)
@@ -31,6 +45,56 @@ namespace RoobsWorld.Stages.Cell
                 result.Add(allTypes[rng.Next(allTypes.Count)]);
 
             return result;
+        }
+
+        public static SpawnBand GetStrategicSpawnBand(CellPartType partType)
+        {
+            switch (partType)
+            {
+                case CellPartType.Cilia:
+                    return new SpawnBand(0.2f, 0.58f, allowToxicZone: false);
+                case CellPartType.Spike:
+                    return new SpawnBand(0.52f, 0.88f, allowToxicZone: false);
+                case CellPartType.Jet:
+                    return new SpawnBand(0.62f, 0.92f, allowToxicZone: true);
+                default:
+                    return new SpawnBand(0.18f, 0.72f, allowToxicZone: false);
+            }
+        }
+
+        public static string GetPreviewText(CellPartType partType)
+        {
+            return partType switch
+            {
+                CellPartType.Cilia => "Cilia: wider feeding reach",
+                CellPartType.Spike => "Spike: safer contact damage",
+                CellPartType.Jet => "Jet: stronger escape boosts",
+                _ => "Flagella: better cruising speed"
+            };
+        }
+
+        public static CellPartType SelectGoalPartType(CellPartLoadout loadout)
+        {
+            if (loadout == null)
+                return CellPartType.Cilia;
+
+            if (!loadout.HasPart(CellPartType.Cilia))
+                return CellPartType.Cilia;
+            if (!loadout.HasPart(CellPartType.Spike))
+                return CellPartType.Spike;
+            if (!loadout.HasPart(CellPartType.Jet))
+                return CellPartType.Jet;
+            if (!loadout.HasPart(CellPartType.Flagella))
+                return CellPartType.Flagella;
+
+            return CellPartType.Cilia;
+        }
+
+        private static float Clamp01(float value)
+        {
+            if (value <= 0f) return 0f;
+            if (value >= 1f) return 1f;
+            return value;
         }
 
         private static void Shuffle(List<CellPartType> values, Random rng)

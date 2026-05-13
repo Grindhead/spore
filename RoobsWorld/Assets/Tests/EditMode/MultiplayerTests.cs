@@ -124,16 +124,17 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
-        public void AddRemotePlayer_AtMaxCapacity_ReturnsFalse()
+        public void AddRemotePlayer_AllowsMoreThanFourPlayers()
         {
             var mgr = new MultiplayerSessionManager();
             mgr.CreateSession();
             mgr.AddRemotePlayer(1, "P1");
             mgr.AddRemotePlayer(2, "P2");
-            mgr.AddRemotePlayer(3, "P3"); // now at MaxPlayers (4)
-            bool added = mgr.AddRemotePlayer(4, "P4"); // should fail
-            Assert.IsFalse(added);
-            Assert.AreEqual(MultiplayerSessionManager.MaxPlayers, mgr.PlayerCount);
+            mgr.AddRemotePlayer(3, "P3");
+            bool added = mgr.AddRemotePlayer(4, "P4");
+
+            Assert.IsTrue(added);
+            Assert.AreEqual(5, mgr.PlayerCount);
         }
 
         [Test]
@@ -278,6 +279,7 @@ namespace RoobsWorld.Tests
                 MoveX    = -0.75f,
                 MoveY    =  0.5f,
                 EatInput = true,
+                Mass     = 3.25f,
                 Tick     = 1234u
             };
             byte[] data = NetworkSerializer.Serialize(pkt);
@@ -289,6 +291,7 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(pkt.MoveX,    restored.MoveX,    0.0001f);
             Assert.AreEqual(pkt.MoveY,    restored.MoveY,    0.0001f);
             Assert.AreEqual(pkt.EatInput, restored.EatInput);
+            Assert.AreEqual(pkt.Mass,     restored.Mass,     0.0001f);
             Assert.AreEqual(pkt.Tick,     restored.Tick);
         }
 
@@ -301,6 +304,7 @@ namespace RoobsWorld.Tests
                 MoveX    = 0.25f,
                 MoveY    = -1f,
                 EatInput = false,
+                Mass     = 5.5f,
                 Tick     = 77u
             };
 
@@ -311,6 +315,7 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(pkt.PlayerId, restored.PlayerId);
             Assert.AreEqual(pkt.MoveX, restored.MoveX, 0.0001f);
             Assert.AreEqual(pkt.MoveY, restored.MoveY, 0.0001f);
+            Assert.AreEqual(pkt.Mass, restored.Mass, 0.0001f);
             Assert.AreEqual(pkt.Tick, restored.Tick);
         }
 

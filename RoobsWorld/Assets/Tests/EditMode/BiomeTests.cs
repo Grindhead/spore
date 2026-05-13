@@ -110,6 +110,18 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void GetProfile_GivesEveryBiomeDistinctRiskAndReasons()
+        {
+            var open = Biome.GetProfile(Biome.BiomeType.OpenWater);
+            var algae = Biome.GetProfile(Biome.BiomeType.AlgaeForest);
+            var toxic = Biome.GetProfile(Biome.BiomeType.ToxicZone);
+
+            Assert.AreNotEqual(open.VisitReasonKey, algae.VisitReasonKey);
+            Assert.AreNotEqual(algae.LeaveReasonKey, toxic.LeaveReasonKey);
+            Assert.Greater(toxic.RiskLevel, open.RiskLevel);
+        }
+
+        [Test]
         public void Organism_ApplyMetabolism_WithMultiplier_DrainsScaled()
         {
             var org = Organism.Create(Vector3.zero, new Genome { MetabolismCost = 10f });

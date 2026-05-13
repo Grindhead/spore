@@ -30,6 +30,7 @@ namespace RoobsWorld.Tests
             Assert.AreEqual("Graphics", Localization.Get("settings.graphics"));
             Assert.AreEqual("Audio", Localization.Get("settings.audio"));
             Assert.AreEqual("Controls", Localization.Get("settings.controls"));
+            Assert.AreEqual("Accessibility", Localization.Get("settings.accessibility"));
             Assert.AreEqual("Back", Localization.Get("settings.back"));
             Assert.AreEqual("Apply", Localization.Get("settings.apply"));
             Assert.AreEqual("Reset to Defaults", Localization.Get("settings.reset"));
@@ -94,6 +95,9 @@ namespace RoobsWorld.Tests
             Assert.IsFalse(string.IsNullOrEmpty(Localization.Get("cell.goal.survive_toxic_progress")));
             Assert.IsFalse(string.IsNullOrEmpty(Localization.Get("cell.goal.bloom_eat_task")));
             Assert.IsFalse(string.IsNullOrEmpty(Localization.Get("cell.goal.eat_larger_task")));
+            Assert.IsFalse(string.IsNullOrEmpty(Localization.Get("cell.upgrade.progress")));
+            Assert.IsFalse(string.IsNullOrEmpty(Localization.Get("cell.upgrade.remaining")));
+            Assert.IsFalse(string.IsNullOrEmpty(Localization.Get("cell.upgrade.ready")));
         }
 
         [Test]
@@ -225,5 +229,21 @@ namespace RoobsWorld.Tests
                 Assert.AreNotEqual(key, val, $"Profile key '{key}' not translated");
             }
         }
+
+        [Test]
+        public void Multiplayer_Validation_Keys_Have_Translations()
+        {
+            var keys = new[]
+            {
+                "multiplayer.server_name_required",
+            };
+            foreach (string key in keys)
+            {
+                string val = Localization.Get(key);
+                Assert.IsFalse(string.IsNullOrEmpty(val), $"Multiplayer key '{key}' missing");
+                Assert.AreNotEqual(key, val, $"Multiplayer key '{key}' not translated");
+            }
+        }
+
     }
 }

@@ -134,10 +134,17 @@ namespace RoobsWorld.UI
 
         private void ShowMessage(string messageKey)
         {
+            if (!SettingsManager.AreSubtitlesEnabled())
+            {
+                Hide();
+                return;
+            }
+
             _canvas.gameObject.SetActive(true);
             string message = Localization.Get(messageKey);
             string hint = Localization.Get("tutorial.skip_hint");
             _messageText.text = message + "\n\n" + hint;
+            _messageText.fontSize = Mathf.RoundToInt(22f * SettingsManager.GetUITextScale());
         }
 
         private void Hide()
@@ -197,7 +204,17 @@ namespace RoobsWorld.UI
             panelRect.offsetMax = Vector2.zero;
 
             _bgImage = panelObj.AddComponent<Image>();
-            _bgImage.color = new Color(UIStyleGuide.Colors.PanelBackgroundStrong.r, UIStyleGuide.Colors.PanelBackgroundStrong.g, UIStyleGuide.Colors.PanelBackgroundStrong.b, 0.88f);
+            _bgImage.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBackgroundStrong, 0.88f);
+            UIStyleGuide.ApplyOutline(panelObj, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBorder, 0.36f), new Vector2(1.2f, -1.2f));
+
+            var accentObj = new GameObject("Accent");
+            accentObj.transform.SetParent(panelObj.transform, false);
+            var accentRect = accentObj.AddComponent<RectTransform>();
+            accentRect.anchorMin = new Vector2(0f, 0f);
+            accentRect.anchorMax = new Vector2(0.01f, 1f);
+            accentRect.offsetMin = Vector2.zero;
+            accentRect.offsetMax = Vector2.zero;
+            accentObj.AddComponent<Image>().color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.82f);
 
             var textObj = new GameObject("Message");
             textObj.transform.SetParent(panelObj.transform, false);
@@ -212,6 +229,7 @@ namespace RoobsWorld.UI
             _messageText.fontSize = 22;
             _messageText.color = UIStyleGuide.Colors.BodyText;
             _messageText.alignment = TextAnchor.MiddleCenter;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.35f);
         }
     }
 }

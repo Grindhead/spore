@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Collections.Generic;
 using NUnit.Framework;
 using RoobsWorld.Core;
 using RoobsWorld.Multiplayer;
@@ -27,6 +28,11 @@ namespace RoobsWorld.Tests
             (bool)typeof(WebSocketNetworkTransport)
                 .GetMethod("ParseBoolField", BindingFlags.NonPublic | BindingFlags.Static)
                 .Invoke(null, new object[] { json, key });
+
+        private static IReadOnlyList<PublicLobbyInfo> ParsePublicLobbies(string encoded) =>
+            (IReadOnlyList<PublicLobbyInfo>)typeof(WebSocketNetworkTransport)
+                .GetMethod("ParsePublicLobbies", BindingFlags.NonPublic | BindingFlags.Static)
+                .Invoke(null, new object[] { encoded });
 
         // ---- ParseStringField ----
 
@@ -85,6 +91,27 @@ namespace RoobsWorld.Tests
             Assert.AreEqual("player_lobby", ParseString(json, "type"));
             Assert.AreEqual("cell-0_1", ParseString(json, "lobbyId"));
             Assert.AreEqual(2, ParseInt(json, "playerId"));
+        }
+
+        [Test]
+        public void ParsePublicLobbies_Extracts_Code_And_Player_Counts()
+        {
+            var lobbies = ParsePublicLobbies("ABC123,1,4,Tide%20Pool;XYZ789,3,4,Open%20Water");
+
+            Assert.AreEqual(2, lobbies.Count);
+            Assert.AreEqual("ABC123", lobbies[0].Code);
+            Assert.AreEqual("Tide Pool", lobbies[0].ServerName);
+            Assert.AreEqual(1, lobbies[0].Players);
+            Assert.AreEqual(4, lobbies[0].MaxPlayers);
+            Assert.AreEqual("XYZ789", lobbies[1].Code);
+            Assert.AreEqual("Open Water", lobbies[1].ServerName);
+            Assert.AreEqual(3, lobbies[1].Players);
+        }
+
+        [Test]
+        public void ParsePublicLobbies_Empty_Returns_Empty_List()
+        {
+            Assert.AreEqual(0, ParsePublicLobbies("").Count);
         }
 
         // ---- ParseBoolField ----

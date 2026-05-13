@@ -16,4 +16,14 @@ ehthumbs.db
 *.blend1
 *.blend2
 
+# Build outputs
+/[Bb]uild/
+/[Bb]uilds/
+/[Dd]istributables/
+/[Dd]ist/
+/[Oo]ut/
+/[Rr]elease/
+/[Rr]eleases/
+/[Aa]rtifacts/
+
 # Keep RoobsWorld-specific ignores in RoobsWorld/.gitignore

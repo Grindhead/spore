@@ -61,6 +61,8 @@ namespace RoobsWorld.Creature
 
                 stats.Health += upgrade.HealthDelta;
                 stats.Speed += upgrade.SpeedDelta;
+                stats.Attack += upgrade.AttackDelta;
+                stats.Defense += upgrade.DefenseDelta;
             }
 
             stats.Speed = Mathf.Max(1f, stats.Speed);

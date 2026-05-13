@@ -33,6 +33,7 @@ namespace RoobsWorld.Stages.Cell
         private float _wanderHeading;
         private float _wanderNoiseTime;
         private Vector3 _lastDecisionPosition;
+        private Vector3 _lastCommittedMoveDirection;
         private float _stuckDecisionTimer;
         private float _forcedExploreTimer;
         private Vector3 _forcedExploreDirection;
@@ -54,6 +55,7 @@ namespace RoobsWorld.Stages.Cell
             _wanderHeading = Random.Range(0f, Mathf.PI * 2f);
             _wanderNoiseTime = Random.Range(0f, 100f);
             _lastDecisionPosition = transform.position;
+            _lastCommittedMoveDirection = _wanderDirection;
             _forcedExploreDirection = _wanderDirection;
             _cellStage = FindAnyObjectByType<CellStage>();
             if (_cellStage != null && _organism != null)
@@ -117,6 +119,14 @@ namespace RoobsWorld.Stages.Cell
                 return;
             }
 
+            bool allowImmediateReverse = result.State == BehaviourState.Flee;
+            dir = StabilizeMoveDirection(_lastCommittedMoveDirection, dir, allowImmediateReverse);
+            if (dir.sqrMagnitude < 0.01f)
+            {
+                _hasCachedMoveDirection = false;
+                return;
+            }
+
             float speedMult = _cellStage != null
                 ? Biome.GetSpeedMultiplier(_cellStage.GetBiomeAt(_organism.transform.position))
                 : 1f;
@@ -124,6 +134,7 @@ namespace RoobsWorld.Stages.Cell
                 speedMult *= _cellStage.EnvironmentEvents.GlobalSpeedMultiplier;
 
             _cachedMoveDirection = dir.normalized;
+            _lastCommittedMoveDirection = _cachedMoveDirection;
             _cachedSpeedMultiplier = speedMult;
             _hasCachedMoveDirection = true;
         }
@@ -140,6 +151,8 @@ namespace RoobsWorld.Stages.Cell
         private const float ForcedExploreDuration = 2.2f;
         private const float ForcedExploreBlend = 0.68f;
         private const float ThreatExperienceCooldown = 4f;
+        private const float MinNonFleeTurnDot = -0.15f;
+        private const float DirectionPersistenceBlend = 0.55f;
 
         // ---- Chemotaxis / biome affinity (cellStageOrganismDesign §7) ----
 
@@ -401,6 +414,35 @@ namespace RoobsWorld.Stages.Cell
 
             float ratio = isPlayerEntity ? PlayerThreatSizeRatio : ThreatSizeRatio;
             return otherSize > mySize * ratio;
+        }
+
+        public static Vector3 StabilizeMoveDirection(
+            Vector3 previousDirection,
+            Vector3 desiredDirection,
+            bool allowImmediateReverse)
+        {
+            previousDirection.y = 0f;
+            desiredDirection.y = 0f;
+
+            if (desiredDirection.sqrMagnitude < 0.0001f)
+                return Vector3.zero;
+
+            Vector3 desired = desiredDirection.normalized;
+            if (previousDirection.sqrMagnitude < 0.0001f || allowImmediateReverse)
+                return desired;
+
+            Vector3 previous = previousDirection.normalized;
+            float dot = Mathf.Clamp(Vector3.Dot(previous, desired), -1f, 1f);
+            if (dot < MinNonFleeTurnDot)
+            {
+                Vector3 tangent = new Vector3(-previous.z, 0f, previous.x);
+                if (Vector3.Dot(tangent, desired) < 0f)
+                    tangent = -tangent;
+
+                desired = Vector3.Lerp(previous, tangent, 0.8f).normalized;
+            }
+
+            return Vector3.Slerp(previous, desired, DirectionPersistenceBlend).normalized;
         }
 
         private void UpdateExplorationState(BehaviourState state)

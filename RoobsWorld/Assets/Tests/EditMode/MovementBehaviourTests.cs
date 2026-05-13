@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using RoobsWorld.Core;
 using RoobsWorld.Stages.Cell;
 using CellBehaviour = RoobsWorld.Stages.Cell.Behaviour;
 
@@ -59,6 +60,34 @@ namespace RoobsWorld.Tests
             Vector3 r1 = Movement.ApplyWobble(dir, 0.5f, g);
             Vector3 r2 = Movement.ApplyWobble(dir, 1f, g);
             Assert.IsTrue(r0 != r1 || r1 != r2, "Wobble should vary with time");
+        }
+
+        [Test]
+        public void OrganismMove_WithExtremeGenomeSpeed_IsCappedRelativeToPlayer()
+        {
+            var org = Organism.Create(Vector3.zero, new Genome { Speed = 10f });
+            float dt = 1f;
+
+            org.Move(Vector3.forward, dt);
+
+            float maxDistance = BalanceConstants.CellPlayerFallbackCruiseSpeed
+                * BalanceConstants.CellOrganismMaxSpeedToPlayerRatio
+                * dt;
+            Assert.LessOrEqual(org.transform.position.z, maxDistance + 0.01f);
+
+            UnityEngine.Object.DestroyImmediate(org.gameObject);
+        }
+
+        [Test]
+        public void ClampSpeedToPlayer_DoesNotSlowBaselineOrganism()
+        {
+            float baselineSpeed = 5f;
+
+            float clamped = Organism.ClampSpeedToPlayer(
+                baselineSpeed,
+                BalanceConstants.CellOrganismMaxSpeedToPlayerRatio);
+
+            Assert.AreEqual(baselineSpeed, clamped, 0.001f);
         }
     }
 
@@ -348,6 +377,33 @@ namespace RoobsWorld.Tests
                 freshState: BehaviourState.Wander);
 
             Assert.AreEqual(BehaviourState.Wander, state);
+        }
+
+        [Test]
+        public void StabilizeMoveDirection_PreventsImmediateNonFleeBacktrack()
+        {
+            Vector3 stabilized = CellOrganismAI.StabilizeMoveDirection(
+                previousDirection: Vector3.right,
+                desiredDirection: Vector3.left,
+                allowImmediateReverse: false);
+
+            Assert.Greater(
+                Vector3.Dot(Vector3.right, stabilized),
+                -0.15f,
+                "Routine movement should turn through a side-step instead of flipping directly backwards.");
+            Assert.AreEqual(1f, stabilized.magnitude, 0.001f);
+        }
+
+        [Test]
+        public void StabilizeMoveDirection_AllowsFleeToReverseImmediately()
+        {
+            Vector3 stabilized = CellOrganismAI.StabilizeMoveDirection(
+                previousDirection: Vector3.right,
+                desiredDirection: Vector3.left,
+                allowImmediateReverse: true);
+
+            Assert.That(stabilized.x, Is.EqualTo(-1f).Within(0.001f));
+            Assert.That(stabilized.z, Is.EqualTo(0f).Within(0.001f));
         }
     }
 

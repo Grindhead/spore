@@ -56,8 +56,7 @@ namespace RoobsWorld.Creature
             root.transform.position = position;
             root.transform.localScale = GetBodyScale(dna);
 
-            BuildBodyFromPrimitives(root, dna);
-            AttachPartsFromPrimitives(root, dna);
+            CreatureModelBuilder.Build(root, dna, _partCatalog);
 
             var stats = StatCalculator.Calculate(dna, _partCatalog);
 
@@ -94,60 +93,6 @@ namespace RoobsWorld.Creature
             return dna.Body.BodyScale;
         }
 
-        private void BuildBodyFromPrimitives(GameObject root, CreatureDNA dna)
-        {
-            var bodyParent = new GameObject("Body");
-            bodyParent.transform.SetParent(root.transform, false);
-
-            float segmentSpacing = 0.4f;
-            Color primaryColor = ProceduralTextureFactory.Opaque(dna.Colors.PrimaryColor);
-            Color secondaryColor = ProceduralTextureFactory.Opaque(dna.Colors.SecondaryColor);
-            var skinTex = ProceduralTextureFactory.CreateCreatureSkinTexture(
-                primaryColor, secondaryColor);
-
-            for (int i = 0; i < dna.Body.SpineSegments; i++)
-            {
-                float t = (float)i / Mathf.Max(1, dna.Body.SpineSegments - 1);
-                float scale = Mathf.Lerp(0.6f, 0.35f, Mathf.Abs(t - 0.4f) * 2f);
-
-                var segment = new GameObject($"Spine_{i}");
-                segment.transform.SetParent(bodyParent.transform, false);
-                segment.transform.localScale = Vector3.one * scale;
-                segment.transform.localPosition = new Vector3(0, 0.5f, (i - dna.Body.SpineSegments / 2f) * segmentSpacing);
-
-                var mf = segment.AddComponent<MeshFilter>();
-                mf.mesh = CreaturePartMeshFactory.CreateSpineSegment(0.5f);
-                var mr = segment.AddComponent<MeshRenderer>();
-                Color segColor = ProceduralTextureFactory.Opaque(Color.Lerp(primaryColor, secondaryColor, t));
-                mr.material = ProceduralTextureFactory.CreateMaterialWithTexture(skinTex, segColor);
-            }
-        }
-
-        private void AttachPartsFromPrimitives(GameObject root, CreatureDNA dna)
-        {
-            var partsParent = new GameObject("Parts");
-            partsParent.transform.SetParent(root.transform, false);
-
-            foreach (var placement in dna.Parts)
-            {
-                if (_partCatalog.TryGetValue(placement.PartId, out var partDef) && partDef.ModelPrefab != null)
-                {
-                    var partObj = Instantiate(partDef.ModelPrefab, partsParent.transform);
-                    partObj.transform.localPosition = placement.Offset;
-                    partObj.transform.localEulerAngles = placement.Rotation;
-                    partObj.transform.localScale = partDef.DefaultScale * placement.Scale;
-                    BlenderAssetLibrary.DisableColliders(partObj);
-                    continue;
-                }
-
-                var tempPart = CreateTempPartPrimitive(placement.PartId);
-                tempPart.transform.SetParent(partsParent.transform, false);
-                tempPart.transform.localPosition = placement.Offset + Vector3.up * 0.5f;
-                tempPart.transform.localEulerAngles = placement.Rotation;
-                tempPart.transform.localScale *= placement.Scale;
-            }
-        }
-
         private void AttachProceduralAnimation(GameObject root, CreatureDNA dna)
         {
             var legPlacements = new List<PartPlacement>();
@@ -162,21 +107,29 @@ namespace RoobsWorld.Creature
             var limbConfigs = new LimbConfig[legPlacements.Count];
             var jointChains = new Transform[legPlacements.Count][];
 
-            var partsParent = root.transform.Find("Parts");
-            if (partsParent == null) return;
+            var legMounts = new List<CreaturePartMount>();
+            var allMounts = root.GetComponentsInChildren<CreaturePartMount>(true);
+            for (int i = 0; i < allMounts.Length; i++)
+            {
+                var mount = allMounts[i];
+                if (mount != null && mount.PartId.StartsWith("leg"))
+                    legMounts.Add(mount);
+            }
+
+            legMounts.Sort((a, b) => a.PartIndex.CompareTo(b.PartIndex));
+            if (legMounts.Count == 0) return;
 
             int legIndex = 0;
-            for (int i = 0; i < partsParent.childCount && legIndex < legPlacements.Count; i++)
+            for (int i = 0; i < legMounts.Count && legIndex < legPlacements.Count; i++)
             {
-                var child = partsParent.GetChild(i);
-                if (!child.name.Contains("leg")) continue;
+                var child = legMounts[i].transform;
 
                 var placement = legPlacements[legIndex];
                 bool isLeft = placement.Offset.x < 0;
 
                 var hip = new GameObject($"Hip_{legIndex}");
                 hip.transform.SetParent(root.transform, false);
-                hip.transform.localPosition = child.localPosition + Vector3.up * 0.5f;
+                hip.transform.position = child.position + Vector3.up * 0.5f;
 
                 var knee = new GameObject($"Knee_{legIndex}");
                 knee.transform.SetParent(hip.transform, false);
@@ -215,29 +168,5 @@ namespace RoobsWorld.Creature
             animator.Initialize(dna);
         }
 
-        private GameObject CreateTempPartPrimitive(string partId)
-        {
-            var mesh = CreaturePartMeshFactory.GetPartMesh(partId);
-            Color color = CreaturePartMeshFactory.GetPartColor(partId);
-
-            var obj = new GameObject($"Part_{partId}");
-            var mf = obj.AddComponent<MeshFilter>();
-            mf.mesh = mesh;
-            var mr = obj.AddComponent<MeshRenderer>();
-            mr.material = TempAssetBuilder.CreateTempMaterial(color, $"{partId}_Mat");
-
-            if (partId.StartsWith("eye"))
-            {
-                var pupil = new GameObject("Pupil");
-                pupil.transform.SetParent(obj.transform, false);
-                pupil.transform.localPosition = Vector3.forward * 0.03f;
-                var pmf = pupil.AddComponent<MeshFilter>();
-                pmf.mesh = CreaturePartMeshFactory.CreatePupil();
-                var pmr = pupil.AddComponent<MeshRenderer>();
-                pmr.material = TempAssetBuilder.CreateTempMaterial(Color.black, "PupilMat");
-            }
-
-            return obj;
-        }
     }
 }

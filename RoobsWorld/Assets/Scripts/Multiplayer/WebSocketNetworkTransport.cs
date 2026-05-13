@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
@@ -9,6 +10,22 @@ using UnityEngine;
 
 namespace RoobsWorld.Multiplayer
 {
+    public readonly struct PublicLobbyInfo
+    {
+        public readonly string Code;
+        public readonly string ServerName;
+        public readonly int Players;
+        public readonly int MaxPlayers;
+
+        public PublicLobbyInfo(string code, string serverName, int players, int maxPlayers)
+        {
+            Code = code;
+            ServerName = serverName;
+            Players = players;
+            MaxPlayers = maxPlayers;
+        }
+    }
+
     /// <summary>
     /// <see cref="INetworkTransport"/> implementation backed by a WebSocket relay server.
     /// Requires Unity 2021.2+ (.NET Standard 2.1).
@@ -48,6 +65,8 @@ namespace RoobsWorld.Multiplayer
 
         /// <summary>Fired when a clan is created in the current session.</summary>
         public event Action<int, string, string, int> OnClanCreated; // (clanId, name, tag, leaderPlayerId)
+        /// <summary>Fired when a party is created in the current session.</summary>
+        public event Action<int, string, string, int> OnPartyCreated; // (partyId, name, tag, leaderPlayerId)
 
         /// <summary>Fired when a lobby player changes ready state.</summary>
         public event Action<int, bool>   OnPlayerReadyChanged;
@@ -57,6 +76,9 @@ namespace RoobsWorld.Multiplayer
 
         /// <summary>Fired when the host starts the shared game.</summary>
         public event Action              OnGameStarted;
+
+        /// <summary>Fired when the relay returns the current public lobby list.</summary>
+        public event Action<IReadOnlyList<PublicLobbyInfo>> OnPublicLobbies;
 
         // ---- private state ----
 
@@ -109,13 +131,18 @@ namespace RoobsWorld.Multiplayer
         }
 
         /// <summary>Sends { type:"create" } to the server; response fires <see cref="OnSessionCreated"/>.</summary>
-        public Task SendCreateSessionAsync() => SendJsonAsync(new { type = "create" });
+        public Task SendCreateSessionAsync(string serverName = null) => SendJsonAsync(new { type = "create", serverName });
 
         /// <summary>Sends { type:"join", code } to the server; response fires <see cref="OnSessionJoined"/>.</summary>
         public Task SendJoinSessionAsync(string code) => SendJsonAsync(new { type = "join", code });
 
+        /// <summary>Sends { type:"list_public_lobbies" } to the server.</summary>
+        public Task SendListPublicLobbiesAsync() => SendJsonAsync(new { type = "list_public_lobbies" });
+
         /// <summary>Sends { type:"create_clan", name, tag } to the server.</summary>
         public Task SendCreateClanAsync(string name, string tag) => SendJsonAsync(new { type = "create_clan", name, tag });
+        /// <summary>Sends { type:"create_party", name, tag } to the server.</summary>
+        public Task SendCreatePartyAsync(string name, string tag) => SendJsonAsync(new { type = "create_party", name, tag });
 
         /// <summary>Sends { type:"ready", isReady } to the server.</summary>
         public Task SendReadyAsync(bool isReady) => SendJsonAsync(new { type = "ready", isReady });
@@ -284,12 +311,17 @@ namespace RoobsWorld.Multiplayer
                 }
 
                 case "clan_created":
+                case "party_created":
                 {
                     int clanId = ParseIntField(json, "clanId");
                     string name = ParseStringField(json, "name");
                     string tag = ParseStringField(json, "tag");
                     int leaderPlayerId = ParseIntField(json, "leaderPlayerId");
-                    _mainThreadCbs.Enqueue(() => OnClanCreated?.Invoke(clanId, name, tag, leaderPlayerId));
+                    _mainThreadCbs.Enqueue(() =>
+                    {
+                        OnClanCreated?.Invoke(clanId, name, tag, leaderPlayerId);
+                        OnPartyCreated?.Invoke(clanId, name, tag, leaderPlayerId);
+                    });
                     break;
                 }
 
@@ -312,6 +344,14 @@ namespace RoobsWorld.Multiplayer
                 case "game_started":
                 {
                     _mainThreadCbs.Enqueue(() => OnGameStarted?.Invoke());
+                    break;
+                }
+
+                case "public_lobbies":
+                {
+                    string encoded = ParseStringField(json, "lobbies") ?? "";
+                    var lobbies = ParsePublicLobbies(encoded);
+                    _mainThreadCbs.Enqueue(() => OnPublicLobbies?.Invoke(lobbies));
                     break;
                 }
 
@@ -413,6 +453,29 @@ namespace RoobsWorld.Multiplayer
             start += search.Length;
             while (start < json.Length && json[start] == ' ') start++;
             return start + 4 <= json.Length && json.Substring(start, 4) == "true";
+        }
+
+        private static IReadOnlyList<PublicLobbyInfo> ParsePublicLobbies(string encoded)
+        {
+            var lobbies = new List<PublicLobbyInfo>();
+            if (string.IsNullOrEmpty(encoded)) return lobbies;
+
+            string[] entries = encoded.Split(';');
+            foreach (string entry in entries)
+            {
+                string[] parts = entry.Split(',');
+                if (parts.Length < 3) continue;
+                if (!int.TryParse(parts[1], out int players)) continue;
+                if (!int.TryParse(parts[2], out int maxPlayers)) continue;
+                if (string.IsNullOrEmpty(parts[0])) continue;
+                string serverName = parts.Length >= 4
+                    ? Uri.UnescapeDataString(parts[3])
+                    : "Public Server";
+
+                lobbies.Add(new PublicLobbyInfo(parts[0], serverName, players, maxPlayers));
+            }
+
+            return lobbies;
         }
     }
 }

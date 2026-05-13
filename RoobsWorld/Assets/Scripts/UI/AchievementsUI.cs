@@ -1,6 +1,7 @@
 using System;
 using RoobsWorld.Core;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace RoobsWorld.UI
@@ -63,6 +64,8 @@ namespace RoobsWorld.UI
 
             var bg = _root.AddComponent<Image>();
             bg.color = UIStyleGuide.Colors.ScreenBackground;
+            UIStyleGuide.AddScreenAtmosphere(_root.transform, "Achievements", 1f);
+            AddBackgroundAtmosphere(_root.transform);
 
             CreateHeader(canvasObj.transform);
             CreateScrollContent(canvasObj.transform);
@@ -85,6 +88,7 @@ namespace RoobsWorld.UI
             title.color = UIStyleGuide.Colors.AccentStrong;
             title.alignment = TextAnchor.MiddleCenter;
             title.fontStyle = FontStyle.Bold;
+            UIStyleGuide.ApplyTextShadow(headerObj, 0.5f);
 
             var tracker = GameManager.HasInstance ? GameManager.Instance.Achievements : null;
             // Count only Cell-stage achievements (other stages are out of scope)
@@ -112,10 +116,11 @@ namespace RoobsWorld.UI
 
             var subText = subObj.AddComponent<Text>();
             subText.font = _font;
-            subText.text = $"{unlocked} / {total}  —  {points} / {maxPoints} pts";
+            subText.text = $"{unlocked} / {total}  -  {points} / {maxPoints} pts";
             subText.fontSize = 22;
             subText.color = UIStyleGuide.Colors.Subtitle;
             subText.alignment = TextAnchor.MiddleCenter;
+            UIStyleGuide.ApplyTextShadow(subObj, 0.3f);
         }
 
         private void CreateScrollContent(Transform parent)
@@ -127,6 +132,8 @@ namespace RoobsWorld.UI
             scrollRect.anchorMax = new Vector2(0.95f, 0.84f);
             scrollRect.offsetMin = Vector2.zero;
             scrollRect.offsetMax = Vector2.zero;
+            scrollObj.AddComponent<Image>();
+            UIStyleGuide.ApplyPaintedPanelChrome(scrollObj, strong: false, alpha: 0.92f, atmosphere: false);
 
             var scroll = scrollObj.AddComponent<ScrollRect>();
             scroll.horizontal = false;
@@ -200,7 +207,11 @@ namespace RoobsWorld.UI
             row.transform.SetParent(parent, false);
             var rowRect = row.AddComponent<RectTransform>();
             rowRect.sizeDelta = new Vector2(0, 40);
-            row.AddComponent<Image>().color = UIStyleGuide.Colors.RowStripe;
+            var rowImage = row.AddComponent<Image>();
+            rowImage.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            rowImage.type = Image.Type.Sliced;
+            rowImage.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.RowStripe, 0.92f);
+            UIStyleGuide.ApplyOutline(row, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.18f), new Vector2(1f, -1f));
 
             var text = row.AddComponent<Text>();
             text.font = _font;
@@ -219,9 +230,12 @@ namespace RoobsWorld.UI
             rowRect.sizeDelta = new Vector2(0, 72);
 
             var bg = row.AddComponent<Image>();
+            bg.sprite = UIStyleGuide.GetPaintedFieldSprite();
+            bg.type = Image.Type.Sliced;
             bg.color = unlocked
-                ? new Color(UIStyleGuide.Colors.PanelBackground.r, UIStyleGuide.Colors.PanelBackground.g, UIStyleGuide.Colors.PanelBackground.b, 0.9f)
-                : new Color(UIStyleGuide.Colors.DeepNavy.r, UIStyleGuide.Colors.DeepNavy.g, UIStyleGuide.Colors.DeepNavy.b, 0.9f);
+                ? UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBackground, 0.9f)
+                : UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.9f);
+            UIStyleGuide.ApplyOutline(row, UIStyleGuide.Colors.WithAlpha(unlocked ? UIStyleGuide.Colors.FossilGoldBright : UIStyleGuide.Colors.PanelBorder, unlocked ? 0.28f : 0.18f), new Vector2(1f, -1f));
 
             // Left colour bar: gold if unlocked, dim grey if not
             var sideBar = new GameObject("SideBar");
@@ -246,6 +260,8 @@ namespace RoobsWorld.UI
             iconRect.anchoredPosition = new Vector2(14, 0);
             iconRect.sizeDelta = new Vector2(iconSize, iconSize);
             var iconImg = iconObj.AddComponent<Image>();
+            iconImg.sprite = UIStyleGuide.GetPaintedButtonSprite();
+            iconImg.type = Image.Type.Sliced;
             iconImg.color = unlocked ? UIStyleGuide.Colors.UnlockedGold : UIStyleGuide.Colors.LockedGray;
 
             float left = 14f + iconSize + 12f;
@@ -303,11 +319,11 @@ namespace RoobsWorld.UI
             rect.sizeDelta = new Vector2(200, 44);
 
             var bg = btnObj.AddComponent<Image>();
-            bg.color = Color.white;
 
             var btn = btnObj.AddComponent<Button>();
             btn.targetGraphic = bg;
-            UIStyleGuide.ApplyButtonStyle(btn, UIButtonVariant.Secondary);
+            UIStyleGuide.ApplyPaintedButtonChrome(btn, UIButtonVariant.Secondary);
+            UIStyleGuide.AddButtonPearl(btnObj, UIButtonVariant.Secondary, 23f);
             btn.onClick.AddListener(() =>
             {
                 OnClosed?.Invoke();
@@ -319,24 +335,48 @@ namespace RoobsWorld.UI
             var textRect = textObj.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            textRect.offsetMin = new Vector2(26f, 0f);
+            textRect.offsetMax = new Vector2(-8f, 0f);
 
             var text = textObj.AddComponent<Text>();
             text.font = _font;
             text.text = Localization.Get("settings.back");
             text.fontSize = UIStyleGuide.Typography.BodyLarge - 2;
-            text.color = UIStyleGuide.Colors.BodyText;
+            UIStyleGuide.ApplyButtonLabel(text, UIButtonVariant.Secondary);
             text.alignment = TextAnchor.MiddleCenter;
+            UIStyleGuide.ApplyTextShadow(textObj, 0.3f);
         }
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             {
                 OnClosed?.Invoke();
                 Hide();
             }
+        }
+
+        private static void AddBackgroundAtmosphere(Transform parent)
+        {
+            CreateAtmosphereBand(parent, "AchievementsTopTide", new Vector2(0f, 0.72f), Vector2.one,
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.TideTealBright, 0.09f));
+            CreateAtmosphereBand(parent, "AchievementsWarmShelf", Vector2.zero, new Vector2(1f, 0.28f),
+                UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilAmber, 0.06f));
+        }
+
+        private static void CreateAtmosphereBand(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Color color)
+        {
+            var band = new GameObject(name);
+            band.transform.SetParent(parent, false);
+            var rect = band.AddComponent<RectTransform>();
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            var image = band.AddComponent<Image>();
+            image.color = color;
+            image.raycastTarget = false;
+            band.transform.SetAsFirstSibling();
         }
     }
 }

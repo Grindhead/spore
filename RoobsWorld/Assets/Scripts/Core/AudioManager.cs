@@ -20,6 +20,7 @@ namespace RoobsWorld.Core
         private float _musicVolume = 0.7f;
         private float _sfxVolume = 1f;
         private float _ambientVolume = 1f;
+        private string _preferredOutputDeviceName = string.Empty;
 
         public float MasterVolume
         {
@@ -43,6 +44,12 @@ namespace RoobsWorld.Core
         {
             get => _ambientVolume;
             set { _ambientVolume = Mathf.Clamp01(value); UpdateVolumes(); }
+        }
+
+        public string PreferredOutputDeviceName
+        {
+            get => _preferredOutputDeviceName;
+            set => _preferredOutputDeviceName = value ?? string.Empty;
         }
 
         protected override void OnInitialize()

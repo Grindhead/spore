@@ -43,7 +43,7 @@ namespace RoobsWorld.Stages.Cell
         {
             if (!_cellToIds.TryGetValue(key, out var list))
             {
-                list = new List<long>();
+                list = new List<long>(4);
                 _cellToIds[key] = list;
             }
             if (!list.Contains(id))
@@ -54,6 +54,8 @@ namespace RoobsWorld.Stages.Cell
         {
             if (!_cellToIds.TryGetValue(key, out var list)) return;
             list.Remove(id);
+            if (list.Count == 0)
+                _cellToIds.Remove(key);
         }
 
         /// <summary>Register or update position for an id. Use same id for UpdatePosition later.</summary>
@@ -102,7 +104,7 @@ namespace RoobsWorld.Stages.Cell
             float radiusSq = radius * radius;
             int cellRadius = Mathf.Max(1, Mathf.CeilToInt(radius / _cellSize));
             var centerKey = CellKey(position);
-            var results = new List<(long, Vector3)>();
+            var results = new List<(long, Vector3)>(8);
 
             for (int dx = -cellRadius; dx <= cellRadius; dx++)
             {
@@ -112,15 +114,19 @@ namespace RoobsWorld.Stages.Cell
                     if (!_cellToIds.TryGetValue(key, out var ids))
                         continue;
 
-                    foreach (long id in ids)
+                    for (int i = 0; i < ids.Count; i++)
                     {
+                        long id = ids[i];
                         if (!_idToEntry.TryGetValue(id, out var entry))
                             continue;
                         if (category.HasValue && entry.Cat != category.Value)
                             continue;
+
                         Vector3 p = entry.Position;
-                        p.y = 0f;
-                        if ((position - p).sqrMagnitude <= radiusSq)
+                        float deltaX = position.x - p.x;
+                        float deltaZ = position.z - p.z;
+                        float sq = deltaX * deltaX + deltaZ * deltaZ;
+                        if (sq <= radiusSq)
                             results.Add((id, entry.Position));
                     }
                 }
@@ -132,29 +138,47 @@ namespace RoobsWorld.Stages.Cell
         /// <summary>Nearest entry within radius, optionally by category. Returns null if none.</summary>
         public (long Id, Vector3 Position)? GetNearestInRadius(Vector3 position, float radius, Category? category = null)
         {
-            var list = GetInRadius(position, radius, category);
-            if (list.Count == 0) return null;
-
             position.y = 0f;
-            long bestId = list[0].Id;
-            Vector3 bestPos = list[0].Position;
-            bestPos.y = 0f;
-            float bestSq = (position - bestPos).sqrMagnitude;
+            float radiusSq = radius * radius;
+            float bestSq = radiusSq;
+            long bestId = 0;
+            Vector3 bestPosition = default;
+            bool found = false;
+            int cellRadius = Mathf.Max(1, Mathf.CeilToInt(radius / _cellSize));
+            var centerKey = CellKey(position);
 
-            for (int i = 1; i < list.Count; i++)
+            for (int dx = -cellRadius; dx <= cellRadius; dx++)
             {
-                var p = list[i].Position;
-                p.y = 0f;
-                float sq = (position - p).sqrMagnitude;
-                if (sq < bestSq)
+                for (int dz = -cellRadius; dz <= cellRadius; dz++)
                 {
-                    bestSq = sq;
-                    bestId = list[i].Id;
-                    bestPos = list[i].Position;
+                    var key = new Vector2Int(centerKey.x + dx, centerKey.y + dz);
+                    if (!_cellToIds.TryGetValue(key, out var ids))
+                        continue;
+
+                    for (int i = 0; i < ids.Count; i++)
+                    {
+                        long id = ids[i];
+                        if (!_idToEntry.TryGetValue(id, out var entry))
+                            continue;
+                        if (category.HasValue && entry.Cat != category.Value)
+                            continue;
+
+                        Vector3 p = entry.Position;
+                        float deltaX = position.x - p.x;
+                        float deltaZ = position.z - p.z;
+                        float sq = deltaX * deltaX + deltaZ * deltaZ;
+                        if (sq <= bestSq)
+                        {
+                            bestSq = sq;
+                            bestId = id;
+                            bestPosition = entry.Position;
+                            found = true;
+                        }
+                    }
                 }
             }
 
-            return (bestId, bestPos);
+            return found ? (bestId, bestPosition) : null;
         }
 
         /// <summary>Number of registered entries (for tests).</summary>

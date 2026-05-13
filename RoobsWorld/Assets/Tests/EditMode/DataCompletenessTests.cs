@@ -32,6 +32,8 @@ namespace RoobsWorld.Tests.EditMode
                 Assert.IsFalse(string.IsNullOrWhiteSpace(option.Id), $"Creature upgrade {option.Title} is missing Id.");
                 Assert.IsFalse(string.IsNullOrWhiteSpace(option.Title), $"Creature upgrade {option.Id} is missing Title.");
                 Assert.IsFalse(string.IsNullOrWhiteSpace(option.Description), $"Creature upgrade {option.Id} is missing Description.");
+                Assert.IsFalse(string.IsNullOrWhiteSpace(option.Tag), $"Creature upgrade {option.Id} is missing comparison tag.");
+                Assert.IsFalse(string.IsNullOrWhiteSpace(option.Tradeoff), $"Creature upgrade {option.Id} is missing tradeoff text.");
                 Assert.IsTrue(ids.Add(option.Id), $"Duplicate creature upgrade Id: {option.Id}");
 
                 var record = option.ToRecord();

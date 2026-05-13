@@ -25,6 +25,8 @@ namespace RoobsWorld.Stages.Cell
         private const float PredationGrowthScaleFactor = 0.18f;
         private const float MaximumNpcScale = 4.8f;
         private const float ContactBiteDamage = 0.05f;
+        private const float MinimumPredationProbeRadius = 0.14f;
+        private const float PredationProbeContactPadding = 0.12f;
         private const float StuckCheckInterval = 0.7f;
         private const float StuckMinTravelDistance = 0.22f;
         private const float StuckVelocityThreshold = 0.14f;
@@ -46,6 +48,7 @@ namespace RoobsWorld.Stages.Cell
         private Vector3 _lastStuckCheckPosition;
         private float _forcedExploreTimer;
         private Vector3 _forcedExploreDirection;
+        private readonly Collider[] _predationProbeHits = new Collider[32];
 
         public struct RiskTradeoffScores
         {
@@ -82,6 +85,7 @@ namespace RoobsWorld.Stages.Cell
         {
             UpdateStuckState(Time.fixedDeltaTime);
             Perceive();
+            ProbeNearbyPredationContacts();
 
             switch (_currentBehavior)
             {
@@ -334,7 +338,9 @@ namespace RoobsWorld.Stages.Cell
             Vector3 biased = ApplyForcedExploreBias(direction.normalized);
             Vector3 separation = CellSeparation.GetDirection(transform);
             biased = CellSeparation.Apply(biased, separation);
-            _rb.linearVelocity = biased * speed + separation * (speed * CellSeparation.PushSpeedMultiplier);
+            float cappedSpeed = Organism.ClampSpeedToPlayer(speed, BalanceConstants.CellNpcMaxSpeedToPlayerRatio);
+            Vector3 velocity = biased * cappedSpeed + separation * (cappedSpeed * CellSeparation.PushSpeedMultiplier);
+            _rb.linearVelocity = Organism.ClampVelocityToPlayer(velocity, BalanceConstants.CellNpcMaxSpeedToPlayerRatio);
         }
 
         private Vector3 ApplyForcedExploreBias(Vector3 baseDirection)
@@ -430,15 +436,25 @@ namespace RoobsWorld.Stages.Cell
 
         private void OnTriggerEnter(Collider other)
         {
+            TryHandleTriggerContact(other);
+        }
+
+        private void OnTriggerStay(Collider other)
+        {
+            TryHandleTriggerContact(other);
+        }
+
+        private bool TryHandleTriggerContact(Collider other)
+        {
             if (TryConsumeFood(other))
-                return;
+                return true;
 
             var otherCell = FindComponentOnCollider<CellAI>(other);
             if (otherCell != null && otherCell != this && otherCell.transform.localScale.x < transform.localScale.x * PreyConsumeSizeRatio)
             {
                 GrowByScale(otherCell.transform.localScale.x * PredationGrowthScaleFactor);
                 UnityObjectUtil.Destroy(otherCell.gameObject);
-                return;
+                return true;
             }
 
             var otherOrganism = FindComponentOnCollider<Organism>(other);
@@ -446,7 +462,7 @@ namespace RoobsWorld.Stages.Cell
             {
                 GrowByScale(otherOrganism.transform.localScale.x * PredationGrowthScaleFactor);
                 otherOrganism.Die();
-                return;
+                return true;
             }
 
             var player = FindComponentOnCollider<PlayerCell>(other);
@@ -454,7 +470,49 @@ namespace RoobsWorld.Stages.Cell
             {
                 player.TakeDamage(ContactBiteDamage);
                 GrowByScale(ContactBiteDamage * 0.6f);
+                return true;
             }
+
+            return false;
+        }
+
+        private void ProbeNearbyPredationContacts()
+        {
+            float probeRadius = ComputePredationProbeRadius(transform.lossyScale, GetComponent<SphereCollider>());
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                transform.position,
+                probeRadius,
+                _predationProbeHits,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Collide);
+
+            for (int i = 0; i < hitCount; i++)
+            {
+                var hit = _predationProbeHits[i];
+                _predationProbeHits[i] = null;
+                if (hit == null || !hit.enabled)
+                    continue;
+
+                if (TryHandleTriggerContact(hit))
+                    break;
+            }
+        }
+
+        public static float ComputePredationProbeRadius(Vector3 worldScale, SphereCollider collider)
+        {
+            float scaleRadius = Mathf.Max(Mathf.Abs(worldScale.x), Mathf.Abs(worldScale.z)) * 0.5f;
+            float colliderRadius = 0f;
+
+            if (collider != null)
+            {
+                float colliderScale = Mathf.Max(
+                    Mathf.Abs(collider.transform.lossyScale.x),
+                    Mathf.Abs(collider.transform.lossyScale.z));
+                colliderRadius = Mathf.Max(0f, collider.radius) * colliderScale;
+            }
+
+            return Mathf.Max(MinimumPredationProbeRadius, Mathf.Max(scaleRadius, colliderRadius))
+                   + PredationProbeContactPadding;
         }
 
         public void ApplyDamage(float scaleDamage)
@@ -537,6 +595,7 @@ namespace RoobsWorld.Stages.Cell
     {
         private const float MinimumSeparationRadius = 1.35f;
         private const float QueryPadding = 1.1f;
+        private const float ConsumablePreySizeRatio = 0.82f;
         public const float PushSpeedMultiplier = 1.45f;
         private const float SeparationWeight = 3.0f;
         private const float MinimumExactOverlapPush = 0.35f;
@@ -564,6 +623,7 @@ namespace RoobsWorld.Stages.Cell
                 return Vector3.zero;
 
             float selfRadius = EstimatePlanarRadius(self);
+            float selfScale = EstimatePredationScale(self);
             float queryRadius = Mathf.Max(MinimumSeparationRadius, selfRadius + QueryPadding);
             var hits = Physics.OverlapSphere(
                 self.position,
@@ -580,6 +640,8 @@ namespace RoobsWorld.Stages.Cell
 
                 Transform other = ResolveEntityTransform(hit);
                 if (other == null || other == self)
+                    continue;
+                if (IsConsumablePrey(selfScale, other))
                     continue;
 
                 Vector3 away = self.position - other.position;
@@ -601,6 +663,15 @@ namespace RoobsWorld.Stages.Cell
             }
 
             return separation.sqrMagnitude > 0.0001f ? Vector3.ClampMagnitude(separation, 1f) : Vector3.zero;
+        }
+
+        private static bool IsConsumablePrey(float selfScale, Transform other)
+        {
+            if (selfScale <= 0f || other == null)
+                return false;
+
+            float otherScale = EstimatePredationScale(other);
+            return otherScale > 0f && otherScale <= selfScale * ConsumablePreySizeRatio;
         }
 
         private static Transform ResolveEntityTransform(Collider hit)
@@ -627,6 +698,15 @@ namespace RoobsWorld.Stages.Cell
         {
             Vector3 scale = target.localScale;
             return Mathf.Max(0.45f, Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z)) * 0.55f);
+        }
+
+        private static float EstimatePredationScale(Transform target)
+        {
+            if (target == null)
+                return 0f;
+
+            Vector3 scale = target.localScale;
+            return Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
         }
 
         private static Vector3 PickDeterministicPush(Transform self, Transform other)

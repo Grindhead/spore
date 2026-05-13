@@ -13,6 +13,9 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(1f, loadout.SpeedMultiplier, 0.001f);
             Assert.IsFalse(loadout.HasContactDamage);
             Assert.IsFalse(loadout.HasPart(CellPartType.Flagella));
+            Assert.AreEqual(0f, loadout.ConsumeProbeRadiusBonus, 0.001f);
+            Assert.AreEqual(1f, loadout.FoodGainMultiplier, 0.001f);
+            Assert.AreEqual(1f, loadout.BoostDurationMultiplier, 0.001f);
         }
 
         [Test]
@@ -47,6 +50,21 @@ namespace RoobsWorld.Tests
             loadout.TryUnlock(CellPartType.Spike);
 
             Assert.IsTrue(loadout.HasContactDamage);
+            Assert.Greater(loadout.ContactDamageMultiplier, 1f);
+        }
+
+        [Test]
+        public void Parts_Unlock_Build_Defining_Bonuses()
+        {
+            var loadout = new CellPartLoadout();
+
+            loadout.TryUnlock(CellPartType.Cilia);
+            Assert.Greater(loadout.ConsumeProbeRadiusBonus, 0f);
+            Assert.Greater(loadout.FoodGainMultiplier, 1f);
+
+            loadout.TryUnlock(CellPartType.Jet);
+            Assert.Greater(loadout.BoostDurationMultiplier, 1f);
+            Assert.Greater(loadout.BoostSpeedMultiplier, 1f);
         }
     }
 }

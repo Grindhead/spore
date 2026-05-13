@@ -19,6 +19,8 @@ namespace RoobsWorld.Stages.Cell
         [SerializeField] private int _initialNPCCount = 8;
         [SerializeField] private int _initialOrganismCount = 9;
         [SerializeField] private int _initialPartPickupCount = 8;
+        private float _baseArenaRadius;
+        private bool _hasBaseArenaRadius;
 
         [Header("Hazards")]
         [SerializeField] private int _predatorCount = 2;
@@ -32,11 +34,18 @@ namespace RoobsWorld.Stages.Cell
         private CellSpatialGrid _spatialGrid;
         private OrganismPool _organismPool;
         private CellEnvironmentEventManager _envEventManager;
+        private GameplayTelemetryTracker _telemetryTracker;
         private CellTutorialController _tutorialController;
         private HighContrastOutlineManager _highContrastManager;
         private CellArenaDebris _arenaDebris;
+        private Transform _arenaBackdropRoot;
+        private CellBackgroundFish _backgroundFish;
         private int _timeScaleIndex;
         private CellGoal? _currentGoal;
+        private int _completedGoalCount;
+        private int _goalVarietyChain;
+        private bool _hasLastGoalCategory;
+        private CellGoal.GoalActionCategory _lastGoalCategory;
         private bool _playerWasThreatenedByPredator;
         private HostAuthorityController _authority;
         private NetworkTickManager _networkTick;
@@ -58,6 +67,7 @@ namespace RoobsWorld.Stages.Cell
         private bool  _leviathanActive;
         private LeviathanCell _activeLeviathanCell;
         private static Material s_wakeTrailMaterial;
+        private static Material s_ambientOrganismMaterial;
         private static readonly float[] s_defaultTimeScaleOptions = { 1f };
         private const float ArenaCurrentCacheRefreshInterval = 0.45f;
         private const float PartPickupSpawnMinRadiusFraction = 0.12f;
@@ -66,11 +76,42 @@ namespace RoobsWorld.Stages.Cell
         private const int PartPickupSpawnAttempts = 16;
         private const float EntitySpawnMinSpacing = 5.5f;
         private const int EntitySpawnPositionAttempts = 28;
+        private const float InitialNpcVisualScaleMin = 0.38f;
+        private const float InitialNpcVisualScaleMax = 0.78f;
+        private const float InitialOrganismGenomeSizeMin = 0.48f;
+        private const int GoalToxinTrailFoodCount = 5;
+        private const float GoalToxinTrailNutrition = 4f;
+        private const float GoalToxinTrailScatterRadius = 1.8f;
+        private const float GoalToxicBeaconLifetimeSeconds = 50f;
+        private const float GoalToxicBeaconDamagePerSecond = 0.04f;
+        private const float GoalNutrientBloomDurationSeconds = 26f;
+        private const float GoalPredatorSpawnBackDistanceFraction = 0.62f;
+        private const float GoalPredatorSpawnSideDistanceFraction = 0.35f;
+        private const float GoalLargerPreySpawnForwardDistance = 11f;
+        private const float GoalLargerPreySpawnSideDistance = 4f;
+        private const float GoalLargerPreyOpportunityRadius = 34f;
+        private const float GoalLargerPreyScaleMultiplier = 1.08f;
+        private const float GoalLargerPreyMinGenomeSize = 0.1f;
+        private const float GoalLargerPreyMaxGenomeSize = 3.4f;
+        private const float GoalLargerPreyInitialEnergy = 14f;
+        private const int GoalLargerPreyMaxConcurrentTargets = 1;
+        private const float GoalPartPickupSpawnForwardDistance = 6.5f;
+        private const float GoalPartPickupSpawnSideDistance = 2.75f;
+        private const float GoalPartPickupOpportunityRadius = 22f;
+        private const int GoalPartPickupMaxConcurrentPickups = 1;
+        private const float GoalFoodOpportunityRadius = 13f;
+        private const float GoalFoodClusterForwardDistance = 5.25f;
+        private const float GoalFoodClusterSideSpacing = 1.65f;
+        private const float GoalFoodClusterRowSpacing = 1.4f;
+        private const int GoalFoodClusterMaxCount = 3;
+        private const float GoalPlantFoodNutrition = 5.5f;
+        private const float GoalMeatFoodNutrition = 8.5f;
 
         /// <summary>Current micro goal for the HUD (e.g. eat N algae). Null when none active.</summary>
         public CellGoal? CurrentGoal => _currentGoal;
         public GameStageType StageType => GameStageType.Cell;
         public FoodManager FoodManager => _foodManager;
+        public float CurrentDocumentaryTimeScale => GetCurrentDocumentaryTimeScale();
         /// <summary>Arena center for biome zone lookup (Step 6).</summary>
         public Vector3 ArenaCenter => _arenaCenter;
         /// <summary>Organism pool for AI reproduction (returns null outside of active stage).</summary>
@@ -84,6 +125,61 @@ namespace RoobsWorld.Stages.Cell
         public Biome.BiomeType GetBiomeAt(Vector3 position)
         {
             return Biome.GetBiomeAt(_arenaCenter, position, _arenaRadius);
+        }
+
+        /// <summary>Returns the configured Toxic Zone center for an arena.</summary>
+        public static Vector3 GetToxicZoneCenter(Vector3 arenaCenter, float arenaRadius)
+        {
+            float offset = Mathf.Max(0f, arenaRadius) * BalanceConstants.CellBiomeToxicZoneCenterOffsetFraction;
+            return arenaCenter + new Vector3(offset, 0f, offset);
+        }
+
+        public static int GetActiveCellPlayerCount(MultiplayerSessionManager session)
+        {
+            return Mathf.Max(1, session?.PlayerCount ?? 1);
+        }
+
+        public static int ComputeMultiplayerScaledCount(int baseCount, int playerCount, int perExtraPlayer, int maxBonus)
+        {
+            int safeBase = Mathf.Max(0, baseCount);
+            int extraPlayers = Mathf.Max(0, playerCount - 1);
+            int bonus = extraPlayers * Mathf.Max(0, perExtraPlayer);
+            int cap = Mathf.Max(0, maxBonus);
+            if (cap == 0)
+                bonus = 0;
+            else
+                bonus = Mathf.Min(bonus, cap);
+
+            return safeBase + bonus;
+        }
+
+        public static int ComputeMultiplayerPredatorCount(int baseCount, int playerCount, int extraPlayersPerBonus, int maxBonus)
+        {
+            int safeBase = Mathf.Max(0, baseCount);
+            int extraPlayers = Mathf.Max(0, playerCount - 1);
+            int interval = Mathf.Max(1, extraPlayersPerBonus);
+            int bonus = extraPlayers / interval;
+            int cap = Mathf.Max(0, maxBonus);
+            if (cap == 0)
+                bonus = 0;
+            else
+                bonus = Mathf.Min(bonus, cap);
+
+            return safeBase + bonus;
+        }
+
+        public static float ComputeMultiplayerArenaRadius(float baseRadius, int playerCount, float perExtraPlayerFraction, float maxBonusFraction)
+        {
+            float safeBase = Mathf.Max(0f, baseRadius);
+            int extraPlayers = Mathf.Max(0, playerCount - 1);
+            float bonusFraction = extraPlayers * Mathf.Max(0f, perExtraPlayerFraction);
+            float cap = Mathf.Max(0f, maxBonusFraction);
+            if (cap == 0f)
+                bonusFraction = 0f;
+            else
+                bonusFraction = Mathf.Min(bonusFraction, cap);
+
+            return safeBase * (1f + bonusFraction);
         }
 
         /// <summary>If the player is inside an ArenaCurrent trigger, returns its direction and force; otherwise false.</summary>
@@ -135,16 +231,38 @@ namespace RoobsWorld.Stages.Cell
             return options != null && options.Length > 0 ? options : s_defaultTimeScaleOptions;
         }
 
+        private float GetCurrentDocumentaryTimeScale()
+        {
+            var options = GetDocumentaryTimeScaleOptions();
+            if (options.Length == 0)
+                return 1f;
+            int index = Mathf.Clamp(_timeScaleIndex, 0, options.Length - 1);
+            return options[index];
+        }
+
         public void OnEnter()
         {
             _isActive = true;
             CellFeelDirector.SetProfile(CellFeelProfile.Classic);
             ApplyCellOnlyPreset();
+            if (!_hasBaseArenaRadius)
+            {
+                _baseArenaRadius = _arenaRadius;
+                _hasBaseArenaRadius = true;
+            }
+
+            var session = GameManager.HasInstance ? GameManager.Instance.Session : null;
+            int activePlayerCount = GetActiveCellPlayerCount(session);
+            _arenaRadius = ComputeMultiplayerArenaRadius(
+                _baseArenaRadius,
+                activePlayerCount,
+                BalanceConstants.CellMultiplayerArenaRadiusPerExtraPlayerFraction,
+                BalanceConstants.CellMultiplayerArenaRadiusMaxBonusFraction);
             var timeScaleOptions = GetDocumentaryTimeScaleOptions();
             _timeScaleIndex = 0;
             Time.timeScale = timeScaleOptions[0];
             SpeciationSystem.Reset();
-            _authority = new HostAuthorityController(GameManager.HasInstance ? GameManager.Instance.Session : null);
+            _authority = new HostAuthorityController(session);
             Debug.Log("[CellStage] Entering Cell Stage");
             CameraManager.Instance.ActivateRig(CameraRigType.Orthographic2D);
             _envEventManager = gameObject.GetComponent<CellEnvironmentEventManager>()
@@ -155,6 +273,10 @@ namespace RoobsWorld.Stages.Cell
             int npcOrg = GameManager.HasInstance
                 ? GameManager.Instance.Modifiers.ApplyNPCCount(_initialOrganismCount)
                 : _initialOrganismCount;
+            npcOrg = ScaleResourceCountForCurrentPlayers(
+                npcOrg,
+                BalanceConstants.CellMultiplayerOrganismPerExtraPlayer,
+                BalanceConstants.CellMultiplayerOrganismMaxBonus);
             _organismPool = new OrganismPool(prewarm: npcOrg, maxPooled: npcOrg * 3);
             SpawnPlayer();
             SpawnFood();
@@ -164,11 +286,13 @@ namespace RoobsWorld.Stages.Cell
             SpawnHazards();
 
             _envEventManager.Activate(_foodManager, _arenaRadius, _player, _authority, _arenaCenter);
+            _telemetryTracker = GameplayTelemetryTracker.Attach(
+                "CellGameplayTelemetry",
+                panelVisible: Application.isEditor || Debug.isDebugBuild);
 
             // Multiplayer tick — activates only when a session is connected; no-op offline.
             _networkTick = gameObject.GetComponent<NetworkTickManager>()
                 ?? gameObject.AddComponent<NetworkTickManager>();
-            var session   = GameManager.HasInstance ? GameManager.Instance.Session : null;
             var transport = GameManager.HasInstance ? GameManager.Instance.SessionTransport : null;
             _networkTick.Activate(session, transport, _player);
             _tutorialController = gameObject.GetComponent<CellTutorialController>()
@@ -180,6 +304,9 @@ namespace RoobsWorld.Stages.Cell
             _nicheFillTimer = _nicheFillCheckInterval;
             _dynamicFoodTimer = BalanceConstants.CellDynamicFoodCheckIntervalSeconds;
             _dynamicPredatorTimer = BalanceConstants.CellDynamicPredatorReinforcementIntervalSeconds;
+            _completedGoalCount = 0;
+            _goalVarietyChain = 0;
+            _hasLastGoalCategory = false;
             SetCurrentGoal(CellGoal.CreateEatFoodGoal(FoodType.Plant, 3));
             ShowGoalLinkedTutorialTip();
             EventBus.Subscribe<CellEvolutionTriggeredEvent>(OnEvolutionTriggered);
@@ -214,10 +341,34 @@ namespace RoobsWorld.Stages.Cell
             _whirlpoolCount = 0;
         }
 
+        private int GetCurrentCellPlayerCount()
+        {
+            return GameManager.HasInstance
+                ? GetActiveCellPlayerCount(GameManager.Instance.Session)
+                : 1;
+        }
+
+        private int ScaleResourceCountForCurrentPlayers(int baseCount, int perExtraPlayer, int maxBonus)
+        {
+            return ComputeMultiplayerScaledCount(baseCount, GetCurrentCellPlayerCount(), perExtraPlayer, maxBonus);
+        }
+
+        private int ScalePredatorCountForCurrentPlayers(int baseCount)
+        {
+            return ComputeMultiplayerPredatorCount(
+                baseCount,
+                GetCurrentCellPlayerCount(),
+                BalanceConstants.CellMultiplayerPredatorExtraPlayersPerBonus,
+                BalanceConstants.CellMultiplayerPredatorMaxBonus);
+        }
+
         public void OnExit()
         {
             _isActive = false;
             _currentGoal = null;
+            _completedGoalCount = 0;
+            _goalVarietyChain = 0;
+            _hasLastGoalCategory = false;
             _playerWasThreatenedByPredator = false;
             Time.timeScale = 1f;
             _tutorialController?.Deactivate();
@@ -227,6 +378,7 @@ namespace RoobsWorld.Stages.Cell
             if (_arenaDebris != null) { _arenaDebris.enabled = false; _arenaDebris = null; }
             _envEventManager?.Deactivate();
             _envEventManager = null;
+            if (_telemetryTracker != null) { Destroy(_telemetryTracker.gameObject); _telemetryTracker = null; }
             _organismPool?.Clear();
             _organismPool = null;
             EventBus.Unsubscribe<CellEvolutionTriggeredEvent>(OnEvolutionTriggered);
@@ -246,6 +398,7 @@ namespace RoobsWorld.Stages.Cell
             _arenaCurrentsCache.Clear();
             _predatorCache.Clear();
             _organismCache.Clear();
+            CleanupArenaBackdrop();
             Debug.Log("[CellStage] Exiting Cell Stage");
         }
 
@@ -267,12 +420,16 @@ namespace RoobsWorld.Stages.Cell
             Time.timeScale = timeScaleOptions[_timeScaleIndex];
 
             var kb = Keyboard.current;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if (kb != null && kb.rightBracketKey.wasPressedThisFrame)
+            bool cycleDocumentarySpeed =
+                (kb != null && kb.rightBracketKey.wasPressedThisFrame) ||
+                (InputManager.HasInstance && InputManager.Instance.InteractPressed);
+            if (cycleDocumentarySpeed)
             {
                 _timeScaleIndex = (_timeScaleIndex + 1) % timeScaleOptions.Length;
+                Time.timeScale = timeScaleOptions[_timeScaleIndex];
             }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             Vector3 envPos = _player != null ? _player.transform.position : _arenaCenter;
             if (kb != null && kb.leftAltKey.isPressed)
             {
@@ -290,6 +447,7 @@ namespace RoobsWorld.Stages.Cell
             UpdateNicheFill();
             UpdateEcosystemBalancing();
             UpdateLeviathan();
+            UpdateEndlessBackdropAnchor();
         }
 
         private void UpdateToxicSurvivalGoal()
@@ -567,11 +725,11 @@ namespace RoobsWorld.Stages.Cell
 
         private Vector3 GetSeparatedEntitySpawnPoint(System.Func<Vector3> candidateFactory, float minSpacing)
         {
-            Vector3 fallback = ClampToArena(candidateFactory());
+            Vector3 fallback = ClampSpawnPointBehindPlayer(candidateFactory(), minSpacing);
             float spacing = Mathf.Max(0.5f, minSpacing);
             for (int i = 0; i < EntitySpawnPositionAttempts; i++)
             {
-                Vector3 candidate = ClampToArena(candidateFactory());
+                Vector3 candidate = ClampSpawnPointBehindPlayer(candidateFactory(), spacing);
                 if (IsEntitySpawnPointClear(candidate, spacing))
                     return candidate;
 
@@ -637,9 +795,60 @@ namespace RoobsWorld.Stages.Cell
             }
 
             if (push.sqrMagnitude < 0.001f)
-                return ClampToArena(position);
+                return ClampSpawnPointBehindPlayer(position, minSpacing);
 
-            return ClampToArena(position + push.normalized * minSpacing);
+            return ClampSpawnPointBehindPlayer(position + push.normalized * minSpacing, minSpacing);
+        }
+
+        private Vector3 ClampSpawnPointBehindPlayer(Vector3 position, float minBehindDistance)
+        {
+            Vector3 clamped = ClampToArena(position);
+            if (_player == null)
+                return clamped;
+
+            return ClampToArena(MovePointBehindPlayer(
+                _player.transform.position,
+                _player.transform.forward,
+                clamped,
+                minBehindDistance));
+        }
+
+        public static bool IsPointInFrontOfPlayer(Vector3 playerPosition, Vector3 playerForward, Vector3 point)
+        {
+            Vector3 flatForward = new Vector3(playerForward.x, 0f, playerForward.z);
+            if (flatForward.sqrMagnitude < 0.0001f)
+                return false;
+
+            Vector3 toPoint = point - playerPosition;
+            toPoint.y = 0f;
+            if (toPoint.sqrMagnitude < 0.0001f)
+                return false;
+
+            return Vector3.Dot(flatForward.normalized, toPoint.normalized) > 0f;
+        }
+
+        public static Vector3 MovePointBehindPlayer(
+            Vector3 playerPosition,
+            Vector3 playerForward,
+            Vector3 point,
+            float minBehindDistance)
+        {
+            Vector3 flatForward = new Vector3(playerForward.x, 0f, playerForward.z);
+            if (flatForward.sqrMagnitude < 0.0001f)
+                return point;
+
+            flatForward.Normalize();
+            Vector3 toPoint = point - playerPosition;
+            Vector3 flatToPoint = new Vector3(toPoint.x, 0f, toPoint.z);
+            float forwardDistance = Vector3.Dot(flatToPoint, flatForward);
+            if (forwardDistance <= 0f)
+                return point;
+
+            Vector3 lateral = flatToPoint - flatForward * forwardDistance;
+            float behindDistance = Mathf.Max(Mathf.Max(0.1f, minBehindDistance), forwardDistance);
+            Vector3 behind = playerPosition + lateral - flatForward * behindDistance;
+            behind.y = point.y;
+            return behind;
         }
 
         private void SpawnPredator(Vector3 position, bool territorial, float scaleFactor)
@@ -697,8 +906,8 @@ namespace RoobsWorld.Stages.Cell
             if (allSafe)
             {
                 _playerWasThreatenedByPredator = false;
-                _player.NotifyPredatorEscaped();
-                EventBus.Publish(new CellPlayerEscapedPredatorEvent());
+                float boostSeconds = _player.NotifyPredatorEscaped();
+                EventBus.Publish(new CellPlayerEscapedPredatorEvent { BoostSeconds = boostSeconds });
                 OnPlayerEscapedPredator();
             }
         }
@@ -802,6 +1011,46 @@ namespace RoobsWorld.Stages.Cell
         {
             if (evt.EventType == CellEnvironmentEventType.RadiationSurge && evt.Started)
                 _player?.OfferRadiationMutation();
+
+            if (!evt.Started)
+                return;
+
+            var chain = GetEcosystemEventChainPlan(evt.EventType);
+            for (int i = 0; i < chain.HerbivoreSpawns; i++)
+                SpawnNicheFillOrganism(Genome.Default(), herbivore: true);
+            for (int i = 0; i < chain.CarnivoreSpawns; i++)
+                SpawnNicheFillOrganism(Genome.Default(), herbivore: false);
+            for (int i = 0; i < chain.MeatDrops && _foodManager != null; i++)
+                _foodManager.AddFoodAt(ClampToArena(GetRandomPointInArena(0.78f)), FoodType.Meat, 7f);
+        }
+
+        public readonly struct EcosystemEventChainPlan
+        {
+            public readonly int HerbivoreSpawns;
+            public readonly int CarnivoreSpawns;
+            public readonly int MeatDrops;
+
+            public EcosystemEventChainPlan(int herbivoreSpawns, int carnivoreSpawns, int meatDrops)
+            {
+                HerbivoreSpawns = Mathf.Max(0, herbivoreSpawns);
+                CarnivoreSpawns = Mathf.Max(0, carnivoreSpawns);
+                MeatDrops = Mathf.Max(0, meatDrops);
+            }
+        }
+
+        public static EcosystemEventChainPlan GetEcosystemEventChainPlan(CellEnvironmentEventType eventType)
+        {
+            switch (eventType)
+            {
+                case CellEnvironmentEventType.NutrientBloom:
+                    return new EcosystemEventChainPlan(herbivoreSpawns: 2, carnivoreSpawns: 1, meatDrops: 0);
+                case CellEnvironmentEventType.VirusOutbreak:
+                    return new EcosystemEventChainPlan(herbivoreSpawns: 0, carnivoreSpawns: 0, meatDrops: 4);
+                case CellEnvironmentEventType.OxygenSurge:
+                    return new EcosystemEventChainPlan(herbivoreSpawns: 3, carnivoreSpawns: 0, meatDrops: 0);
+                default:
+                    return new EcosystemEventChainPlan(0, 0, 0);
+            }
         }
 
         private void SetCurrentGoal(CellGoal? goal)
@@ -809,20 +1058,475 @@ namespace RoobsWorld.Stages.Cell
             _currentGoal = goal;
             if (!goal.HasValue) return;
             ShowContextualGoalTip(goal.Value);
+            PrepareGoalOpportunity(goal.Value);
+        }
+
+        private void PrepareGoalOpportunity(CellGoal goal)
+        {
+            if (goal.Type == CellGoal.GoalType.EscapePredator)
+            {
+                EnsureEscapePredatorOpportunity();
+                return;
+            }
+
+            if (goal.Type == CellGoal.GoalType.EatFood)
+            {
+                if (goal.TargetFoodType == FoodType.Toxin)
+                    SpawnToxinGoalTrail(goal.TargetCount);
+                else
+                    EnsureGoalFoodOpportunity(goal.TargetFoodType, goal.TargetCount - goal.CurrentCount);
+                return;
+            }
+
+            if (goal.Type == CellGoal.GoalType.SurviveInToxicZone)
+            {
+                SpawnToxicGoalBeacon();
+                return;
+            }
+
+            if (goal.Type == CellGoal.GoalType.EatLargerPrey)
+            {
+                EnsureGoalLargerPreyOpportunity(goal.TargetCount - goal.CurrentCount);
+                return;
+            }
+
+            if (goal.Type == CellGoal.GoalType.CollectParts)
+            {
+                EnsureGoalPartPickupOpportunity(goal.TargetCount - goal.CurrentCount);
+                return;
+            }
+
+            if (goal.Type == CellGoal.GoalType.EatDuringNutrientBloom)
+                EnsureGoalNutrientBloom();
+        }
+
+        private void EnsureEscapePredatorOpportunity()
+        {
+            if (_player == null)
+                return;
+
+            FillActivePredatorCache();
+            float safeRadius = Mathf.Max(
+                BalanceConstants.CellGoalPredatorThreatRadius,
+                BalanceConstants.CellGoalPredatorSafeRadius);
+            if (IsAnyPredatorWithinRadiusSqr(_predatorCache, _player.transform.position, safeRadius * safeRadius))
+                return;
+
+            Vector3 spawnPos = ComputeGoalPredatorSpawnPosition(
+                _player.transform.position,
+                _player.transform.forward,
+                _arenaCenter,
+                _arenaRadius,
+                BalanceConstants.CellGoalPredatorThreatRadius);
+            SpawnPredator(spawnPos, territorial: false, scaleFactor: 0.25f);
+            _playerWasThreatenedByPredator = false;
+        }
+
+        public static Vector3 ComputeGoalPredatorSpawnPosition(
+            Vector3 playerPosition,
+            Vector3 playerForward,
+            Vector3 arenaCenter,
+            float arenaRadius,
+            float threatRadius)
+        {
+            Vector3 forward = new Vector3(playerForward.x, 0f, playerForward.z);
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = Vector3.forward;
+            else
+                forward.Normalize();
+
+            Vector3 right = new Vector3(forward.z, 0f, -forward.x);
+            float safeThreatRadius = Mathf.Max(1f, threatRadius);
+            float backDistance = Mathf.Max(6f, safeThreatRadius * GoalPredatorSpawnBackDistanceFraction);
+            float sideDistance = Mathf.Max(3f, safeThreatRadius * GoalPredatorSpawnSideDistanceFraction);
+            Vector3 candidate = playerPosition - forward * backDistance + right * sideDistance;
+            candidate.y = 0f;
+            return ClampPositionToArena(arenaCenter, arenaRadius, candidate);
+        }
+
+        private void EnsureGoalLargerPreyOpportunity(int targetCount)
+        {
+            if (_player == null)
+                return;
+
+            float playerScale = Mathf.Max(0.01f, Mathf.Abs(_player.transform.localScale.x));
+            FillActiveOrganismCache();
+            int desiredCount = Mathf.Min(
+                Mathf.Max(0, targetCount),
+                GoalLargerPreyMaxConcurrentTargets);
+            if (desiredCount <= 0)
+                return;
+
+            int existingCount = CountGoalLargerPreyTargetsNearby(
+                _organismCache,
+                _player.transform.position,
+                playerScale,
+                GoalLargerPreyOpportunityRadius);
+
+            for (int i = existingCount; i < desiredCount; i++)
+            {
+                Vector3 spawnPos = ComputeGoalLargerPreySpawnPosition(
+                    _player.transform.position,
+                    _player.transform.forward,
+                    _arenaCenter,
+                    _arenaRadius,
+                    i);
+                Genome preyGenome = BuildGoalLargerPreyGenome(_player.PlayerGenome, playerScale);
+                Organism prey = Organism.Create(spawnPos, preyGenome, GoalLargerPreyInitialEnergy, speciesId: 0);
+                prey.gameObject.name = $"GoalLargerPrey_{i}";
+                OrganismArchetypeConfigurator.Configure(prey, OrganismArchetype.Generalist);
+                prey.gameObject.AddComponent<CellGoalLargerPreyTarget>();
+                AttachCellWakeTrail(prey.gameObject, baseWidth: 0.065f, lifetime: 0.85f, alpha: 0.28f);
+                CellSwimVisual.Ensure(prey.gameObject, CellSwimVisual.SwimProfile.Npc);
+            }
+        }
+
+        private static int CountGoalLargerPreyTargetsNearby(
+            IReadOnlyList<Organism> organisms,
+            Vector3 playerPosition,
+            float playerScale,
+            float radius)
+        {
+            if (organisms == null || radius <= 0f)
+                return 0;
+
+            int count = 0;
+            float radiusSqr = radius * radius;
+            for (int i = 0; i < organisms.Count; i++)
+            {
+                var organism = organisms[i];
+                if (organism == null || organism.IsDead)
+                    continue;
+                if (organism.GetComponent<CellGoalLargerPreyTarget>() == null)
+                    continue;
+                if ((organism.transform.position - playerPosition).sqrMagnitude > radiusSqr)
+                    continue;
+                if (!PlayerCell.CanConsumeGoalLargerPreyTarget(playerScale, organism.transform.localScale.x))
+                    continue;
+
+                count++;
+            }
+
+            return count;
+        }
+
+        public static Vector3 ComputeGoalLargerPreySpawnPosition(
+            Vector3 playerPosition,
+            Vector3 playerForward,
+            Vector3 arenaCenter,
+            float arenaRadius,
+            int spawnIndex = 0)
+        {
+            Vector3 forward = new Vector3(playerForward.x, 0f, playerForward.z);
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = Vector3.forward;
+            else
+                forward.Normalize();
+
+            Vector3 right = new Vector3(forward.z, 0f, -forward.x);
+            int safeIndex = Mathf.Max(0, spawnIndex);
+            float sideSign = safeIndex % 2 == 0 ? 1f : -1f;
+            float rowMultiplier = 1f + (safeIndex / 2) * 0.35f;
+            Vector3 candidate = playerPosition
+                                + forward * GoalLargerPreySpawnForwardDistance * rowMultiplier
+                                + right * GoalLargerPreySpawnSideDistance * sideSign;
+            candidate.y = 0f;
+            return ClampPositionToArena(arenaCenter, arenaRadius, candidate);
+        }
+
+        public static Genome BuildGoalLargerPreyGenome(Genome playerGenome, float playerWorldScale)
+        {
+            Genome genome = playerGenome != null ? playerGenome.Clone() : Genome.Default();
+            genome.Size = ComputeGoalLargerPreyGenomeSize(playerWorldScale);
+            genome.Speed = Mathf.Clamp(genome.Speed * 0.72f, 0.35f, 2.2f);
+            genome.Attack = 0.1f;
+            genome.Defence = 0.1f;
+            genome.Digestion = Mathf.Max(0.8f, genome.Digestion);
+            genome.MetabolismCost = 0.25f;
+            genome.Spikes = 0f;
+            genome.Flagella = Mathf.Clamp(genome.Flagella * 0.35f + 0.25f, 0f, 1.2f);
+            genome.Traits = GeneticTraits.None;
+            genome.Color = new Color(1f, 0.58f, 0.18f);
+            return genome;
+        }
+
+        public static float EstimateOrganismWorldScale(Genome genome)
+        {
+            float size = genome != null ? genome.Size : GoalLargerPreyMinGenomeSize;
+            return 0.5f
+                   * Mathf.Max(GoalLargerPreyMinGenomeSize, size)
+                   * BalanceConstants.CellEntityVisualScaleMultiplier;
+        }
+
+        private static float ComputeGoalLargerPreyGenomeSize(float playerWorldScale)
+        {
+            float targetScale = Mathf.Max(0.01f, Mathf.Abs(playerWorldScale)) * GoalLargerPreyScaleMultiplier;
+            float visualScaleMultiplier = 0.5f * BalanceConstants.CellEntityVisualScaleMultiplier;
+            return Mathf.Clamp(
+                targetScale / Mathf.Max(0.01f, visualScaleMultiplier),
+                GoalLargerPreyMinGenomeSize,
+                GoalLargerPreyMaxGenomeSize);
+        }
+
+        private void EnsureGoalPartPickupOpportunity(int remainingCount)
+        {
+            if (_player == null || remainingCount <= 0)
+                return;
+
+            int desiredCount = Mathf.Min(
+                Mathf.Max(0, remainingCount),
+                GoalPartPickupMaxConcurrentPickups);
+            if (desiredCount <= 0)
+                return;
+
+            int existingCount = CountActivePartPickupsNear(
+                _player.transform.position,
+                GoalPartPickupOpportunityRadius);
+            if (existingCount >= desiredCount)
+                return;
+
+            for (int i = existingCount; i < desiredCount; i++)
+            {
+                CellPartType partType = CellPartPickupPlanner.SelectGoalPartType(_player.PartLoadout);
+                Vector3 spawnPos = ComputeGoalPartPickupSpawnPosition(
+                    _player.transform.position,
+                    _player.transform.forward,
+                    _arenaCenter,
+                    _arenaRadius,
+                    i);
+                SpawnPartPickup(partType, spawnPos, $"GoalPartPickup_{partType}_{i}");
+            }
+        }
+
+        private static int CountActivePartPickupsNear(Vector3 position, float radius)
+        {
+            if (radius <= 0f)
+                return 0;
+
+            int count = 0;
+            float radiusSqr = radius * radius;
+            var pickups = FindObjectsByType<CellPartPickup>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                var pickup = pickups[i];
+                if (pickup == null || !pickup.isActiveAndEnabled)
+                    continue;
+                if ((pickup.transform.position - position).sqrMagnitude <= radiusSqr)
+                    count++;
+            }
+
+            return count;
+        }
+
+        public static Vector3 ComputeGoalPartPickupSpawnPosition(
+            Vector3 playerPosition,
+            Vector3 playerForward,
+            Vector3 arenaCenter,
+            float arenaRadius,
+            int spawnIndex = 0)
+        {
+            Vector3 forward = new Vector3(playerForward.x, 0f, playerForward.z);
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = Vector3.forward;
+            else
+                forward.Normalize();
+
+            Vector3 right = new Vector3(forward.z, 0f, -forward.x);
+            int safeIndex = Mathf.Max(0, spawnIndex);
+            float sideSign = safeIndex % 2 == 0 ? 1f : -1f;
+            float rowMultiplier = 1f + (safeIndex / 2) * 0.3f;
+            Vector3 candidate = playerPosition
+                                + forward * GoalPartPickupSpawnForwardDistance * rowMultiplier
+                                + right * GoalPartPickupSpawnSideDistance * sideSign;
+            candidate.y = 0f;
+            return ClampPositionToArena(arenaCenter, arenaRadius, candidate);
+        }
+
+        private void EnsureGoalFoodOpportunity(FoodType foodType, int remainingCount)
+        {
+            if (_player == null || _foodManager == null || remainingCount <= 0)
+                return;
+            if (_authority != null && !_authority.CanSpawnFood())
+                return;
+            if (_foodManager.GetNearestFoodOfType(_player.transform.position, GoalFoodOpportunityRadius, foodType).HasValue)
+                return;
+
+            int count = Mathf.Min(Mathf.Max(1, remainingCount), GoalFoodClusterMaxCount);
+            float nutrition = GetGoalFoodNutrition(foodType);
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 spawnPos = ComputeGoalFoodClusterPosition(
+                    _player.transform.position,
+                    _player.transform.forward,
+                    _arenaCenter,
+                    _arenaRadius,
+                    i);
+                _foodManager.AddFoodAt(spawnPos, foodType, nutrition);
+            }
+        }
+
+        public static Vector3 ComputeGoalFoodClusterPosition(
+            Vector3 playerPosition,
+            Vector3 playerForward,
+            Vector3 arenaCenter,
+            float arenaRadius,
+            int foodIndex = 0)
+        {
+            Vector3 forward = new Vector3(playerForward.x, 0f, playerForward.z);
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = Vector3.forward;
+            else
+                forward.Normalize();
+
+            Vector3 right = new Vector3(forward.z, 0f, -forward.x);
+            int safeIndex = Mathf.Max(0, foodIndex);
+            int row = safeIndex / 3;
+            int sideSlot = safeIndex % 3;
+            float sideOffset = (sideSlot - 1) * GoalFoodClusterSideSpacing;
+            float forwardOffset = GoalFoodClusterForwardDistance + row * GoalFoodClusterRowSpacing;
+            Vector3 candidate = playerPosition + forward * forwardOffset + right * sideOffset;
+            candidate.y = 0f;
+            return ClampPositionToArena(arenaCenter, arenaRadius, candidate);
+        }
+
+        public static float GetGoalFoodNutrition(FoodType foodType)
+        {
+            switch (foodType)
+            {
+                case FoodType.Meat:
+                    return GoalMeatFoodNutrition;
+                case FoodType.Plant:
+                    return GoalPlantFoodNutrition;
+                default:
+                    return GoalPlantFoodNutrition;
+            }
+        }
+
+        private void SpawnToxinGoalTrail(int targetCount)
+        {
+            if (_foodManager == null) return;
+            if (_authority != null && !_authority.CanSpawnFood()) return;
+
+            int count = Mathf.Max(GoalToxinTrailFoodCount, targetCount + 2);
+            Vector3 start = _player != null ? _player.transform.position : _arenaCenter;
+            Vector3 toxicCenter = GetToxicZoneCenter(_arenaCenter, _arenaRadius);
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = (i + 1f) / (count + 1f);
+                Vector3 anchor = Vector3.Lerp(start, toxicCenter, Mathf.Lerp(0.28f, 0.9f, t));
+                Vector2 jitter = Random.insideUnitCircle * GoalToxinTrailScatterRadius;
+                Vector3 pos = ClampToArena(anchor + new Vector3(jitter.x, 0f, jitter.y));
+                _foodManager.AddFoodAt(pos, FoodType.Toxin, GoalToxinTrailNutrition);
+            }
+        }
+
+        private void SpawnToxicGoalBeacon()
+        {
+            if (_authority != null && !_authority.CanFireEnvironmentEvent()) return;
+
+            Vector3 toxicCenter = GetToxicZoneCenter(_arenaCenter, _arenaRadius);
+            float toxicRadius = Mathf.Max(2.5f, _arenaRadius * BalanceConstants.CellBiomeToxicZoneRadiusFraction * 0.35f);
+            SpawnToxinCloud(
+                toxicCenter,
+                toxicRadius,
+                GoalToxicBeaconDamagePerSecond,
+                GoalToxicBeaconLifetimeSeconds,
+                "ToxinCloud_GoalBeacon");
+        }
+
+        private void EnsureGoalNutrientBloom()
+        {
+            if (_envEventManager == null) return;
+            if (_envEventManager.ActiveEvent == CellEnvironmentEventType.NutrientBloom) return;
+
+            _envEventManager.TryStartEvent(
+                CellEnvironmentEventType.NutrientBloom,
+                GoalNutrientBloomDurationSeconds);
         }
 
         private void HandleGoalProgress(CellGoal next)
         {
             _currentGoal = next;
-            if (!next.IsComplete) return;
+            if (!next.IsComplete)
+            {
+                if (next.Type == CellGoal.GoalType.EatLargerPrey)
+                    EnsureGoalLargerPreyOpportunity(next.TargetCount - next.CurrentCount);
+                else if (next.Type == CellGoal.GoalType.CollectParts)
+                    EnsureGoalPartPickupOpportunity(next.TargetCount - next.CurrentCount);
+                else if (next.Type == CellGoal.GoalType.EatFood && next.TargetFoodType != FoodType.Toxin)
+                    EnsureGoalFoodOpportunity(next.TargetFoodType, next.TargetCount - next.CurrentCount);
+                return;
+            }
 
-            if (GameManager.Instance != null)
-                GameManager.Instance.AddDNAPoints(
-                    GameManager.Instance.Modifiers.ApplyDNAReward(BalanceConstants.CellDNAPointsPerGoalComplete));
-            EventBus.Publish(new CellGoalCompletedEvent { GoalType = next.Type });
+            bool repeatedCategory = _hasLastGoalCategory && _lastGoalCategory == next.ActionCategory;
+            int nextVarietyChain = ComputeGoalVarietyChain(
+                _hasLastGoalCategory,
+                _lastGoalCategory,
+                next.ActionCategory,
+                _goalVarietyChain);
+            int varietyBonus = ComputeGoalVarietyDnaBonus(
+                nextVarietyChain,
+                BalanceConstants.CellGoalVarietyBonusStartChain,
+                BalanceConstants.CellGoalVarietyBonusDnaPerStep,
+                BalanceConstants.CellGoalVarietyBonusMaxDna);
+
+            int dnaReward = ComputeGoalDnaReward(
+                next,
+                BalanceConstants.CellDNAPointsPerGoalComplete,
+                GameManager.HasInstance ? GameManager.Instance.Modifiers.DNARewardMultiplier : 1f)
+                + varietyBonus;
+            if (GameManager.HasInstance)
+                GameManager.Instance.AddDNAPoints(dnaReward);
+
+            EventBus.Publish(new CellGoalCompletedEvent
+            {
+                GoalType = next.Type,
+                ActionCategory = next.ActionCategory,
+                DnaReward = dnaReward,
+                RewardMultiplier = next.RewardMultiplier,
+                IsRepeatable = next.IsRepeatable,
+                RepeatedActionCategory = repeatedCategory,
+                VarietyChain = nextVarietyChain,
+                VarietyBonusDna = varietyBonus
+            });
+            _goalVarietyChain = nextVarietyChain;
+            _lastGoalCategory = next.ActionCategory;
+            _hasLastGoalCategory = true;
+            _completedGoalCount++;
             if (CameraManager.HasInstance)
                 CameraManager.Instance.RequestShake(0.2f, 0.15f);
-            SetCurrentGoal(CellGoal.GetNextGoalAfterCompletion(next));
+            SetCurrentGoal(CellGoal.GetNextGoalAfterCompletion(next, _completedGoalCount));
+        }
+
+        public static int ComputeGoalDnaReward(CellGoal goal, int baseReward, float rewardMultiplier = 1f)
+        {
+            int baseSafe = Mathf.Max(1, baseReward);
+            int goalMultiplier = Mathf.Max(1, goal.RewardMultiplier);
+            float globalMultiplier = Mathf.Max(0.1f, rewardMultiplier);
+            return Mathf.Max(1, Mathf.RoundToInt(baseSafe * goalMultiplier * globalMultiplier));
+        }
+
+        public static int ComputeGoalVarietyChain(
+            bool hasPreviousCategory,
+            CellGoal.GoalActionCategory previousCategory,
+            CellGoal.GoalActionCategory currentCategory,
+            int currentChain)
+        {
+            if (!hasPreviousCategory)
+                return 1;
+
+            return previousCategory == currentCategory
+                ? 1
+                : Mathf.Max(1, currentChain) + 1;
+        }
+
+        public static int ComputeGoalVarietyDnaBonus(int varietyChain, int startChain, int bonusPerStep, int maxBonus)
+        {
+            int safeStart = Mathf.Max(1, startChain);
+            int eligibleSteps = Mathf.Max(0, varietyChain - safeStart + 1);
+            int rawBonus = eligibleSteps * Mathf.Max(0, bonusPerStep);
+            return Mathf.Min(Mathf.Max(0, maxBonus), rawBonus);
         }
 
         private void ShowContextualGoalTip(CellGoal goal)
@@ -839,9 +1543,35 @@ namespace RoobsWorld.Stages.Cell
                     overlay.ShowContextualTip("tutorial.cell.tip.first_reproduction", 4f);
                     break;
                 case CellGoal.GoalType.EatFood:
+                    if (goal.TargetFoodType == FoodType.Toxin && goal.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier)
+                    {
+                        overlay.ShowContextualTip("tutorial.cell.tip.risk_toxin", 4f);
+                        break;
+                    }
+                    overlay.ShowContextualTip("tutorial.cell.goal_intro", 4f);
+                    break;
                 case CellGoal.GoalType.SurviveInToxicZone:
+                    if (goal.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier)
+                    {
+                        overlay.ShowContextualTip("tutorial.cell.tip.risk_toxin", 4f);
+                        break;
+                    }
+                    overlay.ShowContextualTip("tutorial.cell.goal_intro", 4f);
+                    break;
                 case CellGoal.GoalType.EatDuringNutrientBloom:
+                    overlay.ShowContextualTip(
+                        goal.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier
+                            ? "tutorial.cell.tip.risk_bloom"
+                            : "tutorial.cell.goal_intro",
+                        4f);
+                    break;
                 case CellGoal.GoalType.EatLargerPrey:
+                    overlay.ShowContextualTip(
+                        goal.RewardMultiplier >= BalanceConstants.CellRepeatableRiskGoalRewardMultiplier
+                            ? "tutorial.cell.tip.risk_hunt"
+                            : "tutorial.cell.goal_intro",
+                        4f);
+                    break;
                 case CellGoal.GoalType.CollectParts:
                     overlay.ShowContextualTip("tutorial.cell.goal_intro", 4f);
                     break;
@@ -985,26 +1715,42 @@ namespace RoobsWorld.Stages.Cell
 
         private void SpawnArena()
         {
+            CleanupArenaBackdrop();
+            _arenaBackdropRoot = new GameObject("CellArenaBackdropRoot").transform;
+            _arenaBackdropRoot.position = _arenaCenter;
+
             var arenaMat = ProceduralTextureFactory.CreateTransparentMaterial(
                 ProceduralTextureFactory.CreateCellArenaTexture(256),
-                new Color(0.56f, 0.9f, 0.96f, 0.95f));
-            var floor = ModelFactory.CreateGround(_arenaRadius * 2f, arenaMat);
-            floor.transform.position = _arenaCenter;
+                new Color(0.46f, 0.78f, 0.9f, 0.96f));
+            var floor = ModelFactory.CreateGround(_arenaRadius * 2f, arenaMat, 1f);
             floor.name = "CellArenaFloor";
+            floor.transform.SetParent(_arenaBackdropRoot, false);
+            floor.transform.localPosition = Vector3.zero;
 
             // Add soft translucent water layers to create depth/haze and a more painterly cell-ocean feel.
             SpawnBackdropLayer("CellArenaBackdropNear", _arenaRadius * 2.5f, -0.06f, 0.58f, new Color(0.67f, 0.93f, 1f, 0.44f));
             SpawnBackdropLayer("CellArenaBackdropFar",  _arenaRadius * 3.5f, -0.12f, 0.35f, new Color(0.79f, 0.98f, 1f, 0.3f));
+            _backgroundFish = CellBackgroundFish.Spawn(_arenaCenter, _arenaRadius);
+            _backgroundFish.transform.SetParent(_arenaBackdropRoot, true);
             SpawnWaterVignette();
+            SpawnAmbientAquariumOrganisms();
             SpawnForegroundAlgae();
         }
 
         private void SpawnBackdropLayer(string name, float size, float yOffset, float smoothness, Color tint)
         {
             var mat = CreateWaterBackdropMaterial(name, tint, smoothness);
-            var layer = ModelFactory.CreateGround(size, mat);
-            layer.transform.position = _arenaCenter + new Vector3(0f, yOffset, 0f);
+            var layer = ModelFactory.CreateGround(size, mat, 1f);
             layer.name = name;
+            if (_arenaBackdropRoot != null)
+            {
+                layer.transform.SetParent(_arenaBackdropRoot, false);
+                layer.transform.localPosition = new Vector3(0f, yOffset, 0f);
+            }
+            else
+            {
+                layer.transform.position = _arenaCenter + new Vector3(0f, yOffset, 0f);
+            }
         }
 
         private static Material CreateWaterBackdropMaterial(string layerName, Color tint, float smoothness)
@@ -1037,6 +1783,61 @@ namespace RoobsWorld.Stages.Cell
             return fallbackMat;
         }
 
+        private void SpawnAmbientAquariumOrganisms()
+        {
+            for (int i = 0; i < 24; i++)
+            {
+                float angle = i * 2.399963f;
+                float band = (i % 6) / 5f;
+                float radius = Mathf.Lerp(_arenaRadius * 0.18f, _arenaRadius * 0.94f, band);
+                Vector3 pos = _arenaCenter + new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    0.035f + (i % 4) * 0.012f,
+                    Mathf.Sin(angle) * radius);
+
+                var organism = GameObject.CreatePrimitive(i % 3 == 0 ? PrimitiveType.Capsule : PrimitiveType.Sphere);
+                organism.name = $"AmbientAquariumOrganism_{i}";
+                organism.transform.position = pos;
+                organism.transform.localScale = new Vector3(
+                    Mathf.Lerp(0.16f, 0.42f, (i % 7) / 6f),
+                    Mathf.Lerp(0.035f, 0.08f, (i % 5) / 4f),
+                    Mathf.Lerp(0.22f, 0.68f, (i % 9) / 8f));
+                organism.transform.rotation = Quaternion.Euler(0f, -angle * Mathf.Rad2Deg + 90f, 0f);
+
+                var collider = organism.GetComponent<Collider>();
+                if (collider != null)
+                    Destroy(collider);
+
+                var renderer = organism.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                    renderer.sharedMaterial = GetAmbientOrganismMaterial(i);
+            }
+        }
+
+        private static Material GetAmbientOrganismMaterial(int index)
+        {
+            if (s_ambientOrganismMaterial == null)
+            {
+                s_ambientOrganismMaterial = ProceduralTextureFactory.CreateTransparentMaterial(
+                    Texture2D.whiteTexture,
+                    new Color(0.72f, 0.98f, 0.9f, 0.18f));
+                s_ambientOrganismMaterial.name = "AmbientAquariumOrganism_Mat";
+                s_ambientOrganismMaterial.SetFloat("_Smoothness", 0.12f);
+            }
+
+            var material = new Material(s_ambientOrganismMaterial);
+            Color tint = Color.Lerp(
+                new Color(0.7f, 1f, 0.86f, 0.13f),
+                new Color(0.72f, 0.86f, 1f, 0.16f),
+                (index % 5) / 4f);
+            material.color = tint;
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", tint);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", tint);
+            return material;
+        }
+
         private void SpawnWaterVignette()
         {
             SpawnCornerCloud("Vignette_TopRight", new Vector3(_arenaRadius * 0.84f, -0.05f, _arenaRadius * 0.84f), _arenaRadius * 0.95f, new Color(0.05f, 0.1f, 0.16f, 0.42f));
@@ -1050,9 +1851,40 @@ namespace RoobsWorld.Stages.Cell
                 ProceduralTextureFactory.CreateCellArenaTexture(128),
                 tint);
             cloudMat.SetFloat("_Smoothness", 0.2f);
-            var cloud = ModelFactory.CreateGround(size, cloudMat);
+            var cloud = ModelFactory.CreateGround(size, cloudMat, 1f);
             cloud.name = name;
-            cloud.transform.position = _arenaCenter + localOffset;
+            if (_arenaBackdropRoot != null)
+            {
+                cloud.transform.SetParent(_arenaBackdropRoot, false);
+                cloud.transform.localPosition = localOffset;
+            }
+            else
+            {
+                cloud.transform.position = _arenaCenter + localOffset;
+            }
+        }
+
+        private void UpdateEndlessBackdropAnchor()
+        {
+            if (_arenaBackdropRoot == null || _player == null)
+                return;
+
+            Vector3 playerPos = _player.transform.position;
+            _arenaBackdropRoot.position = new Vector3(playerPos.x, _arenaCenter.y, playerPos.z);
+            _backgroundFish?.SetCenter(_arenaBackdropRoot.position);
+        }
+
+        private void CleanupArenaBackdrop()
+        {
+            _backgroundFish = null;
+            if (_arenaBackdropRoot == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(_arenaBackdropRoot.gameObject);
+            else
+                DestroyImmediate(_arenaBackdropRoot.gameObject);
+            _arenaBackdropRoot = null;
         }
 
         private void SpawnForegroundAlgae()
@@ -1078,6 +1910,10 @@ namespace RoobsWorld.Stages.Cell
             int foodMult = GameManager.HasInstance
                 ? GameManager.Instance.Modifiers.ApplyFoodCount(_foodManager.InitialFoodCount)
                 : _foodManager.InitialFoodCount;
+            foodMult = ScaleResourceCountForCurrentPlayers(
+                foodMult,
+                BalanceConstants.CellMultiplayerFoodPerExtraPlayer,
+                BalanceConstants.CellMultiplayerFoodMaxBonus);
             _foodManager.SpawnInArena(_arenaCenter, _arenaRadius, foodMult);
         }
 
@@ -1087,9 +1923,13 @@ namespace RoobsWorld.Stages.Cell
             int npcCount = GameManager.HasInstance
                 ? GameManager.Instance.Modifiers.ApplyNPCCount(_initialNPCCount)
                 : _initialNPCCount;
+            npcCount = ScaleResourceCountForCurrentPlayers(
+                npcCount,
+                BalanceConstants.CellMultiplayerDecorativeNpcPerExtraPlayer,
+                BalanceConstants.CellMultiplayerDecorativeNpcMaxBonus);
             for (int i = 0; i < npcCount; i++)
             {
-                float size = Random.Range(0.2f, 0.52f);
+                float size = Random.Range(InitialNpcVisualScaleMin, InitialNpcVisualScaleMax);
                 Color npcColor = GetClassicNpcColor(i);
                 var pos = GetSeparatedEntitySpawnPoint(() => GetRandomPointInArena(), EntitySpawnMinSpacing);
                 var npcGenome = BuildDecorativeNpcGenome(i, npcColor, size);
@@ -1115,7 +1955,10 @@ namespace RoobsWorld.Stages.Cell
 
         private static Genome BuildDecorativeNpcGenome(int index, Color color, float visualScale)
         {
-            float normalizedSize = Mathf.Clamp(visualScale / 0.5f, 0.35f, 1.1f);
+            float normalizedSize = Mathf.Clamp(
+                visualScale / 0.5f,
+                InitialNpcVisualScaleMin / 0.5f,
+                InitialNpcVisualScaleMax / 0.5f);
             return new Genome
             {
                 Speed = 1.4f + (index % 5) * 0.55f,
@@ -1201,6 +2044,10 @@ namespace RoobsWorld.Stages.Cell
             int count = GameManager.HasInstance
                 ? GameManager.Instance.Modifiers.ApplyNPCCount(_initialOrganismCount)
                 : _initialOrganismCount;
+            count = ScaleResourceCountForCurrentPlayers(
+                count,
+                BalanceConstants.CellMultiplayerOrganismPerExtraPlayer,
+                BalanceConstants.CellMultiplayerOrganismMaxBonus);
 
             for (int i = 0; i < count; i++)
             {
@@ -1262,7 +2109,7 @@ namespace RoobsWorld.Stages.Cell
                     i + (isBacteria ? 3 : isFilterFeeder ? 5 : isScavenger ? 7 : isParasite ? 11 : isPhotosynthetic ? 17 : isColonial ? 19 : 13));
                 genome.Spikes = Mathf.Clamp(genome.Spikes * 0.7f + 1.2f, 0f, 10f);
                 genome.Flagella = Mathf.Clamp(genome.Flagella * 0.9f + 0.9f, 0f, 10f);
-                genome.Size = Mathf.Clamp(genome.Size * 0.78f, 0.3f, 2.2f);
+                genome.Size = Mathf.Clamp(genome.Size * 0.78f, InitialOrganismGenomeSizeMin, 2.2f);
 
                 var pos = GetSeparatedEntitySpawnPoint(() => GetOrganismSpawnPoint(i % 10), EntitySpawnMinSpacing);
                 int   speciesId = SpeciationSystem.GetSpeciesIdForOffspring(0, baseGenome, genome);
@@ -1306,33 +2153,46 @@ namespace RoobsWorld.Stages.Cell
 
         private void SpawnPartPickups()
         {
-            var pickupPlan = CellPartPickupPlanner.BuildPlan(_initialPartPickupCount);
+            int pickupCount = ScaleResourceCountForCurrentPlayers(
+                _initialPartPickupCount,
+                BalanceConstants.CellMultiplayerPartPickupPerExtraPlayer,
+                BalanceConstants.CellMultiplayerPartPickupMaxBonus);
+            var pickupPlan = CellPartPickupPlanner.BuildPlan(pickupCount);
             var spawnedPositions = new List<Vector3>(pickupPlan.Count);
             for (int i = 0; i < pickupPlan.Count; i++)
             {
                 CellPartType partType = pickupPlan[i];
-                Color pickupColor = GetPickupColor(partType);
-                var pos = GetPartPickupSpawnPoint(spawnedPositions);
-                pos.y = 0.3f;
-                var pickup = ModelFactory.CreateCellPickup(pos, pickupColor);
-                pickup.name = $"CellPartPickup_{i}";
-
-                var pickupComponent = pickup.AddComponent<CellPartPickup>();
-                pickupComponent.SetPartType(partType);
-                pickupComponent.EnsureTriggerColliders();
+                var pos = GetPartPickupSpawnPoint(partType, spawnedPositions);
+                SpawnPartPickup(partType, pos, $"CellPartPickup_{i}");
                 spawnedPositions.Add(pos);
             }
         }
 
-        private Vector3 GetPartPickupSpawnPoint(List<Vector3> existingPositions)
+        private CellPartPickup SpawnPartPickup(CellPartType partType, Vector3 position, string pickupName)
         {
+            Vector3 spawnPos = ClampToArena(position);
+            spawnPos.y = 0.3f;
+            var pickup = ModelFactory.CreateCellPickup(spawnPos, GetPickupColor(partType));
+            pickup.name = pickupName;
+
+            var pickupComponent = pickup.AddComponent<CellPartPickup>();
+            pickupComponent.SetPartType(partType);
+            pickupComponent.EnsureTriggerColliders();
+            return pickupComponent;
+        }
+
+        private Vector3 GetPartPickupSpawnPoint(CellPartType partType, List<Vector3> existingPositions)
+        {
+            var band = CellPartPickupPlanner.GetStrategicSpawnBand(partType);
             float minSpacingSqr = PartPickupMinSpacing * PartPickupMinSpacing;
-            Vector3 fallback = ClampToArena(GetRandomPointInArenaRing(PartPickupSpawnMinRadiusFraction, PartPickupSpawnMaxRadiusFraction));
+            float minFrac = Mathf.Max(PartPickupSpawnMinRadiusFraction, band.MinRadiusFraction);
+            float maxFrac = Mathf.Max(minFrac + 0.01f, Mathf.Min(PartPickupSpawnMaxRadiusFraction, band.MaxRadiusFraction));
+            Vector3 fallback = ClampToArena(GetRandomPointInArenaRing(minFrac, maxFrac));
 
             for (int i = 0; i < PartPickupSpawnAttempts; i++)
             {
-                Vector3 candidate = GetRandomPointInArenaRing(PartPickupSpawnMinRadiusFraction, PartPickupSpawnMaxRadiusFraction);
-                if (GetBiomeAt(candidate) == Biome.BiomeType.ToxicZone)
+                Vector3 candidate = GetRandomPointInArenaRing(minFrac, maxFrac);
+                if (!band.AllowToxicZone && GetBiomeAt(candidate) == Biome.BiomeType.ToxicZone)
                     continue;
 
                 bool overlapsExisting = false;
@@ -1376,6 +2236,7 @@ namespace RoobsWorld.Stages.Cell
             int predCount = GameManager.HasInstance
                 ? GameManager.Instance.Modifiers.ApplyPredatorCount(_predatorCount)
                 : _predatorCount;
+            predCount = ScalePredatorCountForCurrentPlayers(predCount);
             for (int i = 0; i < predCount; i++)
             {
                 // Even-indexed predators patrol the food-rich AlgaeForest band; odd ones roam freely.
@@ -1483,18 +2344,27 @@ namespace RoobsWorld.Stages.Cell
         {
             for (int i = 0; i < _toxinCloudCount; i++)
             {
-                var pos = GetRandomPointInArena(0.7f);
-                var cloud = new GameObject($"ToxinCloud_{i}");
-                cloud.transform.position = pos;
-
-                cloud.AddComponent<SphereCollider>();
-                var toxin = cloud.AddComponent<ToxinCloud>();
                 float radius = Random.Range(2f, 5f);
-                toxin.Initialize(radius, 0.15f, 30f);
-
-                var visual = ModelFactory.CreateToxinCloud(Vector3.zero, radius);
-                visual.transform.SetParent(cloud.transform, false);
+                SpawnToxinCloud(GetRandomPointInArena(0.7f), radius, 0.15f, 30f, $"ToxinCloud_{i}");
             }
+        }
+
+        private static ToxinCloud SpawnToxinCloud(
+            Vector3 position,
+            float radius,
+            float damagePerSecond,
+            float lifetime,
+            string name)
+        {
+            var cloud = new GameObject(name);
+            cloud.transform.position = position;
+            var collider = cloud.AddComponent<SphereCollider>();
+            collider.isTrigger = true;
+            var toxin = cloud.AddComponent<ToxinCloud>();
+            toxin.Initialize(radius, damagePerSecond, lifetime);
+            var visual = ModelFactory.CreateToxinCloud(Vector3.zero, radius);
+            visual.transform.SetParent(cloud.transform, false);
+            return toxin;
         }
 
         private void SpawnCurrentZones()
@@ -1555,13 +2425,7 @@ namespace RoobsWorld.Stages.Cell
         public void SpawnToxinAtPosition(Vector3 position)
         {
             position = ClampToArena(position);
-            var cloud = new GameObject("ToxinCloud_manual");
-            cloud.transform.position = position;
-            cloud.AddComponent<SphereCollider>().isTrigger = true;
-            var toxin = cloud.AddComponent<ToxinCloud>();
-            toxin.Initialize(3f, 0.15f, 30f);
-            var visual = ModelFactory.CreateToxinCloud(Vector3.zero, 3f);
-            visual.transform.SetParent(cloud.transform, false);
+            SpawnToxinCloud(position, 3f, 0.15f, 30f, "ToxinCloud_manual");
         }
 
         /// <summary>Spawn an arena current at position (environmental manipulation).</summary>
@@ -1582,15 +2446,12 @@ namespace RoobsWorld.Stages.Cell
 
         private void OnEvolutionTriggered(CellEvolutionTriggeredEvent evt)
         {
-            UIManager.Instance.ShowScreen(CellEvolutionUI.ID);
+            // Cell stage no longer shows evolution overlays.
         }
 
         private void OnFinalEvolutionComplete(CellEvolutionCompleteEvent evt)
         {
-            if (!_isActive) return;
-            Debug.Log("[CellStage] Final evolution reached. Transitioning to Creature Stage.");
-            RoobsWorld.UI.TutorialOverlay.Instance?.ShowContextualTip("cell.stage.complete", 5f);
-            StageManager.Instance?.TransitionTo(GameStageType.Creature);
+            // Cell stage now has no final-evolution transition and supports unlimited growth.
         }
 
         private void OnCellOrganismDied(CellOrganismDiedEvent evt)
@@ -1691,6 +2552,10 @@ namespace RoobsWorld.Stages.Cell
                     return Color.white;
             }
         }
+    }
+
+    public sealed class CellGoalLargerPreyTarget : MonoBehaviour
+    {
     }
 }
 

@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using RoobsWorld.Core;
+using RoobsWorld.Creature;
 using RoobsWorld.Stages.Creature;
 using UnityEngine;
 
@@ -93,6 +95,89 @@ namespace RoobsWorld.Tests.EditMode
                 deltaTime: 1f);
 
             Assert.That(regen, Is.EqualTo(1f).Within(0.0001f));
+        }
+
+        [Test]
+        public void CanPrimeGuardCounter_RequiresActiveGuardBlockedPlayerHit()
+        {
+            Assert.IsTrue(CreaturePlayerController.CanPrimeGuardCounter(
+                guardRemaining: 0.2f,
+                feedbackType: CreatureCombatFeedbackType.Blocked,
+                isPlayerTarget: true));
+            Assert.IsFalse(CreaturePlayerController.CanPrimeGuardCounter(
+                guardRemaining: 0f,
+                feedbackType: CreatureCombatFeedbackType.Blocked,
+                isPlayerTarget: true));
+            Assert.IsFalse(CreaturePlayerController.CanPrimeGuardCounter(
+                guardRemaining: 0.2f,
+                feedbackType: CreatureCombatFeedbackType.Hit,
+                isPlayerTarget: true));
+            Assert.IsFalse(CreaturePlayerController.CanPrimeGuardCounter(
+                guardRemaining: 0.2f,
+                feedbackType: CreatureCombatFeedbackType.Blocked,
+                isPlayerTarget: false));
+        }
+
+        [Test]
+        public void ApplyCounterAttackMultiplier_SpendsOnlyActiveCounterWindow()
+        {
+            Assert.That(
+                CreaturePlayerController.ApplyCounterAttackMultiplier(10f, counterWindowRemaining: 0f, counterMultiplier: 1.45f),
+                Is.EqualTo(10f).Within(0.0001f));
+            Assert.That(
+                CreaturePlayerController.ApplyCounterAttackMultiplier(10f, counterWindowRemaining: 0.5f, counterMultiplier: 1.45f),
+                Is.EqualTo(14.5f).Within(0.0001f));
+        }
+
+        [Test]
+        public void StaminaSpendAndRecovery_ClampWithinBudget()
+        {
+            Assert.IsTrue(CreaturePlayerController.CanSpendStamina(20f, 18f));
+            Assert.IsFalse(CreaturePlayerController.CanSpendStamina(12f, 18f));
+            Assert.That(CreaturePlayerController.SpendStamina(20f, 18f), Is.EqualTo(2f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.SpendStamina(8f, 18f), Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.RecoverStamina(50f, 100f, 24f, 0.5f), Is.EqualTo(62f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.RecoverStamina(98f, 100f, 24f, 0.5f), Is.EqualTo(100f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.RestoreStamina(60f, 100f, 26f), Is.EqualTo(86f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.RestoreStamina(90f, 100f, 26f), Is.EqualTo(100f).Within(0.0001f));
+        }
+
+        [Test]
+        public void UpgradeStaminaModifiers_ChangeBudgetRecoveryAndCooldown()
+        {
+            var dna = CreatureDNA.CreateDefault();
+            dna.Upgrades.Add(new CreatureUpgradeRecord
+            {
+                MaxStaminaDelta = 20f,
+                StaminaRecoveryDelta = 8f,
+                AbilityCooldownDelta = -1.5f
+            });
+
+            Assert.That(CreaturePlayerController.ComputeMaxStamina(dna, 100f), Is.EqualTo(120f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.ComputeStaminaRecovery(dna, 24f), Is.EqualTo(32f).Within(0.0001f));
+            Assert.That(CreaturePlayerController.ComputeAbilityCooldown(dna, 6f), Is.EqualTo(4.5f).Within(0.0001f));
+        }
+
+        [Test]
+        public void ResolveInheritedAbility_UsesLegacyAbilityId()
+        {
+            var dna = CreatureDNA.CreateDefault();
+            dna.LegacyAbilityId = "toxin_burst";
+
+            Assert.AreEqual(
+                CreatureInheritedAbilityType.ToxinBurst,
+                CreaturePlayerController.ResolveInheritedAbility(dna));
+        }
+
+        [Test]
+        public void ResolveInheritedAbility_FallsBackToCreatureParts()
+        {
+            var dna = CreatureDNA.CreateDefault();
+            dna.Parts.Add(new PartPlacement { PartId = "tail_basic", AttachBone = 2, Offset = Vector3.back });
+
+            Assert.AreEqual(
+                CreatureInheritedAbilityType.Dash,
+                CreaturePlayerController.ResolveInheritedAbility(dna));
         }
     }
 }

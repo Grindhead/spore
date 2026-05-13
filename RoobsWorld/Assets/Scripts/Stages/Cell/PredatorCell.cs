@@ -317,8 +317,13 @@ namespace RoobsWorld.Stages.Cell
             }
 
             Vector3 separation = CellSeparation.GetDirection(transform);
-            _rb.linearVelocity = CellSeparation.Apply(direction, separation) * speed
-                + separation * (speed * CellSeparation.PushSpeedMultiplier);
+            float ratio = _burstTimer > 0f
+                ? BalanceConstants.CellPredatorBurstMaxSpeedToPlayerRatio
+                : BalanceConstants.CellPredatorMaxSpeedToPlayerRatio;
+            float cappedSpeed = Organism.ClampSpeedToPlayer(speed, ratio);
+            Vector3 velocity = CellSeparation.Apply(direction, separation) * cappedSpeed
+                + separation * (cappedSpeed * CellSeparation.PushSpeedMultiplier);
+            _rb.linearVelocity = Organism.ClampVelocityToPlayer(velocity, ratio);
         }
 
         private void PickWanderDirection()

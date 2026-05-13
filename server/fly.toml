@@ -7,7 +7,8 @@ primary_region = "lhr"
 [env]
   NODE_ENV = "production"
   PORT = "7788"
-  MAX_PLAYERS = "4"
+  MAX_PLAYERS = "1000"
+  OFFICIAL_LOBBIES = "PUBLIC:Official Europe"
 
 [http_service]
   internal_port = 7788
@@ -22,8 +23,8 @@ primary_region = "lhr"
   # backed by shared state; rooms are currently stored in memory.
   [http_service.concurrency]
     type = "connections"
-    soft_limit = 150
-    hard_limit = 220
+    soft_limit = 512
+    hard_limit = 768
 
   [[http_service.checks]]
     interval = "15s"

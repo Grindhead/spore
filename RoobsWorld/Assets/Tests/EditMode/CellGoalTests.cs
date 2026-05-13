@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using RoobsWorld.Core;
 using RoobsWorld.Stages.Cell;
 
 namespace RoobsWorld.Tests
@@ -146,20 +147,16 @@ namespace RoobsWorld.Tests
             // Eat 5 algae → Eat 3 dead cells → Eat 2 toxin → Escape 1 predator → Reproduce 1 time
             //   → Survive 10s Toxic → Eat 3 during Bloom → Eat 1 prey larger than you → null
             var eatPlants = CellGoal.CreateEatFoodGoal(FoodType.Plant, 5);
-            var eatMeat = CellGoal.GetNextGoalAfterCompletion(eatPlants);
+            var escape = CellGoal.GetNextGoalAfterCompletion(eatPlants);
+            Assert.True(escape.HasValue);
+            Assert.AreEqual(CellGoal.GoalType.EscapePredator, escape.Value.Type);
+
+            var eatMeat = CellGoal.GetNextGoalAfterCompletion(escape.Value);
             Assert.True(eatMeat.HasValue);
             Assert.AreEqual(CellGoal.GoalType.EatFood, eatMeat.Value.Type);
             Assert.AreEqual(FoodType.Meat, eatMeat.Value.TargetFoodType);
 
-            var eatToxin = CellGoal.GetNextGoalAfterCompletion(eatMeat.Value);
-            Assert.True(eatToxin.HasValue);
-            Assert.AreEqual(FoodType.Toxin, eatToxin.Value.TargetFoodType);
-
-            var escape = CellGoal.GetNextGoalAfterCompletion(eatToxin.Value);
-            Assert.True(escape.HasValue);
-            Assert.AreEqual(CellGoal.GoalType.EscapePredator, escape.Value.Type);
-
-            var reproduce = CellGoal.GetNextGoalAfterCompletion(escape.Value);
+            var reproduce = CellGoal.GetNextGoalAfterCompletion(eatMeat.Value);
             Assert.True(reproduce.HasValue);
             Assert.AreEqual(CellGoal.GoalType.ReproduceOnce, reproduce.Value.Type);
 
@@ -183,8 +180,193 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(CellGoal.GoalType.CollectParts, collect.Value.Type);
             Assert.Greater(collect.Value.TargetCount, 0);
 
-            var none = CellGoal.GetNextGoalAfterCompletion(collect.Value);
-            Assert.False(none.HasValue);
+            var eatToxin = CellGoal.GetNextGoalAfterCompletion(collect.Value);
+            Assert.True(eatToxin.HasValue);
+            Assert.AreEqual(CellGoal.GoalType.EatFood, eatToxin.Value.Type);
+            Assert.AreEqual(FoodType.Toxin, eatToxin.Value.TargetFoodType);
+
+            var repeatable = CellGoal.GetNextGoalAfterCompletion(eatToxin.Value, 8);
+            Assert.True(repeatable.HasValue);
+            Assert.True(repeatable.Value.IsRepeatable);
+            Assert.AreNotEqual(eatToxin.Value.ActionCategory, repeatable.Value.ActionCategory);
+        }
+
+        [Test]
+        public void GetNextGoalAfterCompletion_DoesNotRepeatActionCategories()
+        {
+            CellGoal? current = CellGoal.CreateEatFoodGoal(FoodType.Plant, 3);
+            CellGoal.GoalActionCategory? previousCategory = null;
+
+            for (int i = 0; i < 12 && current.HasValue; i++)
+            {
+                var category = current.Value.ActionCategory;
+                if (previousCategory.HasValue)
+                    Assert.AreNotEqual(previousCategory.Value, category);
+
+                previousCategory = category;
+                current = CellGoal.GetNextGoalAfterCompletion(current.Value);
+            }
+        }
+
+        [Test]
+        public void RepeatableGoalDeck_ContainsRiskRoutesWithHigherRewards()
+        {
+            var deck = CellGoal.GetRepeatableGoalDeck();
+            bool hasBloomRisk = false;
+            bool hasToxinRisk = false;
+            bool hasHuntRisk = false;
+
+            for (int i = 0; i < deck.Length; i++)
+            {
+                var goal = deck[i].Goal;
+                Assert.True(goal.IsRepeatable);
+                Assert.Greater(deck[i].Weight, 0);
+
+                if (goal.Type == CellGoal.GoalType.EatDuringNutrientBloom && goal.RewardMultiplier > 1)
+                    hasBloomRisk = true;
+                if (goal.Type == CellGoal.GoalType.EatFood && goal.TargetFoodType == FoodType.Toxin && goal.RewardMultiplier > 1)
+                    hasToxinRisk = true;
+                if (goal.Type == CellGoal.GoalType.EatLargerPrey && goal.RewardMultiplier > 1)
+                    hasHuntRisk = true;
+            }
+
+            Assert.True(hasBloomRisk);
+            Assert.True(hasToxinRisk);
+            Assert.True(hasHuntRisk);
+        }
+
+        [Test]
+        public void SelectRepeatableGoal_AvoidsPreviousActionCategory()
+        {
+            for (int i = 0; i < 24; i++)
+            {
+                var next = CellGoal.SelectRepeatableGoal(CellGoal.GoalActionCategory.Feeding, i);
+                Assert.AreNotEqual(CellGoal.GoalActionCategory.Feeding, next.ActionCategory);
+                Assert.True(next.IsRepeatable);
+            }
+        }
+
+        [Test]
+        public void ComputeRepeatableRewardRampBonus_StartsLateAndCaps()
+        {
+            Assert.AreEqual(0, CellGoal.ComputeRepeatableRewardRampBonus(8, 9, 4, 2));
+            Assert.AreEqual(0, CellGoal.ComputeRepeatableRewardRampBonus(12, 9, 4, 2));
+            Assert.AreEqual(1, CellGoal.ComputeRepeatableRewardRampBonus(13, 9, 4, 2));
+            Assert.AreEqual(2, CellGoal.ComputeRepeatableRewardRampBonus(30, 9, 4, 2));
+            Assert.AreEqual(0, CellGoal.ComputeRepeatableRewardRampBonus(30, 9, 4, 0));
+        }
+
+        [Test]
+        public void ApplyRepeatableRewardRamp_RaisesRiskRoutesAndLeavesSafeRoutesStable()
+        {
+            var toxin = CellGoal.CreateEatFoodGoal(FoodType.Toxin, 3, rewardMultiplier: 3, isRepeatable: true);
+            var plant = CellGoal.CreateEatFoodGoal(FoodType.Plant, 4, isRepeatable: true);
+            var escape = CellGoal.CreateEscapePredatorGoal(1, isRepeatable: true);
+
+            Assert.True(CellGoal.IsRepeatableRiskRoute(toxin));
+            Assert.False(CellGoal.IsRepeatableRiskRoute(plant));
+            Assert.False(CellGoal.IsRepeatableRiskRoute(escape));
+            Assert.AreEqual(3, CellGoal.ApplyRepeatableRewardRamp(toxin, 9).RewardMultiplier);
+            Assert.AreEqual(4, CellGoal.ApplyRepeatableRewardRamp(toxin, 13).RewardMultiplier);
+            Assert.AreEqual(5, CellGoal.ApplyRepeatableRewardRamp(toxin, 80).RewardMultiplier);
+            Assert.AreEqual(1, CellGoal.ApplyRepeatableRewardRamp(plant, 80).RewardMultiplier);
+            Assert.AreEqual(1, CellGoal.ApplyRepeatableRewardRamp(escape, 80).RewardMultiplier);
+        }
+
+        [Test]
+        public void SelectRepeatableGoal_AppliesLateRunRampOnlyToRiskRoutes()
+        {
+            bool sawSafeRecovery = false;
+            bool sawRampedRisk = false;
+
+            for (int i = 30; i < 130; i++)
+            {
+                var next = CellGoal.SelectRepeatableGoal(CellGoal.GoalActionCategory.Feeding, i);
+                if (CellGoal.IsRepeatableRiskRoute(next))
+                {
+                    Assert.GreaterOrEqual(next.RewardMultiplier, BalanceConstants.CellRepeatableRiskGoalRewardMultiplier + BalanceConstants.CellRepeatableRewardRampMaxBonus);
+                    sawRampedRisk = true;
+                }
+                else
+                {
+                    Assert.AreEqual(1, next.RewardMultiplier);
+                    sawSafeRecovery = true;
+                }
+            }
+
+            Assert.True(sawSafeRecovery);
+            Assert.True(sawRampedRisk);
+        }
+
+        [Test]
+        public void GoalRewardSuffix_ShowsRiskRewardMultiplier()
+        {
+            var goal = CellGoal.CreateEatLargerPreyGoal(2, rewardMultiplier: 3, isRepeatable: true);
+
+            string suffix = CellStageHUD.BuildGoalRewardSuffix(
+                goal,
+                BalanceConstants.CellDNAPointsPerGoalComplete);
+
+            StringAssert.Contains("Risk reward", suffix);
+            StringAssert.Contains("+9 DNA", suffix);
+        }
+
+        [Test]
+        public void GoalRewardSuffix_ReflectsLateRunRiskRamp()
+        {
+            var goal = CellGoal.ApplyRepeatableRewardRamp(
+                CellGoal.CreateEatFoodGoal(FoodType.Toxin, 3, rewardMultiplier: 3, isRepeatable: true),
+                80);
+
+            string suffix = CellStageHUD.BuildGoalRewardSuffix(
+                goal,
+                BalanceConstants.CellDNAPointsPerGoalComplete);
+
+            StringAssert.Contains("Risk reward", suffix);
+            StringAssert.Contains("+15 DNA", suffix);
+        }
+
+        [Test]
+        public void GoalCompletedText_IncludesVarietyBonusWhenPresent()
+        {
+            var evt = new CellGoalCompletedEvent
+            {
+                DnaReward = 7,
+                RewardMultiplier = 1,
+                VarietyChain = 3,
+                VarietyBonusDna = 2
+            };
+
+            string text = CellStageHUD.BuildGoalCompletedText(evt);
+
+            StringAssert.Contains("Goal complete", text);
+            StringAssert.Contains("+7 DNA", text);
+            StringAssert.Contains("Variety x3 +2 DNA", text);
+        }
+
+        [Test]
+        public void GoalCompletedText_UsesRiskMessageWithoutVarietyNoise()
+        {
+            var evt = new CellGoalCompletedEvent
+            {
+                DnaReward = 9,
+                RewardMultiplier = BalanceConstants.CellRepeatableRiskGoalRewardMultiplier
+            };
+
+            string text = CellStageHUD.BuildGoalCompletedText(evt);
+
+            StringAssert.Contains("Risk route complete", text);
+            StringAssert.Contains("+9 DNA", text);
+            Assert.False(text.Contains("Variety"));
+        }
+
+        [Test]
+        public void GoalGuidanceSuffix_NamesSeededOpportunity()
+        {
+            Assert.AreEqual("  |  Nearby food", CellStageHUD.BuildGoalGuidanceSuffix(CellGoal.CreateEatFoodGoal(FoodType.Plant, 3)));
+            Assert.AreEqual("  |  Toxic trail", CellStageHUD.BuildGoalGuidanceSuffix(CellGoal.CreateEatFoodGoal(FoodType.Toxin, 2)));
+            Assert.AreEqual("  |  Orange prey", CellStageHUD.BuildGoalGuidanceSuffix(CellGoal.CreateEatLargerPreyGoal(1)));
+            Assert.AreEqual("  |  Nearby part", CellStageHUD.BuildGoalGuidanceSuffix(CellGoal.CreateCollectPartsGoal(1)));
         }
 
         [Test]

@@ -30,6 +30,7 @@ namespace RoobsWorld.Core
             EnsureManagers();
             RegisterCreatureParts();
             CreatePauseMenu();
+            CreateStageDebugOverlay();
             CreateAdaptiveMusic();
             CreateTutorialOverlay();
             CreateAchievementToast();
@@ -175,6 +176,20 @@ namespace RoobsWorld.Core
             var menuObj = new GameObject("MainMenu");
             menuObj.AddComponent<MainMenuUI>();
             Debug.Log("[Bootstrap] Main menu created");
+        }
+
+        private void CreateStageDebugOverlay()
+        {
+            if (!Application.isEditor && !Debug.isDebugBuild)
+                return;
+
+            if (FindAnyObjectByType<StageDebugOverlay>() != null)
+                return;
+
+            var overlayObject = new GameObject("StageDebugOverlay");
+            DontDestroyOnLoad(overlayObject);
+            overlayObject.AddComponent<StageDebugOverlay>();
+            Debug.Log("[Bootstrap] Stage debug overlay created");
         }
 
         private void CreateAdaptiveMusic()

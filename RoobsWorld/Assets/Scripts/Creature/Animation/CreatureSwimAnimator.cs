@@ -44,7 +44,21 @@ namespace RoobsWorld.Creature.Animation
                     _spineSegments.Add(new AnimatedTransform(_bodyRoot.GetChild(i), i));
             }
 
-            if (_partsRoot != null && dna?.Parts != null)
+            var mounts = GetComponentsInChildren<CreaturePartMount>(true);
+            if (mounts != null && mounts.Length > 0)
+            {
+                System.Array.Sort(mounts, (a, b) => a.PartIndex.CompareTo(b.PartIndex));
+                for (int i = 0; i < mounts.Length; i++)
+                {
+                    if (mounts[i] != null)
+                        _parts.Add(new AnimatedPart(
+                            mounts[i].transform,
+                            mounts[i].PartId,
+                            mounts[i].Offset,
+                            mounts[i].PartIndex));
+                }
+            }
+            else if (_partsRoot != null && dna?.Parts != null)
             {
                 int count = Mathf.Min(_partsRoot.childCount, dna.Parts.Count);
                 for (int i = 0; i < count; i++)
@@ -146,12 +160,17 @@ namespace RoobsWorld.Creature.Animation
             public readonly SwimPartKind Kind;
 
             public AnimatedPart(Transform transform, PartPlacement placement, int index)
+                : this(transform, placement?.PartId, placement != null ? placement.Offset : Vector3.zero, index)
+            {
+            }
+
+            public AnimatedPart(Transform transform, string partId, Vector3 offset, int index)
             {
                 Transform = transform;
                 LocalRotation = transform.localRotation;
                 Index = index;
-                IsLeftSide = placement.Offset.x < 0f;
-                Kind = GetKind(placement.PartId);
+                IsLeftSide = offset.x < 0f;
+                Kind = GetKind(partId);
             }
 
             private static SwimPartKind GetKind(string partId)

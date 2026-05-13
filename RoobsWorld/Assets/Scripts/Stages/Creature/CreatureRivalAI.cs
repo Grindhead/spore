@@ -1,10 +1,19 @@
 using System.Collections.Generic;
+using RoobsWorld.Core;
 using RoobsWorld.Creature;
 using RoobsWorld.Creature.AI;
 using UnityEngine;
 
 namespace RoobsWorld.Stages.Creature
 {
+    public enum CreatureRivalArchetype
+    {
+        Charger,
+        Stalker,
+        Tank,
+        Skirmisher
+    }
+
     /// <summary>
     /// Simple rival AI that wanders around its anchor point and chases/attacks the player in range.
     /// </summary>
@@ -23,6 +32,10 @@ namespace RoobsWorld.Stages.Creature
         [SerializeField] private float _turnSpeedDegrees = 360f;
         [SerializeField] private float _speedMultiplier = 0.9f;
         [SerializeField] private float _attackMultiplier = 0.8f;
+        [SerializeField] private float _attackTelegraphDuration = 0.34f;
+        [SerializeField] private float _attackRecoveryDuration = 0.42f;
+        [SerializeField] private float _movementAcceleration = 10f;
+        [SerializeField] private float _movementDeceleration = 14f;
 
         private Rigidbody _rb;
         private CreatureInstance _self;
@@ -31,13 +44,22 @@ namespace RoobsWorld.Stages.Creature
         private Vector3 _anchorPosition;
         private Vector3 _wanderTarget;
         private readonly Queue<Vector2Int> _recentLocations = new Queue<Vector2Int>();
+        private CreatureRivalArchetype _archetype = CreatureRivalArchetype.Charger;
+        private bool _isAlpha;
         private float _wanderRetargetTimer;
         private float _attackCooldownTimer;
+        private float _attackTelegraphTimer;
+        private float _attackRecoveryTimer;
+        private Vector3 _planarVelocity;
+
+        public CreatureRivalArchetype Archetype => _archetype;
+        public bool IsAlpha => _isAlpha;
 
         private void Awake()
         {
             _rb = GetComponent<Rigidbody>();
             _self = GetComponent<CreatureInstance>();
+            ConfigureLocomotionBody(_rb);
             _anchorPosition = transform.position;
             _wanderTarget = transform.position;
             PickWanderTarget();
@@ -49,13 +71,72 @@ namespace RoobsWorld.Stages.Creature
             _playerCreature = _player != null ? _player.GetComponent<CreatureInstance>() : null;
         }
 
+        public void ConfigureArchetype(CreatureRivalArchetype archetype)
+        {
+            _archetype = archetype;
+
+            switch (archetype)
+            {
+                case CreatureRivalArchetype.Stalker:
+                    _aggroRange = 18f;
+                    _speedMultiplier = 0.78f;
+                    _attackMultiplier = 0.95f;
+                    _wanderRadius = 14f;
+                    break;
+                case CreatureRivalArchetype.Tank:
+                    _aggroRange = 12f;
+                    _speedMultiplier = 0.68f;
+                    _attackMultiplier = 1.25f;
+                    _attackCooldown = 1.15f;
+                    _attackRange = 2.15f;
+                    break;
+                case CreatureRivalArchetype.Skirmisher:
+                    _aggroRange = 15f;
+                    _speedMultiplier = 1.12f;
+                    _attackMultiplier = 0.65f;
+                    _attackCooldown = 0.62f;
+                    _wanderRadius = 16f;
+                    break;
+                default:
+                    _aggroRange = 14f;
+                    _speedMultiplier = 1.02f;
+                    _attackMultiplier = 1f;
+                    _attackCooldown = 0.82f;
+                    break;
+            }
+        }
+
+        public void ConfigureAlphaRival()
+        {
+            _isAlpha = true;
+            _aggroRange *= 1.18f;
+            _attackRange *= 1.08f;
+            _attackMultiplier *= 1.22f;
+            _attackCooldown *= 0.92f;
+            _wanderRadius *= 1.12f;
+            if (_self != null)
+                _self.GrantInvulnerability(0.2f);
+        }
+
         private void Update()
         {
             if (_self == null || !_self.IsAlive || _rb == null)
                 return;
 
             _attackCooldownTimer = Mathf.Max(0f, _attackCooldownTimer - Time.deltaTime);
+            _attackRecoveryTimer = Mathf.Max(0f, _attackRecoveryTimer - Time.deltaTime);
             _wanderRetargetTimer -= Time.deltaTime;
+
+            if (_attackTelegraphTimer > 0f)
+            {
+                _attackTelegraphTimer = Mathf.Max(0f, _attackTelegraphTimer - Time.deltaTime);
+                _planarVelocity = Vector3.MoveTowards(_planarVelocity, Vector3.zero, Mathf.Max(1f, _movementDeceleration) * Time.deltaTime);
+                _rb.linearVelocity = new Vector3(_planarVelocity.x, _rb.linearVelocity.y, _planarVelocity.z);
+                if (_attackTelegraphTimer <= 0f)
+                    ResolveTelegraphedAttack();
+                return;
+            }
+
             CreatureMovementMemory.RecordRecentLocation(
                 _recentLocations,
                 transform.position,
@@ -74,10 +155,20 @@ namespace RoobsWorld.Stages.Creature
                 if (_wanderRetargetTimer <= 0f || Vector3.Distance(transform.position, _wanderTarget) < 1.5f)
                     PickWanderTarget();
             }
+            if (desired.sqrMagnitude < 0.0001f)
+            {
+                PickWanderTarget();
+                desired = SafeNormalize(_wanderTarget - transform.position);
+            }
 
-            float speed = Mathf.Max(1f, _self.Stats.Speed) * Mathf.Max(0.1f, _speedMultiplier) * GetIntentSpeedMultiplier(intent);
-            Vector3 planarVelocity = desired * speed;
-            _rb.linearVelocity = new Vector3(planarVelocity.x, _rb.linearVelocity.y, planarVelocity.z);
+            float recoveryMultiplier = _attackRecoveryTimer > 0f ? 0.35f : 1f;
+            float speed = Mathf.Max(1f, _self.Stats.Speed) * Mathf.Max(0.1f, _speedMultiplier) * GetIntentSpeedMultiplier(intent) * recoveryMultiplier;
+            Vector3 targetPlanarVelocity = desired * speed;
+            float accel = targetPlanarVelocity.sqrMagnitude > _planarVelocity.sqrMagnitude
+                ? Mathf.Max(1f, _movementAcceleration)
+                : Mathf.Max(1f, _movementDeceleration);
+            _planarVelocity = Vector3.MoveTowards(_planarVelocity, targetPlanarVelocity, accel * Time.deltaTime);
+            _rb.linearVelocity = new Vector3(_planarVelocity.x, _rb.linearVelocity.y, _planarVelocity.z);
 
             if (desired.sqrMagnitude > 0.0001f)
             {
@@ -158,7 +249,7 @@ namespace RoobsWorld.Stages.Creature
                 return;
             if (_playerCreature.IsInvulnerable)
                 return;
-            if (_attackCooldownTimer > 0f)
+            if (_attackCooldownTimer > 0f || _attackRecoveryTimer > 0f)
                 return;
 
             float distance = HorizontalDistance(transform.position, _player.position);
@@ -168,9 +259,66 @@ namespace RoobsWorld.Stages.Creature
             if (distance > effectiveReach)
                 return;
 
+            StartAttackTelegraph();
+        }
+
+        private void StartAttackTelegraph()
+        {
+            float difficultyTelegraphMultiplier = GameManager.HasInstance
+                ? GameManager.Instance.Modifiers.EnemyTelegraphMultiplier
+                : 1f;
+            _attackTelegraphTimer = Mathf.Max(0.05f, _attackTelegraphDuration * Mathf.Max(0.1f, difficultyTelegraphMultiplier));
+            EventBus.Publish(new CreatureCombatFeedbackEvent
+            {
+                Type = CreatureCombatFeedbackType.Telegraph,
+                SourceCreatureId = _self?.DNA?.CreatureId,
+                TargetCreatureId = _playerCreature?.DNA?.CreatureId,
+                Position = transform.position,
+                IsPlayerTarget = true
+            });
+        }
+
+        private void ResolveTelegraphedAttack()
+        {
+            if (_playerCreature == null || !_playerCreature.IsAlive)
+                return;
+            if (_playerCreature.IsInvulnerable)
+            {
+                BeginRecovery();
+                return;
+            }
+
+            float distance = HorizontalDistance(transform.position, _player.position);
+            float selfRadius = CreatureCombatGeometry.EstimatePlanarRadius(transform);
+            float playerRadius = CreatureCombatGeometry.EstimatePlanarRadius(_player);
+            float effectiveReach = CreatureCombatGeometry.ComputeContactReach(_attackRange, selfRadius, playerRadius);
+            if (!CanResolveTelegraphedAttack(distance, effectiveReach))
+            {
+                EventBus.Publish(new CreatureCombatFeedbackEvent
+                {
+                    Type = CreatureCombatFeedbackType.Miss,
+                    SourceCreatureId = _self?.DNA?.CreatureId,
+                    TargetCreatureId = _playerCreature?.DNA?.CreatureId,
+                    Position = transform.position,
+                    IsPlayerTarget = true
+                });
+                BeginRecovery();
+                return;
+            }
+
             float damage = Mathf.Max(1f, _self.Stats.Attack * Mathf.Max(0.1f, _attackMultiplier));
             _playerCreature.TakeDamage(damage);
             _attackCooldownTimer = _attackCooldown;
+            BeginRecovery();
+        }
+
+        private void BeginRecovery()
+        {
+            float difficultyRecoveryMultiplier = GameManager.HasInstance
+                ? GameManager.Instance.Modifiers.RecoveryWindowMultiplier
+                : 1f;
+            _attackRecoveryTimer = Mathf.Max(0f, _attackRecoveryDuration * Mathf.Max(0.1f, difficultyRecoveryMultiplier));
+            _attackCooldownTimer = Mathf.Max(_attackCooldownTimer, _attackCooldown);
         }
 
         private void PickWanderTarget()
@@ -234,6 +382,22 @@ namespace RoobsWorld.Stages.Creature
         private static Vector3 SafeNormalize(Vector3 vector)
         {
             return vector.sqrMagnitude < 0.0001f ? Vector3.zero : vector.normalized;
+        }
+
+        public static bool CanResolveTelegraphedAttack(float distance, float effectiveReach)
+        {
+            return distance <= Mathf.Max(0f, effectiveReach);
+        }
+
+        private static void ConfigureLocomotionBody(Rigidbody rb)
+        {
+            if (rb == null)
+                return;
+
+            rb.useGravity = false;
+            rb.isKinematic = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
         }
 
         private static float HorizontalDistance(Vector3 a, Vector3 b)

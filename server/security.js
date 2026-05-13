@@ -20,7 +20,7 @@ class RateLimiter {
     constructor({ windowMs = 60_000, max = 30 } = {}) {
         this.windowMs = windowMs;
         this.max = max;
-        /** @type {Map<string, number[]>} */
+        /** @type {Map<string, { times: number[], start: number }>} */
         this._buckets = new Map();
     }
 
@@ -31,16 +31,26 @@ class RateLimiter {
      */
     check(key) {
         const now = Date.now();
-        let times = this._buckets.get(key);
-        if (!times) { times = []; this._buckets.set(key, times); }
+        let bucket = this._buckets.get(key);
+        if (!bucket) {
+            bucket = { times: [], start: 0 };
+            this._buckets.set(key, bucket);
+        }
 
         // Drop timestamps outside the window
-        let lo = 0;
-        while (lo < times.length && now - times[lo] >= this.windowMs) lo++;
-        if (lo > 0) times.splice(0, lo);
+        while (bucket.start < bucket.times.length && now - bucket.times[bucket.start] >= this.windowMs) {
+            bucket.start++;
+        }
 
-        if (times.length >= this.max) return false;
-        times.push(now);
+        const count = bucket.times.length - bucket.start;
+        if (count >= this.max) return false;
+
+        if (bucket.start > 32 && bucket.start * 2 > bucket.times.length) {
+            bucket.times = bucket.times.slice(bucket.start);
+            bucket.start = 0;
+        }
+
+        bucket.times.push(now);
         return true;
     }
 
@@ -50,8 +60,8 @@ class RateLimiter {
      */
     cleanup() {
         const cutoff = Date.now() - this.windowMs;
-        for (const [key, times] of this._buckets) {
-            if (times.length === 0 || times[times.length - 1] < cutoff)
+        for (const [key, bucket] of this._buckets) {
+            if (bucket.times.length === bucket.start || bucket.times[bucket.times.length - 1] < cutoff)
                 this._buckets.delete(key);
         }
     }
@@ -86,6 +96,12 @@ function validateClanName(name) {
     return trimmed.length >= 3 && trimmed.length <= 24;
 }
 
+function validateServerName(name) {
+    if (typeof name !== 'string') return false;
+    const trimmed = name.trim();
+    return trimmed.length >= 3 && trimmed.length <= 32;
+}
+
 /**
  * Returns true for a 2-5 char uppercase alphanumeric clan tag.
  */
@@ -109,10 +125,10 @@ function validateBase64(data, maxBytes = 16_384) {
 }
 
 /**
- * Returns true for a valid player ID (0–3 integer).
+ * Returns true for a valid relay-assigned player ID.
  */
 function validatePlayerId(id) {
-    return Number.isInteger(id) && id >= 0 && id <= 3;
+    return Number.isInteger(id) && id >= 0;
 }
 
 /**
@@ -173,6 +189,7 @@ module.exports = {
     RateLimiter,
     validateCode,
     validateClanName,
+    validateServerName,
     validateClanTag,
     validateBase64,
     validatePlayerId,

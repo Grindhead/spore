@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using RoobsWorld.Core;
+using RoobsWorld.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -70,7 +71,8 @@ namespace RoobsWorld.Stages.Cell
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 9;
-            gameObject.AddComponent<CanvasScaler>();
+            var scaler = gameObject.AddComponent<CanvasScaler>();
+            UIStyleGuide.ApplyCanvasScalerDefaults(scaler);
             gameObject.AddComponent<GraphicRaycaster>();
 
             var panel = CreatePanel(_canvas.transform);
@@ -85,7 +87,7 @@ namespace RoobsWorld.Stages.Cell
             _statsText = contentGo.AddComponent<Text>();
             _statsText.font = RoobsWorld.UI.UIStyleGuide.GetDefaultFont();
             _statsText.fontSize = Mathf.RoundToInt(12 * scale);
-            _statsText.color = new Color(0.85f, 0.9f, 1f);
+            _statsText.color = UIStyleGuide.Colors.BodyText;
             _statsText.alignment = TextAnchor.UpperLeft;
             _statsText.text = "Total organisms: 0\nSpecies: 0 (0 active, 0 extinct)";
 
@@ -103,7 +105,8 @@ namespace RoobsWorld.Stages.Cell
             rect.offsetMax = Vector2.zero;
 
             var image = go.AddComponent<Image>();
-            image.color = new Color(0.08f, 0.08f, 0.12f, 0.9f);
+            image.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBackgroundStrong, 0.9f);
+            UIStyleGuide.ApplyOutline(go, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.HudPanelBorder, 0.32f), new Vector2(1f, -1f));
             return go;
         }
 

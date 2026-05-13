@@ -115,6 +115,15 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void GetThreatCueLabel_DifferentiatesHazards()
+        {
+            Assert.AreEqual("Predator", ThreatIndicator.GetThreatCueLabel(CellThreatCueType.Predator));
+            Assert.AreEqual("Virus", ThreatIndicator.GetThreatCueLabel(CellThreatCueType.Virus));
+            Assert.AreEqual("Toxin", ThreatIndicator.GetThreatCueLabel(CellThreatCueType.ToxicHazard));
+            Assert.AreEqual("Leviathan", ThreatIndicator.GetThreatCueLabel(CellThreatCueType.Leviathan));
+        }
+
+        [Test]
         public void ComputeTenseState_EntersTense_WhenIntensityCrossesEnterThreshold()
         {
             bool tense = ThreatAudioFeedback.ComputeTenseState(

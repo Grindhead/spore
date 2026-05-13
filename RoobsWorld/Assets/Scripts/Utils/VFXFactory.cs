@@ -173,6 +173,17 @@ namespace RoobsWorld.Utils
     /// </summary>
     public static class VFXFactory
     {
+        private static readonly Dictionary<VFXParticleStyle, string> ParticleTexturePaths =
+            new Dictionary<VFXParticleStyle, string>
+            {
+                { VFXParticleStyle.SoftBlob, "VFX/Particles/particle_soft_blob" },
+                { VFXParticleStyle.Spark, "VFX/Particles/particle_spark" },
+                { VFXParticleStyle.Spore, "VFX/Particles/particle_spore" },
+                { VFXParticleStyle.Droplet, "VFX/Particles/particle_droplet" },
+                { VFXParticleStyle.Slash, "VFX/Particles/particle_slash" },
+                { VFXParticleStyle.Heart, "VFX/Particles/particle_heart" },
+            };
+
         private static readonly Dictionary<VFXParticleStyle, Texture2D> ParticleTextures =
             new Dictionary<VFXParticleStyle, Texture2D>();
 
@@ -252,7 +263,11 @@ namespace RoobsWorld.Utils
             trails.colorOverTrail = gradient;
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
-            var vfxMat = new Material(Shader.Find("Particles/Standard Unlit"));
+            var particleShader = Shader.Find("Particles/Standard Unlit")
+                ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended")
+                ?? Shader.Find("Sprites/Default");
+            var vfxMat = new Material(particleShader);
+            ConfigureParticleMaterial(vfxMat);
             vfxMat.color = config.StartColor;
             vfxMat.mainTexture = GetParticleTexture(config.ParticleStyle);
             vfxMat.SetColor("_EmissionColor", config.StartColor * 1.4f);
@@ -284,9 +299,28 @@ namespace RoobsWorld.Utils
             if (ParticleTextures.TryGetValue(style, out var texture) && texture != null)
                 return texture;
 
-            texture = CreateParticleTexture(style, 64);
+            if (ParticleTexturePaths.TryGetValue(style, out string resourcePath))
+                texture = Resources.Load<Texture2D>(resourcePath);
+
+            if (texture == null)
+                texture = CreateParticleTexture(style, 64);
+
             ParticleTextures[style] = texture;
             return texture;
+        }
+
+        private static void ConfigureParticleMaterial(Material material)
+        {
+            if (material == null) return;
+
+            material.SetFloat("_Mode", 2f);
+            material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_ZWrite", 0);
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.EnableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         }
 
         private static Texture2D CreateParticleTexture(VFXParticleStyle style, int size)

@@ -155,7 +155,17 @@ namespace RoobsWorld.UI
             _toastRect.sizeDelta = new Vector2(420, 80);
 
             var bg = toast.AddComponent<Image>();
-            bg.color = new Color(UIStyleGuide.Colors.PanelBackgroundStrong.r, UIStyleGuide.Colors.PanelBackgroundStrong.g, UIStyleGuide.Colors.PanelBackgroundStrong.b, 0.94f);
+            bg.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.PanelBackgroundStrong, 0.94f);
+            UIStyleGuide.ApplyOutline(toast, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.42f), new Vector2(1.2f, -1.2f));
+
+            var accentObj = new GameObject("Accent");
+            accentObj.transform.SetParent(toast.transform, false);
+            var accentRect = accentObj.AddComponent<RectTransform>();
+            accentRect.anchorMin = new Vector2(0f, 0f);
+            accentRect.anchorMax = new Vector2(0.012f, 1f);
+            accentRect.offsetMin = Vector2.zero;
+            accentRect.offsetMax = Vector2.zero;
+            accentObj.AddComponent<Image>().color = UIStyleGuide.Colors.FossilGoldBright;
 
             var iconObj = new GameObject("Icon");
             iconObj.transform.SetParent(toast.transform, false);
@@ -182,6 +192,7 @@ namespace RoobsWorld.UI
             _headerText.fontStyle = FontStyle.Bold;
             _headerText.alignment = TextAnchor.LowerLeft;
             _headerText.text = Localization.Get("achievement.unlocked");
+            UIStyleGuide.ApplyTextShadow(headerObj, 0.35f);
 
             var titleObj = new GameObject("Title");
             titleObj.transform.SetParent(toast.transform, false);
@@ -193,8 +204,9 @@ namespace RoobsWorld.UI
             _titleText = titleObj.AddComponent<Text>();
             _titleText.font = font;
             _titleText.fontSize = 16;
-            _titleText.color = Color.white;
+            _titleText.color = UIStyleGuide.Colors.BodyText;
             _titleText.alignment = TextAnchor.UpperLeft;
+            UIStyleGuide.ApplyTextShadow(titleObj, 0.32f);
 
             var descObj = new GameObject("Desc");
             descObj.transform.SetParent(toast.transform, false);
