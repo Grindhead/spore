@@ -320,6 +320,46 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void ApplyChatMessage_Stores_ServerFiltered_Message()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+
+            Assert.IsTrue(mgr.ApplyChatMessage(mgr.LocalPlayerId, " hello   reef "));
+
+            Assert.AreEqual(1, mgr.ChatMessages.Count);
+            Assert.AreEqual("hello reef", mgr.ChatMessages[0].Message);
+            Assert.AreEqual("You", mgr.ChatMessages[0].SenderName);
+            Assert.IsTrue(mgr.ChatMessages[0].IsLocal);
+        }
+
+        [Test]
+        public void ApplyChatMessage_Publishes_Event()
+        {
+            MultiplayerChatMessageEvent? received = null;
+            EventBus.Subscribe<MultiplayerChatMessageEvent>(e => received = e);
+
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+            mgr.AddRemotePlayer(1, "Alice");
+            mgr.ApplyChatMessage(1, "ready when you are");
+
+            Assert.IsNotNull(received);
+            Assert.AreEqual(1, received.Value.FromPlayerId);
+            Assert.AreEqual("Alice", received.Value.SenderName);
+            Assert.AreEqual("ready when you are", received.Value.Message);
+            Assert.IsFalse(received.Value.IsLocal);
+        }
+
+        [Test]
+        public void TryNormalizeChatMessage_Rejects_Invalid_Text()
+        {
+            Assert.IsFalse(MultiplayerSessionManager.TryNormalizeChatMessage("   ", out _));
+            Assert.IsFalse(MultiplayerSessionManager.TryNormalizeChatMessage(new string('x', MultiplayerSessionManager.ChatMessageMaxLength + 1), out _));
+            Assert.IsFalse(MultiplayerSessionManager.TryNormalizeChatMessage("bad\u0001message", out _));
+        }
+
+        [Test]
         public void ApplySessionMap_Stores_Server_Map()
         {
             var mgr = new MultiplayerSessionManager();

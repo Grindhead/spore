@@ -54,6 +54,8 @@ namespace RoobsWorld.Multiplayer
         private Text       _sessionCodeLabel;
         private Text       _sessionSummaryLabel;
         private Text       _playerListText;
+        private Text       _chatLogText;
+        private InputField _chatInputField;
         private Text       _publicLobbyListText;
         private readonly List<Button> _publicLobbyButtons = new List<Button>();
         private readonly List<ScannedLobbyInfo> _scannedLobbyRows = new List<ScannedLobbyInfo>();
@@ -123,6 +125,7 @@ namespace RoobsWorld.Multiplayer
                 _session.OnHostMigrated  -= OnHostMigrated;
                 _session.OnPlayerReadyChanged -= OnPlayerReadyChanged;
                 _session.OnGameStarted -= OnGameStarted;
+                _session.OnChatMessageReceived -= OnChatMessageReceived;
             }
 
             _session = session;
@@ -134,6 +137,7 @@ namespace RoobsWorld.Multiplayer
                 _session.OnHostMigrated  += OnHostMigrated;
                 _session.OnPlayerReadyChanged += OnPlayerReadyChanged;
                 _session.OnGameStarted += OnGameStarted;
+                _session.OnChatMessageReceived += OnChatMessageReceived;
             }
         }
 
@@ -359,6 +363,36 @@ namespace RoobsWorld.Multiplayer
                 await _transport.SendStartGameAsync();
             else
                 _session.ApplyGameStarted();
+        }
+
+        private async void OnSendChatPressed()
+        {
+            await SendChatInputAsync();
+        }
+
+        private async Task SendChatInputAsync()
+        {
+            if (_chatInputField == null) return;
+            if (_session == null || _session.State == SessionState.Offline)
+            {
+                ShowStatus("Join a server before chatting.", isError: true);
+                return;
+            }
+
+            if (!MultiplayerSessionManager.TryNormalizeChatMessage(_chatInputField.text, out string message))
+            {
+                ShowStatus("Chat message is empty or too long.", isError: true);
+                return;
+            }
+
+            if (_transport == null || !_transport.IsConnected)
+            {
+                ShowStatus("Chat is unavailable until the relay is connected.", isError: true);
+                return;
+            }
+
+            _chatInputField.text = "";
+            await _transport.SendGlobalChatMessageAsync(message);
         }
 
         private async Task ConnectAndCreateAsync()
@@ -776,6 +810,12 @@ namespace RoobsWorld.Multiplayer
                 _session.ApplyGameStarted();
             };
 
+            transport.OnGlobalChatMessage += (fromPlayerId, message) =>
+            {
+                EnsureSession();
+                _session.ApplyChatMessage(fromPlayerId, message);
+            };
+
             transport.OnError += reason =>
             {
                 ShowStatus(GetFriendlyRelayError(reason), isError: true);
@@ -794,6 +834,9 @@ namespace RoobsWorld.Multiplayer
                 case "not_host": return "Only the host can start the game.";
                 case "not_ready": return Localization.Get("multiplayer.waiting_ready");
                 case "invalid_lobby": return "Could not switch multiplayer lobby.";
+                case "invalid_chat": return "Chat message was not sent.";
+                case "chat_rate_limited": return "Slow down before sending another chat message.";
+                case "not_in_session": return "Join a server before chatting.";
                 default: return "Multiplayer error: " + reason;
             }
         }
@@ -931,6 +974,11 @@ namespace RoobsWorld.Multiplayer
             OnStartGameRequested?.Invoke();
         }
 
+        private void OnChatMessageReceived(MultiplayerChatMessage message)
+        {
+            RefreshChatLog();
+        }
+
         // ---- Panel state ----
 
         private void RefreshPanels()
@@ -945,6 +993,7 @@ namespace RoobsWorld.Multiplayer
             {
                 RefreshSessionCode();
                 RefreshPlayerList();
+                RefreshChatLog();
                 RefreshStartButton();
             }
         }
@@ -969,6 +1018,29 @@ namespace RoobsWorld.Multiplayer
                 sb.AppendLine(FormatPlayerRow(rp.DisplayName, rp.PlayerId, rp.PlayerId == _session.HostPlayerId, rp.IsReady));
 
             _playerListText.text = sb.ToString();
+        }
+
+        private void RefreshChatLog()
+        {
+            if (_chatLogText == null) return;
+            if (_session == null || _session.ChatMessages.Count == 0)
+            {
+                _chatLogText.text = "No messages yet.";
+                return;
+            }
+
+            var messages = _session.ChatMessages;
+            int start = Math.Max(0, messages.Count - 8);
+            var sb = new System.Text.StringBuilder();
+            for (int i = start; i < messages.Count; i++)
+            {
+                var message = messages[i];
+                sb.Append(message.SenderName)
+                  .Append(": ")
+                  .AppendLine(message.Message);
+            }
+
+            _chatLogText.text = sb.ToString();
         }
 
         private static string FormatPlayerCountStatus(int playerCount)
@@ -1102,7 +1174,7 @@ namespace RoobsWorld.Multiplayer
                 "", UIStyleGuide.Typography.BodySmall, UIStyleGuide.Colors.TideTealBright, TextAnchor.MiddleRight, FontStyle.Bold, scale);
 
             var rosterPanel = MakePanel("RosterPanel", _sessionPanel.transform,
-                new Vector2(0.08f, 0.28f), new Vector2(0.92f, 0.8f), UIStyleGuide.Colors.RowStripe);
+                new Vector2(0.08f, 0.54f), new Vector2(0.92f, 0.8f), UIStyleGuide.Colors.RowStripe);
             UIStyleGuide.ApplyPaintedPanelChrome(rosterPanel, strong: false, alpha: 0.8f, atmosphere: false);
 
             MakeLabel(_sessionPanel.transform, "RosterHeader",
@@ -1112,6 +1184,28 @@ namespace RoobsWorld.Multiplayer
             _playerListText = MakeLabel(rosterPanel.transform, "PlayerList",
                 new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f),
                 "", UIStyleGuide.Typography.BodySmall, UIStyleGuide.Colors.BodyText, TextAnchor.UpperLeft, FontStyle.Normal, scale);
+
+            MakeLabel(_sessionPanel.transform, "ChatHeader",
+                new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.53f),
+                "Global Chat", UIStyleGuide.Typography.BodySmall, UIStyleGuide.Colors.Subtitle, TextAnchor.MiddleLeft, FontStyle.Bold, scale);
+
+            var chatPanel = MakePanel("GlobalChatPanel", _sessionPanel.transform,
+                new Vector2(0.08f, 0.25f), new Vector2(0.92f, 0.48f), UIStyleGuide.Colors.RowStripe);
+            UIStyleGuide.ApplyPaintedPanelChrome(chatPanel, strong: false, alpha: 0.72f, atmosphere: false);
+
+            _chatLogText = MakeLabel(chatPanel.transform, "ChatLog",
+                new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f),
+                "No messages yet.", UIStyleGuide.Typography.BodySmall, UIStyleGuide.Colors.BodyText, TextAnchor.UpperLeft, FontStyle.Normal, scale);
+
+            var chatInputGo = MakePanel("ChatInputField", _sessionPanel.transform,
+                new Vector2(0.08f, 0.18f), new Vector2(0.68f, 0.235f), FieldBackground);
+            _chatInputField = MakeTextInput(chatInputGo, MultiplayerSessionManager.ChatMessageMaxLength, "Message", scale);
+            _chatInputField.lineType = InputField.LineType.SingleLine;
+
+            MakeButton(_sessionPanel.transform, "SendChatBtn",
+                new Vector2(0.70f, 0.18f), new Vector2(0.92f, 0.235f),
+                "Send",
+                UIStyleGuide.Colors.Amethyst, scale, OnSendChatPressed, UIStyleGuide.Typography.BodySmall);
 
             MakeButton(_sessionPanel.transform, "LeaveBtn",
                 new Vector2(0.08f, 0.07f), new Vector2(0.42f, 0.17f),

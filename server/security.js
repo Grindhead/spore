@@ -77,6 +77,23 @@ const CLAN_TAG_RE = /^[A-Z0-9]{2,5}$/;
 const LOBBY_ID_RE = /^[A-Za-z0-9_-]{1,24}$/;
 // Base64 characters + padding
 const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+const CHAT_CONTROL_CHARS_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const DEFAULT_PROFANITY_WORDS = Object.freeze([
+    'asshole',
+    'bastard',
+    'bitch',
+    'bullshit',
+    'crap',
+    'cunt',
+    'damn',
+    'dick',
+    'fuck',
+    'fucker',
+    'fucking',
+    'motherfucker',
+    'piss',
+    'shit',
+]);
 
 /**
  * Returns true for a valid 6-char uppercase alphanumeric session code.
@@ -147,6 +164,56 @@ function validateLobbyId(lobbyId) {
     return typeof lobbyId === 'string' && LOBBY_ID_RE.test(lobbyId);
 }
 
+function normalizeChatMessage(message) {
+    if (typeof message !== 'string') return '';
+    return message.replace(/\s+/g, ' ').trim();
+}
+
+function validateChatMessage(message, maxChars = 160) {
+    if (typeof message !== 'string') return false;
+    if (CHAT_CONTROL_CHARS_RE.test(message)) return false;
+
+    const normalized = normalizeChatMessage(message);
+    return normalized.length > 0 && normalized.length <= maxChars;
+}
+
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseProfanityWords(rawWords) {
+    const words = new Set(DEFAULT_PROFANITY_WORDS);
+    if (typeof rawWords === 'string' && rawWords.trim().length > 0) {
+        for (const word of rawWords.split(',')) {
+            const normalized = word.trim().toLowerCase();
+            if (normalized.length > 0 && normalized.length <= 64)
+                words.add(normalized);
+        }
+    }
+    return [...words].sort((a, b) => b.length - a.length);
+}
+
+function maskProfanityWord(word) {
+    return '*'.repeat(Math.max(3, word.length));
+}
+
+function filterProfanity(message, rawWords = '') {
+    if (typeof message !== 'string') return '';
+
+    let filtered = message;
+    const words = Array.isArray(rawWords)
+        ? rawWords.map(word => String(word).trim().toLowerCase()).filter(Boolean)
+        : parseProfanityWords(rawWords);
+
+    for (const word of words) {
+        const pattern = new RegExp(`(^|[^A-Za-z0-9])(${escapeRegExp(word)})(?=$|[^A-Za-z0-9])`, 'gi');
+        filtered = filtered.replace(pattern, (_match, prefix, profaneWord) =>
+            `${prefix}${maskProfanityWord(profaneWord)}`);
+    }
+
+    return filtered;
+}
+
 // ---- auth ----
 
 /**
@@ -195,6 +262,10 @@ module.exports = {
     validatePlayerId,
     validateRelayTarget,
     validateLobbyId,
+    normalizeChatMessage,
+    validateChatMessage,
+    filterProfanity,
+    parseProfanityWords,
     validateAuthToken,
     extractQueryParam,
 };

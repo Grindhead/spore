@@ -61,6 +61,14 @@ namespace RoobsWorld.Tests
             Assert.IsNull(ParseString("{}", "type"));
         }
 
+        [Test]
+        public void ParseString_Unescapes_Json_String_Value()
+        {
+            string json = "{\"type\":\"chat\",\"message\":\"hello \\\"reef\\\"\\n\\u2192\"}";
+
+            Assert.AreEqual("hello \"reef\"\n\u2192", ParseString(json, "message"));
+        }
+
         // ---- ParseIntField ----
 
         [Test]
@@ -146,6 +154,26 @@ namespace RoobsWorld.Tests
             Assert.IsTrue(received.HasValue);
             Assert.AreEqual(6789, received.Value.Seed);
             Assert.AreEqual(1, received.Value.Landmarks.Length);
+            t.Dispose();
+        }
+
+        [Test]
+        public void HandleServerMessage_Chat_Fires_Event()
+        {
+            var t = new WebSocketNetworkTransport("ws://localhost:7788");
+            int fromPlayerId = -1;
+            string message = null;
+            t.OnGlobalChatMessage += (from, text) =>
+            {
+                fromPlayerId = from;
+                message = text;
+            };
+
+            HandleServerMessage(t, "{\"type\":\"chat\",\"from\":2,\"message\":\"hello \\\"reef\\\"\"}");
+            t.PumpEvents();
+
+            Assert.AreEqual(2, fromPlayerId);
+            Assert.AreEqual("hello \"reef\"", message);
             t.Dispose();
         }
 

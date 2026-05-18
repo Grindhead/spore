@@ -667,8 +667,7 @@ namespace RoobsWorld.Stages.Cell
                 RoobsWorld.Core.CameraManager.Instance.RequestShake(0.12f, 0.1f);
             PlayEatPulse(foodType);
             UpdateVisualScale();
-
-            // Cell-stage progression is now pure eat-to-grow with no upgrade/evolution overlays.
+            AdvanceProgressionAfterMassGain();
         }
 
         private float ComputeEffectiveMoveSpeed(bool includeActiveBoost)
@@ -742,6 +741,7 @@ namespace RoobsWorld.Stages.Cell
             UpdateVisualScale();
             UnityObjectUtil.Destroy(cell.gameObject);
             EventBus.Publish(new CellAteLargerPreyEvent { PreyWasLarger = preyWasLarger });
+            AdvanceProgressionAfterMassGain();
         }
 
         private void ConsumeOrganism(Organism organism)
@@ -762,6 +762,7 @@ namespace RoobsWorld.Stages.Cell
             UpdateVisualScale();
             organism.Die();
             EventBus.Publish(new CellAteLargerPreyEvent { PreyWasLarger = preyWasLarger });
+            AdvanceProgressionAfterMassGain();
         }
 
         private void TryAbsorbSymbiont(Genome preyGenome)
@@ -1128,9 +1129,19 @@ namespace RoobsWorld.Stages.Cell
         /// </summary>
         public void OfferRadiationMutation()
         {
-            // Cell stage no longer presents power-up choices or modal overlays.
-            // Radiation surges can still affect the environment, but not player mutation UX.
-            return;
+            if (_isDead || _isEvolving || _reproductionUIActive)
+                return;
+
+            var options = CreateMutationChoices();
+            if (options == null || options.Length == 0)
+                return;
+
+            _reproductionUIActive = true;
+            MutationChoiceUI.Show(
+                options,
+                OnRadiationMutationChoice,
+                _biasTracker.GetBiasDescription(),
+                _playerGenome);
         }
 
         private void OnRadiationMutationChoice(Genome chosen)
@@ -1172,11 +1183,37 @@ namespace RoobsWorld.Stages.Cell
             _foodConsumedSinceUpgrade = 0;
             if (speciesId != 0) SpeciationSystem.RegisterOrganism(speciesId);
             _reproductionUIActive = false;
-            EventBus.Publish(new CellPlayerReproducedEvent());
+            EventBus.Publish(new CellPlayerReproducedEvent
+            {
+                OffspringGenome = upgradedGenome,
+                SpeciesId = speciesId,
+                Position = transform.position
+            });
         }
 
         public static bool HasConsumedEnoughFoodForUpgrade(int consumedFoodCount, int requiredFoodCount)
             => consumedFoodCount >= Mathf.Max(1, requiredFoodCount);
+
+        public static bool ShouldOfferUpgradePrompt(
+            float currentMass,
+            int consumedFoodCount,
+            int requiredFoodCount,
+            float reproductionMassThreshold,
+            float currentTime,
+            float unlockTime,
+            bool isDead,
+            bool isEvolving,
+            bool promptActive)
+        {
+            if (isDead || isEvolving || promptActive)
+                return false;
+
+            if (currentTime < unlockTime)
+                return false;
+
+            return currentMass >= Mathf.Max(0f, reproductionMassThreshold) &&
+                   HasConsumedEnoughFoodForUpgrade(consumedFoodCount, requiredFoodCount);
+        }
 
         public static int ComputeDietVarietyChain(FoodType? lastFoodType, FoodType currentFoodType, int currentChain)
         {
@@ -1221,7 +1258,41 @@ namespace RoobsWorld.Stages.Cell
 
         private void TryApplyUpgradeAfterFood()
         {
-            // Intentionally disabled: cell stage uses automatic growth-only progression.
+            if (!ShouldOfferUpgradePrompt(
+                    _currentMass,
+                    _foodConsumedSinceUpgrade,
+                    _foodConsumedPerUpgrade,
+                    BalanceConstants.CellPlayerReproductionMassThreshold,
+                    Time.time,
+                    _upgradePromptUnlockTime,
+                    _isDead,
+                    _isEvolving,
+                    _reproductionUIActive))
+            {
+                return;
+            }
+
+            var options = CreateMutationChoices();
+            if (options == null || options.Length == 0)
+                return;
+
+            _reproductionUIActive = true;
+            MutationChoiceUI.Show(
+                options,
+                OnUpgradeChoice,
+                _biasTracker.GetBiasDescription(),
+                _playerGenome);
+        }
+
+        private Genome[] CreateMutationChoices()
+        {
+            GeneticTraits discovered = GameManager.HasInstance
+                ? GameManager.Instance.DiscoveredTraits
+                : GeneticTraits.None;
+            return MutationSystem.CreateStrategicMutationChoices(
+                _playerGenome,
+                _biasTracker.ComputeBias(),
+                discovered);
         }
 
         private void ApplyAutomaticUpgrade(Genome chosen)
@@ -1250,7 +1321,12 @@ namespace RoobsWorld.Stages.Cell
                     UpgradeSizeBonus,
                     UpgradeSpeedBonus)
             });
-            EventBus.Publish(new CellPlayerReproducedEvent());
+            EventBus.Publish(new CellPlayerReproducedEvent
+            {
+                OffspringGenome = upgradedGenome,
+                SpeciesId = speciesId,
+                Position = transform.position
+            });
         }
 
         private static Genome EnsureUpgradeImprovesCoreStats(Genome chosen, Genome previousGenome)
@@ -1273,8 +1349,13 @@ namespace RoobsWorld.Stages.Cell
 
         private void CheckEvolution()
         {
-            // Stage progression should be driven by size growth; food milestones gate upgrades separately.
-            _evolutionTracker.UpdateMass(_currentMass);
+            _evolutionTracker.UpdateMass(_currentMass, _foodConsumedTotal, _foodConsumedPerUpgrade);
+        }
+
+        private void AdvanceProgressionAfterMassGain()
+        {
+            CheckEvolution();
+            TryApplyUpgradeAfterFood();
         }
 
         private void OnEvolutionReached(int level)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -83,6 +84,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>Fired when the relay returns the current public lobby list.</summary>
         public event Action<IReadOnlyList<PublicLobbyInfo>> OnPublicLobbies;
 
+        /// <summary>Fired when the relay broadcasts a server-filtered global chat message.</summary>
+        public event Action<int, string> OnGlobalChatMessage; // (fromPlayerId, message)
+
         // ---- private state ----
 
         private readonly string            _serverUrl;
@@ -155,6 +159,10 @@ namespace RoobsWorld.Multiplayer
 
         /// <summary>Sends { type:"start_game" } to the server; only the host may start.</summary>
         public Task SendStartGameAsync() => SendJsonAsync(new { type = "start_game" });
+
+        /// <summary>Sends { type:"chat", message } to the server-filtered global chat channel.</summary>
+        public Task SendGlobalChatMessageAsync(string message) =>
+            SendJsonAsync(new { type = "chat", message = message ?? string.Empty });
 
         // ---- INetworkTransport ----
 
@@ -368,6 +376,14 @@ namespace RoobsWorld.Multiplayer
                     break;
                 }
 
+                case "chat":
+                {
+                    int from = ParseIntField(json, "from");
+                    string message = ParseStringField(json, "message") ?? "";
+                    _mainThreadCbs.Enqueue(() => OnGlobalChatMessage?.Invoke(from, message));
+                    break;
+                }
+
                 case "data":
                 {
                     int    from    = ParseIntField(json, "from");
@@ -432,18 +448,84 @@ namespace RoobsWorld.Multiplayer
         private static string EscapeJsonString(string value)
         {
             if (string.IsNullOrEmpty(value)) return string.Empty;
-            return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+            var sb = new StringBuilder(value.Length + 8);
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '"': sb.Append("\\\""); break;
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < 32)
+                            sb.Append("\\u").Append(((int)c).ToString("x4"));
+                        else
+                            sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
         }
 
         // Lightweight field extractors — no regex, no full parser needed for these tiny messages.
         private static string ParseStringField(string json, string key)
         {
-            string search = $"\"{key}\":\"";
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key)) return null;
+
+            string search = $"\"{key}\"";
             int start = json.IndexOf(search, StringComparison.Ordinal);
             if (start < 0) return null;
             start += search.Length;
-            int end = json.IndexOf('"', start);
-            return end < 0 ? null : json.Substring(start, end - start);
+            while (start < json.Length && json[start] == ' ') start++;
+            if (start >= json.Length || json[start] != ':') return null;
+            start++;
+            while (start < json.Length && json[start] == ' ') start++;
+            if (start >= json.Length || json[start] != '"') return null;
+            start++;
+
+            var sb = new StringBuilder();
+            while (start < json.Length)
+            {
+                char c = json[start++];
+                if (c == '"') return sb.ToString();
+                if (c != '\\')
+                {
+                    sb.Append(c);
+                    continue;
+                }
+
+                if (start >= json.Length) return null;
+                char escaped = json[start++];
+                switch (escaped)
+                {
+                    case '"': sb.Append('"'); break;
+                    case '\\': sb.Append('\\'); break;
+                    case '/': sb.Append('/'); break;
+                    case 'b': sb.Append('\b'); break;
+                    case 'f': sb.Append('\f'); break;
+                    case 'n': sb.Append('\n'); break;
+                    case 'r': sb.Append('\r'); break;
+                    case 't': sb.Append('\t'); break;
+                    case 'u':
+                        if (start + 4 > json.Length) return null;
+                        string hex = json.Substring(start, 4);
+                        if (!int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int codePoint))
+                            return null;
+                        sb.Append((char)codePoint);
+                        start += 4;
+                        break;
+                    default:
+                        sb.Append(escaped);
+                        break;
+                }
+            }
+
+            return null;
         }
 
         private static int ParseIntField(string json, string key)

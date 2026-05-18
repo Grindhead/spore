@@ -279,13 +279,16 @@ namespace RoobsWorld.Stages.Creature
             if (child == null)
                 return;
 
+            var childObject = child.gameObject;
+            child.SetParent(null, false);
+
 #if UNITY_EDITOR
             if (!Application.isPlaying)
-                DestroyImmediate(child.gameObject);
+                DestroyImmediate(childObject);
             else
-                Destroy(child.gameObject);
+                Destroy(childObject);
 #else
-            Destroy(child.gameObject);
+            Destroy(childObject);
 #endif
         }
 

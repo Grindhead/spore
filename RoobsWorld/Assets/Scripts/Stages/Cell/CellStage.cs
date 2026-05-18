@@ -976,11 +976,40 @@ namespace RoobsWorld.Stages.Cell
             HandleGoalProgress(next);
         }
 
-        private void OnPlayerReproduced(CellPlayerReproducedEvent _)
+        private void OnPlayerReproduced(CellPlayerReproducedEvent evt)
         {
+            SpawnPlayerOffspring(evt);
+
             if (!_currentGoal.HasValue) return;
             var next = _currentGoal.Value.ApplyReproduced();
             HandleGoalProgress(next);
+        }
+
+        private void SpawnPlayerOffspring(CellPlayerReproducedEvent evt)
+        {
+            if (!_isActive || _player == null)
+                return;
+
+            if (_authority != null && !_authority.CanSpawnOrganism())
+                return;
+
+            Genome genome = evt.OffspringGenome ?? _player.PlayerGenome;
+            if (genome == null)
+                return;
+
+            int speciesId = evt.SpeciesId;
+            if (speciesId == 0)
+                speciesId = SpeciationSystem.GetSpeciesIdForOffspring(0, _player.PlayerGenome, genome);
+
+            Vector3 origin = evt.Position == default ? _player.transform.position : evt.Position;
+            Vector3 spawnPosition = origin + GetRandomEntityScatterOffset(EntitySpawnMinSpacing);
+            var child = SpawnPooledOrganism(
+                spawnPosition,
+                genome.Clone(),
+                BalanceConstants.CellOffspringInitialEnergy,
+                speciesId);
+            if (child != null)
+                SpeciationSystem.RegisterOrganism(speciesId);
         }
 
         private void OnAteLargerPrey(CellAteLargerPreyEvent evt)

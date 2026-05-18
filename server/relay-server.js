@@ -26,6 +26,7 @@
  *     { type: "join",    code: "ABCD12" }
  *     { type: "list_public_lobbies" }
  *     { type: "join_lobby", lobbyId: "cell" }
+ *     { type: "chat",    message: "Hello tide pool" }
  *     { type: "relay",   to: <playerId|null>,  data: "<base64 ≤16 KB>" }
  *     { type: "leave" }
  *     { type: "pong" }    ← keepalive response
@@ -39,6 +40,7 @@
  *     { type: "player_left",   playerId, wasHost }
  *     { type: "host_migrated", newHostId }
  *     { type: "player_lobby",  playerId, lobbyId }
+ *     { type: "chat",          from, message } // server-filtered global session chat
  *     { type: "data",          from, data }
  *     { type: "ping" }
  *     { type: "error",         reason: "not_found"|"full"|"already_in_session"|"invalid_code" }
@@ -57,6 +59,9 @@ const {
     validateBase64,
     validateRelayTarget,
     validateLobbyId,
+    normalizeChatMessage,
+    validateChatMessage,
+    filterProfanity,
     validateAuthToken,
     extractQueryParam,
 } = require('./security');
@@ -81,8 +86,12 @@ const CFG = {
     MAX_CONNS_PER_IP:   parseInt(process.env.MAX_CONNS_PER_IP   ?? '0'),    // 0 or less = unlimited
     MSG_RATE_WINDOW_MS: parseInt(process.env.MSG_RATE_WINDOW    ?? '1000'), // 1-second window
     MSG_RATE_MAX:       parseInt(process.env.MSG_RATE_MAX       ?? '120'),  // gameplay input + voice chunks
+    CHAT_RATE_WINDOW_MS:parseInt(process.env.CHAT_RATE_WINDOW   ?? '5000'),
+    CHAT_RATE_MAX:      parseInt(process.env.CHAT_RATE_MAX      ?? '5'),
     JOIN_RATE_WINDOW_MS:parseInt(process.env.JOIN_RATE_WINDOW   ?? '60000'),
     JOIN_RATE_MAX:      parseInt(process.env.JOIN_RATE_MAX      ?? '10'),   // 10 join attempts/min per IP
+    MAX_CHAT_CHARS:     parseInt(process.env.MAX_CHAT_CHARS     ?? '160'),
+    CHAT_PROFANITY_WORDS:     process.env.CHAT_PROFANITY_WORDS  ?? '',
     MAX_AUTOSAVE_BYTES: parseInt(process.env.MAX_AUTOSAVE_BYTES ?? String(256 * 1024)),
     AUTOSAVE_DIR:             process.env.AUTOSAVE_DIR          ?? path.join(process.cwd(), 'player-progress'),
     CREATURE_MAP_SEED:         process.env.CREATURE_MAP_SEED    ?? '',
@@ -97,6 +106,7 @@ const CFG = {
 
 const connRateLimiter = new RateLimiter({ windowMs: CFG.CONN_RATE_WINDOW_MS, max: CFG.CONN_RATE_MAX });
 const msgRateLimiter  = new RateLimiter({ windowMs: CFG.MSG_RATE_WINDOW_MS,  max: CFG.MSG_RATE_MAX  });
+const chatRateLimiter = new RateLimiter({ windowMs: CFG.CHAT_RATE_WINDOW_MS, max: CFG.CHAT_RATE_MAX });
 const joinRateLimiter = new RateLimiter({ windowMs: CFG.JOIN_RATE_WINDOW_MS, max: CFG.JOIN_RATE_MAX });
 
 // ---- session store ----
@@ -702,6 +712,7 @@ function startHousekeeping() {
     // Rate limiter memory
     connRateLimiter.cleanup();
     msgRateLimiter.cleanup();
+    chatRateLimiter.cleanup();
     joinRateLimiter.cleanup();
     }, CFG.PING_MS);
 }
@@ -915,6 +926,35 @@ wss.on('connection', (ws, req) => {
                 log('info', `game started code=${session.code} host=${ws._playerId}`);
                 session.broadcast(-1, { type: 'creature_map', map: encodeCreatureMap(session.creatureMap) });
                 session.broadcast(-1, { type: 'game_started' });
+                break;
+            }
+
+            // ---- server-filtered global chat ----
+            case 'chat': {
+                const session = ws._session;
+                if (!session) {
+                    return send(ws, { type: 'error', reason: 'not_in_session' });
+                }
+
+                const chatKey = `${ip}:${session.code}:${ws._playerId}`;
+                if (!chatRateLimiter.check(chatKey)) {
+                    log('warn', `chat rate exceeded code=${session.code} player=${ws._playerId} ip=${ip}`);
+                    return send(ws, { type: 'error', reason: 'chat_rate_limited' });
+                }
+
+                if (!validateChatMessage(msg.message, CFG.MAX_CHAT_CHARS)) {
+                    return send(ws, { type: 'error', reason: 'invalid_chat' });
+                }
+
+                const message = filterProfanity(
+                    normalizeChatMessage(msg.message),
+                    CFG.CHAT_PROFANITY_WORDS
+                );
+                session.broadcast(-1, {
+                    type: 'chat',
+                    from: ws._playerId,
+                    message,
+                });
                 break;
             }
 

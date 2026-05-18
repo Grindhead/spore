@@ -43,6 +43,96 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void ShouldOfferUpgradePrompt_RequiresMassFoodAndDelay()
+        {
+            int required = BalanceConstants.CellFoodConsumedPerUpgrade;
+
+            Assert.IsFalse(PlayerCell.ShouldOfferUpgradePrompt(
+                BalanceConstants.CellPlayerReproductionMassThreshold - 0.1f,
+                required,
+                required,
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                currentTime: 10f,
+                unlockTime: 2f,
+                isDead: false,
+                isEvolving: false,
+                promptActive: false));
+
+            Assert.IsFalse(PlayerCell.ShouldOfferUpgradePrompt(
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                required - 1,
+                required,
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                currentTime: 10f,
+                unlockTime: 2f,
+                isDead: false,
+                isEvolving: false,
+                promptActive: false));
+
+            Assert.IsFalse(PlayerCell.ShouldOfferUpgradePrompt(
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                required,
+                required,
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                currentTime: 1f,
+                unlockTime: 2f,
+                isDead: false,
+                isEvolving: false,
+                promptActive: false));
+
+            Assert.IsTrue(PlayerCell.ShouldOfferUpgradePrompt(
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                required,
+                required,
+                BalanceConstants.CellPlayerReproductionMassThreshold,
+                currentTime: 10f,
+                unlockTime: 2f,
+                isDead: false,
+                isEvolving: false,
+                promptActive: false));
+        }
+
+        [Test]
+        public void ShouldOfferUpgradePrompt_BlocksWhenPlayerCannotChoose()
+        {
+            int required = BalanceConstants.CellFoodConsumedPerUpgrade;
+            float mass = BalanceConstants.CellPlayerReproductionMassThreshold;
+
+            Assert.IsFalse(PlayerCell.ShouldOfferUpgradePrompt(
+                mass,
+                required,
+                required,
+                mass,
+                currentTime: 10f,
+                unlockTime: 2f,
+                isDead: true,
+                isEvolving: false,
+                promptActive: false));
+
+            Assert.IsFalse(PlayerCell.ShouldOfferUpgradePrompt(
+                mass,
+                required,
+                required,
+                mass,
+                currentTime: 10f,
+                unlockTime: 2f,
+                isDead: false,
+                isEvolving: true,
+                promptActive: false));
+
+            Assert.IsFalse(PlayerCell.ShouldOfferUpgradePrompt(
+                mass,
+                required,
+                required,
+                mass,
+                currentTime: 10f,
+                unlockTime: 2f,
+                isDead: false,
+                isEvolving: false,
+                promptActive: true));
+        }
+
+        [Test]
         public void DietVarietyChain_ResetsOnRepeatAndGrowsOnSwitch()
         {
             int first = PlayerCell.ComputeDietVarietyChain(null, FoodType.Plant, 0);

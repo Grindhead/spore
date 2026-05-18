@@ -80,6 +80,23 @@ namespace RoobsWorld.Multiplayer
         }
     }
 
+    /// <summary>A server-filtered global chat message in the current multiplayer session.</summary>
+    public sealed class MultiplayerChatMessage
+    {
+        public int    FromPlayerId { get; }
+        public string SenderName   { get; }
+        public string Message      { get; }
+        public bool   IsLocal      { get; }
+
+        public MultiplayerChatMessage(int fromPlayerId, string senderName, string message, bool isLocal)
+        {
+            FromPlayerId = fromPlayerId;
+            SenderName = string.IsNullOrWhiteSpace(senderName) ? $"Player {fromPlayerId}" : senderName;
+            Message = message ?? string.Empty;
+            IsLocal = isLocal;
+        }
+    }
+
     /// <summary>
     /// Manages session lifecycle: host, join, drop-in/drop-out, host migration.
     /// Platform-agnostic: inject a real <see cref="INetworkTransport"/> when NGO/relay is available.
@@ -104,12 +121,15 @@ namespace RoobsWorld.Multiplayer
         public const int PartyNameMaxLength = ClanNameMaxLength;
         public const int PartyTagMinLength  = ClanTagMinLength;
         public const int PartyTagMaxLength  = ClanTagMaxLength;
+        public const int ChatMessageMaxLength = 160;
+        public const int ChatHistoryMaxMessages = 50;
 
         private static readonly string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
         private readonly INetworkTransport   _transport;
         private readonly List<RemotePlayer> _remotePlayers = new List<RemotePlayer>();
         private readonly List<MultiplayerClan> _clans = new List<MultiplayerClan>();
+        private readonly List<MultiplayerChatMessage> _chatMessages = new List<MultiplayerChatMessage>();
 
         private int    _localPlayerId = -1;
         private int    _hostPlayerId  = -1;
@@ -146,6 +166,7 @@ namespace RoobsWorld.Multiplayer
         public IReadOnlyList<RemotePlayer> RemotePlayers => _remotePlayers;
         public IReadOnlyList<MultiplayerClan> Clans => _clans;
         public IReadOnlyList<MultiplayerClan> Parties => _clans;
+        public IReadOnlyList<MultiplayerChatMessage> ChatMessages => _chatMessages;
 
         // ---- events ----
 
@@ -174,6 +195,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>A player moved between relay bandwidth lobbies.</summary>
         public event Action<int, string> OnPlayerLobbyChanged;
 
+        /// <summary>A server-filtered global chat message was received for this session.</summary>
+        public event Action<MultiplayerChatMessage> OnChatMessageReceived;
+
         // ---- constructor ----
 
         public MultiplayerSessionManager(INetworkTransport transport = null)
@@ -197,6 +221,7 @@ namespace RoobsWorld.Multiplayer
             _localReady    = true;
             _remotePlayers.Clear();
             _clans.Clear();
+            _chatMessages.Clear();
             _sessionMap = null;
             ResetLobbyState();
             State          = SessionState.Hosting;
@@ -224,6 +249,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = localPlayerId;
             _localClanId   = -1;
             _localReady    = true;
+            _chatMessages.Clear();
             _sessionMap = null;
             ResetLobbyState();
             State          = SessionState.Hosting;
@@ -250,6 +276,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = hostPlayerId;
             _localClanId   = -1;
             _localReady    = false;
+            _chatMessages.Clear();
             _sessionMap = null;
             ResetLobbyState();
             State          = localPlayerId == hostPlayerId ? SessionState.Hosting : SessionState.Connected;
@@ -281,6 +308,7 @@ namespace RoobsWorld.Multiplayer
             _sessionMap = null;
             _remotePlayers.Clear();
             _clans.Clear();
+            _chatMessages.Clear();
             ResetLobbyState();
             State          = SessionState.Connected;
             return true;
@@ -374,6 +402,33 @@ namespace RoobsWorld.Multiplayer
             if (State == SessionState.Offline) return false;
             OnGameStarted?.Invoke();
             EventBus.Publish(new MultiplayerGameStartedEvent { SessionCode = _sessionCode });
+            return true;
+        }
+
+        /// <summary>Applies a server-filtered global chat message for the current session.</summary>
+        public bool ApplyChatMessage(int fromPlayerId, string message)
+        {
+            if (State == SessionState.Offline) return false;
+            if (fromPlayerId < 0) return false;
+            if (!TryNormalizeChatMessage(message, out string normalizedMessage)) return false;
+
+            var chatMessage = new MultiplayerChatMessage(
+                fromPlayerId,
+                GetPlayerDisplayName(fromPlayerId),
+                normalizedMessage,
+                fromPlayerId == _localPlayerId);
+            _chatMessages.Add(chatMessage);
+            while (_chatMessages.Count > ChatHistoryMaxMessages)
+                _chatMessages.RemoveAt(0);
+
+            OnChatMessageReceived?.Invoke(chatMessage);
+            EventBus.Publish(new MultiplayerChatMessageEvent
+            {
+                FromPlayerId = chatMessage.FromPlayerId,
+                SenderName = chatMessage.SenderName,
+                Message = chatMessage.Message,
+                IsLocal = chatMessage.IsLocal
+            });
             return true;
         }
 
@@ -494,6 +549,7 @@ namespace RoobsWorld.Multiplayer
             _transport.Disconnect();
             _remotePlayers.Clear();
             _clans.Clear();
+            _chatMessages.Clear();
             _sessionCode   = null;
             _localPlayerId = -1;
             _hostPlayerId  = -1;
@@ -536,6 +592,13 @@ namespace RoobsWorld.Multiplayer
         private bool PlayerHasClan(int playerId)
         {
             return _clans.Exists(c => c.HasMember(playerId));
+        }
+
+        private string GetPlayerDisplayName(int playerId)
+        {
+            if (playerId == _localPlayerId) return "You";
+            var remote = _remotePlayers.Find(p => p.PlayerId == playerId);
+            return remote != null ? remote.DisplayName : $"Player {playerId}";
         }
 
         private bool IsKnownPlayer(int playerId)
@@ -604,6 +667,36 @@ namespace RoobsWorld.Multiplayer
             }
 
             return true;
+        }
+
+        public static bool TryNormalizeChatMessage(string message, out string normalizedMessage)
+        {
+            normalizedMessage = null;
+            if (string.IsNullOrWhiteSpace(message)) return false;
+
+            var sb = new StringBuilder(message.Length);
+            bool previousWhitespace = false;
+            foreach (char c in message)
+            {
+                if (char.IsControl(c) && !char.IsWhiteSpace(c))
+                    return false;
+
+                if (char.IsWhiteSpace(c))
+                {
+                    if (!previousWhitespace)
+                    {
+                        sb.Append(' ');
+                        previousWhitespace = true;
+                    }
+                    continue;
+                }
+
+                sb.Append(c);
+                previousWhitespace = false;
+            }
+
+            normalizedMessage = sb.ToString().Trim();
+            return normalizedMessage.Length > 0 && normalizedMessage.Length <= ChatMessageMaxLength;
         }
 
         private static bool IsValidAssignedSession(string code, int localPlayerId)

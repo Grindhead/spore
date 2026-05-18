@@ -1,0 +1,1211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spore-Like Cell and Creature Polish Audit Todo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f8f6ef;
+      --ink: #182322;
+      --muted: #5f6a66;
+      --line: #d8d2c3;
+      --deep: #173d3b;
+      --deep-2: #245957;
+      --teal: #0f8f84;
+      --coral: #d95645;
+      --gold: #c58b19;
+      --green: #6b8e23;
+      --blue: #3765a3;
+      --panel: #fffdf7;
+      --panel-strong: #f0eadc;
+      --shadow: 0 16px 36px rgba(24, 35, 34, 0.12);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+    }
+
+    header {
+      background:
+        linear-gradient(135deg, rgba(15, 143, 132, 0.2), transparent 44%),
+        linear-gradient(160deg, var(--deep), #102826);
+      color: #fffdf7;
+      padding: 48px 24px 38px;
+      border-bottom: 8px solid var(--coral);
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 960px;
+      margin-bottom: 14px;
+      font-size: clamp(2rem, 4vw, 4.3rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      font-size: 1.55rem;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 1.05rem;
+      letter-spacing: 0;
+    }
+
+    p {
+      color: var(--muted);
+    }
+
+    a {
+      color: var(--deep);
+    }
+
+    code {
+      display: inline-block;
+      max-width: 100%;
+      padding: 1px 5px;
+      overflow-wrap: anywhere;
+      border: 1px solid rgba(23, 61, 59, 0.14);
+      border-radius: 5px;
+      background: rgba(23, 61, 59, 0.07);
+      color: #123331;
+      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      margin-bottom: 12px;
+      color: #bbefe8;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .lede {
+      max-width: 900px;
+      margin-bottom: 0;
+      color: rgba(255, 253, 247, 0.82);
+      font-size: 1.08rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 253, 247, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 253, 247, 0.08);
+      color: #fffdf7;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    .section {
+      margin-top: 28px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .section.compact {
+      padding: 20px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid.cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .fact {
+      min-height: 100%;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+    }
+
+    .fact h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .fact p,
+    .task p,
+    .note p {
+      margin-bottom: 0;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: var(--teal);
+    }
+
+    .swatch.coral {
+      background: var(--coral);
+    }
+
+    .swatch.gold {
+      background: var(--gold);
+    }
+
+    .swatch.green {
+      background: var(--green);
+    }
+
+    .swatch.blue {
+      background: var(--blue);
+    }
+
+    .priority-bar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .priority {
+      padding: 14px;
+      border-radius: var(--radius);
+      color: #fffdf7;
+    }
+
+    .priority strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 1.05rem;
+    }
+
+    .priority span {
+      display: block;
+      color: rgba(255, 253, 247, 0.84);
+      font-size: 0.9rem;
+    }
+
+    .p0 {
+      background: #9d2f28;
+    }
+
+    .p1 {
+      background: #ad6c10;
+    }
+
+    .p2 {
+      background: #236b67;
+    }
+
+    .p3 {
+      background: #3f5f28;
+    }
+
+    .todo-group {
+      display: grid;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .task {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-left-width: 7px;
+      border-radius: var(--radius);
+      background: #fffefa;
+    }
+
+    .task.p0-border {
+      border-left-color: #9d2f28;
+    }
+
+    .task.p1-border {
+      border-left-color: #ad6c10;
+    }
+
+    .task.p2-border {
+      border-left-color: #236b67;
+    }
+
+    .task.p3-border {
+      border-left-color: #3f5f28;
+    }
+
+    .task-head {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .task input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      accent-color: var(--teal);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 42px;
+      min-height: 26px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: #fffdf7;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .badge.p0 {
+      background: #9d2f28;
+    }
+
+    .badge.p1 {
+      background: #ad6c10;
+    }
+
+    .badge.p2 {
+      background: #236b67;
+    }
+
+    .badge.p3 {
+      background: #3f5f28;
+    }
+
+    .task-title {
+      margin-bottom: 4px;
+      font-size: 1.14rem;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .task-subtitle {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .task-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .detail {
+      padding: 12px;
+      border: 1px solid rgba(216, 210, 195, 0.9);
+      border-radius: var(--radius);
+      background: #fbf7ed;
+    }
+
+    .detail strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--deep);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin: 5px 0;
+      color: var(--muted);
+    }
+
+    .callout {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border: 1px solid rgba(217, 86, 69, 0.28);
+      border-radius: var(--radius);
+      background: #fff1ed;
+    }
+
+    .callout strong {
+      color: #84261f;
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fffefa;
+    }
+
+    .matrix th,
+    .matrix td {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .matrix th {
+      background: var(--deep);
+      color: #fffdf7;
+      font-size: 0.86rem;
+      text-transform: uppercase;
+    }
+
+    .matrix tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .owner {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(15, 143, 132, 0.12);
+      color: #145b55;
+      font-weight: 750;
+      font-size: 0.82rem;
+    }
+
+    .note {
+      padding: 16px;
+      border: 1px solid rgba(55, 101, 163, 0.28);
+      border-radius: var(--radius);
+      background: #eef4ff;
+    }
+
+    .footer {
+      margin-top: 26px;
+      padding: 18px 0 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    @media (max-width: 860px) {
+      header {
+        padding-top: 36px;
+      }
+
+      .grid.cols-2,
+      .grid.cols-4,
+      .priority-bar,
+      .task-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .task-head {
+        grid-template-columns: auto 1fr;
+      }
+
+      .task-head .badge {
+        grid-column: 2;
+        justify-self: start;
+      }
+
+      .matrix {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+
+    @media print {
+      header {
+        background: #173d3b;
+        color: #fff;
+      }
+
+      main {
+        width: 100%;
+      }
+
+      .section,
+      .task {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell">
+      <div class="eyebrow">Audit todo list</div>
+      <h1>Cell, Creature Creator, and Creature Stage Spore-Like Polish Plan</h1>
+      <p class="lede">
+        Goal: deepen the existing Cell and Creature scope until it feels much closer to classic Spore's cell-to-creature arc, while preserving the multiplayer work already in the project: larger sessions, invite flows, remote player readability, lobby readiness, host migration, voice proximity, and player-count scaling.
+      </p>
+      <div class="meta">
+        <span class="pill">Created: 2026-05-18</span>
+        <span class="pill">Scope: Cell stage + Creature creator + Creature game mode</span>
+        <span class="pill">Guardrail: no later-stage expansion in this pass</span>
+        <span class="pill">Verification baseline: latest EditMode XML shows 1127 passed, 0 failed</span>
+        <span class="pill">Untracked inputs included: TestResults/EditMode.xml</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <h2>Audit Snapshot</h2>
+      <div class="grid cols-4">
+        <article class="fact">
+          <h3><span class="swatch"></span> Strongest Foundation</h3>
+          <p>The codebase already has a substantial Cell stage, a procedural Creature creator, generated creature part assets, a playable Creature arena loop, and meaningful multiplayer systems.</p>
+        </article>
+        <article class="fact">
+          <h3><span class="swatch coral"></span> Biggest Risk</h3>
+          <p>The cell growth to evolution to creature transition loop appears disconnected from normal play. There is UI for evolution, but the food-driven trigger path is disabled.</p>
+        </article>
+        <article class="fact">
+          <h3><span class="swatch gold"></span> Main Fidelity Gap</h3>
+          <p>Cell and Creature modes have systems, but they still read more like arena/action prototypes than an organism editor plus ecosystem progression loop.</p>
+        </article>
+        <article class="fact">
+          <h3><span class="swatch green"></span> Preserve</h3>
+          <p>Keep unlimited-player session goals, scaled resources and rivals, lobby flow, remote cell ghosting, player mass labels, voice proximity, and host migration work.</p>
+        </article>
+      </div>
+
+      <div class="callout">
+        <strong>Scope guardrail:</strong> do not add Civilization, Tribe, Space, or other later-stage features in this pass. The best return is to make Cell and Creature feel cohesive, expressive, readable, and multiplayer-ready.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Untracked Files Included In Audit</h2>
+      <p>
+        The audit includes the untracked files reported by <code>git ls-files --others --exclude-standard</code> at the time of this update. These are treated as current working-tree evidence, not as committed project baseline.
+      </p>
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Untracked file</th>
+            <th>What it changes in the audit</th>
+            <th>Follow-up</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>TestResults/EditMode.xml</code></td>
+            <td>
+              This is the latest visible EditMode test result artifact. It reports <code>1127</code> tests, <code>1127</code> passed, <code>0</code> failed, start time <code>2026-05-18 00:19:30Z</code>, duration <code>5.207797</code> seconds.
+            </td>
+            <td>
+              Keep using it as the immediate verification baseline for the todo list, but decide whether generated test XML should be committed, ignored, or replaced by CI-published artifacts.
+            </td>
+          </tr>
+          <tr>
+            <td><code>docs/spore-polish-audit-todo.html</code></td>
+            <td>
+              This is the newly generated audit artifact. It is included here so the audit records its own untracked status and does not imply the file was already part of the repository.
+            </td>
+            <td>
+              Commit it if this todo should become shared project planning material, or keep it local if it is only a working note.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section compact">
+      <h2>Priority Ladder</h2>
+      <div class="priority-bar" aria-label="Priority legend">
+        <div class="priority p0"><strong>P0 Critical</strong><span>Restore the core playable progression and shared multiplayer correctness.</span></div>
+        <div class="priority p1"><strong>P1 High</strong><span>Add Spore-like mechanics, creator expressiveness, and creature ecosystem play.</span></div>
+        <div class="priority p2"><strong>P2 Polish</strong><span>Improve feel, UI, audio, accessibility, animation, and performance.</span></div>
+        <div class="priority p3"><strong>P3 Validation</strong><span>Lock it down with tests, playtest checklists, telemetry, and balance passes.</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>P0 Critical Todo</h2>
+      <div class="todo-group">
+        <article class="task p0-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Reconnect cell growth, evolution, and creature transition">
+            <div>
+              <div class="task-title">Reconnect the Cell growth to evolution to Creature transition loop</div>
+              <div class="task-subtitle">Normal eating and survival should lead to evolution choices, reproduction, and finally a clean jump into Creature stage.</div>
+            </div>
+            <span class="badge p0">P0</span>
+          </div>
+          <p>
+            The current Cell stage has rich systems, but food-driven progression appears intentionally disabled in the player path. A Spore-like experience needs the player to eat, grow, unlock parts, edit, reproduce, and eventually become a land creature.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>PlayerCell.TryApplyUpgradeAfterFood()</code> is disabled.</li>
+                <li><code>PlayerCell.CheckEvolution()</code> exists, but no active call site was found during audit.</li>
+                <li><code>CellEvolutionUI</code> and <code>MutationChoiceUI</code> exist but are not obviously reached through normal consumption.</li>
+                <li><code>CellStage.OnFinalEvolutionComplete()</code> handles transition to Creature when evolution completes.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Eating enough food reliably advances growth thresholds in solo and multiplayer.</li>
+                <li>Evolution choices open at authored milestones without soft-locking combat, movement, or input.</li>
+                <li>Reproduction and the <code>ReproduceOnce</code> goal can be completed from a fresh Cell run.</li>
+                <li>Final Cell evolution persists creature DNA and transitions into Creature stage.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="detail">
+            <strong>Starting files</strong>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/PlayerCell.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/CellStage.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/CellEvolutionUI.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/MutationChoiceUI.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/CellGoal.cs</code>
+          </div>
+        </article>
+
+        <article class="task p0-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Harden multiplayer authority and shared progression">
+            <div>
+              <div class="task-title">Harden multiplayer authority while retaining all multiplayer improvements</div>
+              <div class="task-subtitle">The host should own shared ecology and stage progression; clients should get smooth, readable, fair state.</div>
+            </div>
+            <span class="badge p0">P0</span>
+          </div>
+          <p>
+            Multiplayer is a major differentiator for this project. The next pass should preserve the improved lobby/session features while making shared Cell and Creature outcomes authoritative and synchronized.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>NetworkTickManager</code> broadcasts players, organisms, and food state at a fixed tick.</li>
+                <li>Remote cell ghosts, labels, and interpolation exist through <code>RemotePlayerCell</code>.</li>
+                <li>Audit found comments and code paths suggesting food state is sent but not fully reconciled by clients.</li>
+                <li>Cell stage already scales arena size, food, NPCs, organisms, and predators by player count.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Food, pickups, hazards, organisms, cell deaths, growth, and evolution milestones are host-authoritative.</li>
+                <li>Clients see smooth remote motion, no duplicate food consumption, and no divergent organism state.</li>
+                <li>Cell-to-Creature transition uses a clear ready/commit handshake for every connected player.</li>
+                <li>Creature stage supports the same session identity, lobby, remote readability, and reconnect expectations.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="detail">
+            <strong>Starting files</strong>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/MultiplayerSessionManager.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/NetworkTickManager.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/RemotePlayerCell.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/CellStage.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStage.cs</code>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>P1 Cell Stage Todo</h2>
+      <div class="todo-group">
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Make the cell editor and organelles feel Spore-like">
+            <div>
+              <div class="task-title">Make the Cell editor and organelle loop expressive</div>
+              <div class="task-subtitle">Players should attach visible parts, understand what they do, and feel the cell physically change.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            Current cell loadouts are useful but narrow. The next pass should move from stat multipliers toward visible organelles, attachment placement, costs, discovery unlocks, and stronger cause-and-effect.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>CellPartLoadout</code> currently focuses on <code>Flagella</code>, <code>Cilia</code>, <code>Spike</code>, and <code>Jet</code>.</li>
+                <li>Cell part models exist under <code>RoobsWorld/Assets/Art/Models/CellParts</code>.</li>
+                <li><code>ProceduralCellGenerator</code> already supports generated body visuals and loadout visuals.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Add clear mouth types for herbivore, carnivore, and omnivore play.</li>
+                <li>Add defensive and utility parts such as spikes, poison, electric burst, armor, eyes/sensors, suction, cilia, flagella, and jets.</li>
+                <li>Parts have silhouettes, tooltips, DNA cost, unlock source, and multiplayer-replicated gameplay effects.</li>
+                <li>The editor preview updates mass, speed, turn rate, attack, defense, diet, and special abilities live.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Deepen cell ecology and food chain">
+            <div>
+              <div class="task-title">Deepen Cell ecology, food chain, and readable survival pressure</div>
+              <div class="task-subtitle">The water should feel alive, layered, and dangerous in a way the player can read at a glance.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            The Cell stage already has many organism archetypes and environmental systems. The polish pass should make them behave as a coherent ecology rather than a collection of spawned actors.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li>Archetypes include filter feeders, bacteria swarms, scavengers, parasites, photosynthetic cells, colonial organisms, predators, and a leviathan.</li>
+                <li><code>CellStage.ApplyCellOnlyPreset()</code> currently sets a classic baseline with organisms, pickups, and predator counts.</li>
+                <li>Biomes, food, hazards, traits, endosymbiosis, and documentary time-scale systems already exist.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Every organism has a readable silhouette, diet, threat level, behavior tell, and reward.</li>
+                <li>Food clouds, meat chunks, toxins, currents, and larger prey support gradual mastery from tiny cell to apex microbe.</li>
+                <li>Predators use anticipation and escape windows, not instant punishment.</li>
+                <li>Multiplayer scaling keeps density and challenge fair for two, four, and larger groups.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Upgrade Cell feel, camera, effects, and audio">
+            <div>
+              <div class="task-title">Upgrade Cell feel, camera, VFX, and audio feedback</div>
+              <div class="task-subtitle">Cell mode should feel squishy, tactile, and musical instead of purely systemic.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            There are hooks for haptics, screen shake, ambience, and sound, but the Resources audio folders currently appear to contain catalogs and placeholders rather than shipped clips.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>RoobsWorld/Assets/Resources/AUDIO_CATALOG.md</code> lists required Cell and UI sounds.</li>
+                <li><code>RoobsWorld/Assets/Resources/Music</code> and <code>RoobsWorld/Assets/Resources/SFX</code> appear to contain placeholders only.</li>
+                <li><code>PlayerCell</code> already calls movement, camera, food, haptic, and feedback paths.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Add real ambience, music states, eating, bite, toxin, predator warning, evolution, UI, and death sounds.</li>
+                <li>Cell bodies squash, wobble, pulse, and react to speed, damage, digestion, and growth.</li>
+                <li>Camera zoom, shake, framing, and threat cues scale with cell size and nearby predators.</li>
+                <li>All feedback has accessibility alternatives for reduced motion, contrast, and audio-independent cues.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>P1 Creature Creator Todo</h2>
+      <div class="todo-group">
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Expand creature body sculpting">
+            <div>
+              <div class="task-title">Expand body sculpting into a proper creature-building surface</div>
+              <div class="task-subtitle">The player should shape a spine and body plan, then place mirrored parts with confidence.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            The editor already has DNA state, body shape, symmetry, undo/redo, drag placement, categories, and runtime UI. It needs the tactile body editing that makes the creature creator the center of the experience.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>CreatureEditorState</code> supports DNA editing, colors, transform edits, symmetry, undo, and redo.</li>
+                <li><code>CreatureDNA.BodyPlan</code> includes spine segments and symmetry concepts.</li>
+                <li>The editor state currently exposes a boolean symmetry toggle rather than richer body-plan manipulation.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Players can add, move, scale, and curve spine/body segments with stable undo and redo.</li>
+                <li>Bilateral and radial symmetry are explicit modes with mirrored placement previews.</li>
+                <li>Invalid placement explains itself without blocking experimentation.</li>
+                <li>Stats, DNA cost, animation impact, and multiplayer validation update live.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="detail">
+            <strong>Starting files</strong>
+            <code>RoobsWorld/Assets/Scripts/Creature/CreatureDNA.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Creature/Editor/CreatureEditorState.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Creature/Editor/CreatureEditorScene.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Creature/CreatureModelBuilder.cs</code>
+          </div>
+        </article>
+
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Curate creature part catalog and ability mapping">
+            <div>
+              <div class="task-title">Curate the part catalog, costs, abilities, and attachment rules</div>
+              <div class="task-subtitle">Generated assets should become meaningful creature parts instead of a generic asset dump.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            The project has many creature prefabs, but the catalog mapping is broad. A Spore-like creator needs readable categories, names, icons, costs, ability verbs, allowed anchors, and animation implications.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>RoobsWorld/Assets/Resources/Models/CreatureParts</code> contains many generated creature part prefabs.</li>
+                <li><code>CreaturePartCatalog</code> maps asset names such as heads, jaws, torsos, legs, arms, tails, ears, horns, and wings into broad categories.</li>
+                <li>Legacy fallback parts still exist for basic mouth, eye, leg, arm, horn, wing, shell, and tail definitions.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Each part has an authored display name, icon/preview, category, cost, rarity, allowed anchors, and gameplay stats.</li>
+                <li>Part abilities map to Creature verbs: bite, charge, strike, spit, jump, glide, sprint, sing, charm, pose, sneak, and call pack.</li>
+                <li>Duplicate-looking generated assets are merged, hidden, or renamed into a clear progression set.</li>
+                <li>Catalog data is testable without opening the editor scene.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Polish creator UI and return flow">
+            <div>
+              <div class="task-title">Polish creator UI, preview, paint, animation, and return flow</div>
+              <div class="task-subtitle">The editor should feel like a complete mode, not a debugging surface.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            The current runtime editor UI is functional and has helpful controls, but the player-facing loop needs stronger polish: icon tools, proper tabs, animated previews, paint/pattern editing, and a reliable Done behavior.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>CreatureEditorScene</code> builds toolbar, categories, palette cards, stats, undo/redo, symmetry, delete, save, and done controls.</li>
+                <li><code>OnDone</code> currently saves/logs but does not clearly return the player into the Creature game loop.</li>
+                <li>Painting currently centers on body colors more than texture patterns, markings, and material families.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Creator has tabs for body, parts, paint, test drive, and save.</li>
+                <li>Preview creature idles, walks, attacks, socializes, and shows ability cooldown/readiness.</li>
+                <li>Paint supports base color, accent color, pattern, material finish, and part-level overrides.</li>
+                <li>Done returns to the correct previous stage with saved DNA, replicated identity, and no scene leak.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>P1 Creature Stage Todo</h2>
+      <div class="todo-group">
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Turn creature arena into a creature world">
+            <div>
+              <div class="task-title">Turn the Creature arena into a creature world</div>
+              <div class="task-subtitle">The mode should support exploration, nests, food, species territories, social play, and combat.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            Creature mode currently has a competent action arena. The Spore-like target is a broader life stage where the player migrates, eats, befriends or fights species, grows, and returns to nests.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>CreatureStageArena</code> builds a bounded arena with landmarks such as cover, high ground, narrow passage, and healing zones.</li>
+                <li><code>CreatureStageObjective</code> includes rival cull, alpha hunt, feeding ground hold, and pacify rivals.</li>
+                <li><code>CreatureStageEncounterManager</code> spawns rival archetypes and tracks kills, alpha encounters, and streaks.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>World generation creates nests, food sources, water, paths, sightlines, species territories, and migration gates.</li>
+                <li>Objectives support both social and combat approaches with clear species relationship state.</li>
+                <li>Creature size, diet, inherited cell traits, and part choices affect traversal, feeding, and social options.</li>
+                <li>Multiplayer groups can explore together without invalidating solo progression.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="detail">
+            <strong>Starting files</strong>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStage.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStageArena.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStageEncounterManager.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStageObjective.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureRivalAI.cs</code>
+          </div>
+        </article>
+
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Add creature verbs and social systems">
+            <div>
+              <div class="task-title">Add Creature verbs for social, survival, traversal, and combat play</div>
+              <div class="task-subtitle">The player should be able to solve encounters by more than attacking.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            Creature controller combat has good building blocks. The next pass should add Spore-like expressive verbs and map them to body parts so the creator matters in the world.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>CreaturePlayerController</code> supports movement, camera-relative control, attack, guard, counter, stamina, and inherited abilities.</li>
+                <li><code>CellToCreatureDnaBridge</code> carries Cell legacy into Creature abilities such as dash, toxin burst, bioelectric burst, regeneration, and guard surge.</li>
+                <li>Rival AI has threat, prey, forage, investigate, loiter, and disposition concepts.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Add bite, charge, strike, spit, sprint, sneak, jump, call, eat, drink, heal, and nest interactions.</li>
+                <li>Add social verbs such as sing, dance, charm, pose, and mimic with simple rhythm/readability cues.</li>
+                <li>Part stats determine available verbs and ratings, not just raw combat numbers.</li>
+                <li>AI species can respond socially, flee, group up, protect nests, hunt prey, and remember player disposition.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="task p1-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Create creature progression and migration loop">
+            <div>
+              <div class="task-title">Create a Creature progression, nest, and migration loop</div>
+              <div class="task-subtitle">Creature mode should have a clear arc from fragile newcomer to established species.</div>
+            </div>
+            <span class="badge p1">P1</span>
+          </div>
+          <p>
+            A satisfying Creature stage needs growth goals and a rhythm: leave nest, feed, meet species, earn DNA, edit, migrate, and survive escalating ecological pressure.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li>Creature objectives exist, but they are mostly encounter or arena framed.</li>
+                <li>Cell-to-Creature DNA legacy exists and can seed diet, size, abilities, and starting stats.</li>
+                <li>Creature HUD and objective code provide a place to surface progression.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Starting nest, home species, health recovery, mating/edit opportunities, and pack recruitment are implemented.</li>
+                <li>DNA rewards come from eating, allying, defeating, discovering, and completing migration goals.</li>
+                <li>Creature creator reopens at safe milestones and returns to the same world state.</li>
+                <li>Solo and multiplayer runs have consistent saved progress and clear win/next-milestone feedback.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>P2 Polish Todo</h2>
+      <div class="todo-group">
+        <article class="task p2-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Add audio content and verify loading">
+            <div>
+              <div class="task-title">Ship actual audio content and state mixing</div>
+              <div class="task-subtitle">Replace placeholder catalogs with real clips, then tune dynamic state transitions.</div>
+            </div>
+            <span class="badge p2">P2</span>
+          </div>
+          <p>
+            Audio is one of the largest polish gaps found in the audit. Add content for Cell, Creature, UI, multiplayer, danger, evolution, success, and failure, then verify Resources loading.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>All clips referenced in <code>AUDIO_CATALOG.md</code> exist or the catalog is updated to match shipped names.</li>
+                <li>Music states blend for calm, danger, combat, editor, victory, and death.</li>
+                <li>Voice proximity UX includes mute, device selection, push-to-talk, volume, and consent affordances.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Starting files</strong>
+              <code>RoobsWorld/Assets/Resources/AUDIO_CATALOG.md</code>
+              <code>RoobsWorld/Assets/Resources/Music</code>
+              <code>RoobsWorld/Assets/Resources/SFX</code>
+              <code>RoobsWorld/Assets/Scripts/Multiplayer/ProximityVoiceChat.cs</code>
+            </div>
+          </div>
+        </article>
+
+        <article class="task p2-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Unify UI and accessibility polish">
+            <div>
+              <div class="task-title">Unify UI, accessibility, and input polish across modes</div>
+              <div class="task-subtitle">Cell, editor, lobby, and Creature screens should feel like one shipped game.</div>
+            </div>
+            <span class="badge p2">P2</span>
+          </div>
+          <p>
+            Multiple systems build runtime UI independently. That is productive, but a polish pass should unify typography, spacing, iconography, hover states, tooltips, input prompts, and accessibility options.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Create shared UI tokens for colors, panel styles, text hierarchy, buttons, icon buttons, tabs, sliders, and tooltips.</li>
+                <li>Support keyboard, mouse, gamepad, and remapping for core Cell, creator, Creature, lobby, and voice controls.</li>
+                <li>Reduced motion, high contrast, readable text scale, and audio-independent warnings work in every mode.</li>
+                <li>No instructional text overlaps or overflows at common 16:9, ultrawide, and handheld resolutions.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Starting files</strong>
+              <code>RoobsWorld/Assets/Scripts/UI</code>
+              <code>RoobsWorld/Assets/Scripts/Stages/Cell</code>
+              <code>RoobsWorld/Assets/Scripts/Creature/Editor/CreatureEditorScene.cs</code>
+              <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStageHUD.cs</code>
+              <code>RoobsWorld/Assets/Scripts/Multiplayer/MultiplayerLobbyUI.cs</code>
+            </div>
+          </div>
+        </article>
+
+        <article class="task p2-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Improve performance and save compatibility">
+            <div>
+              <div class="task-title">Improve performance, save compatibility, and content hygiene</div>
+              <div class="task-subtitle">Large generated worlds, many players, and many creature parts need predictable budgets.</div>
+            </div>
+            <span class="badge p2">P2</span>
+          </div>
+          <p>
+            The project has many assets and systems. The polish pass should keep runtime allocations, generated meshes, network ticks, and save data under control while preserving existing saves.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Pool food, organisms, VFX, remote ghosts, projectile-like effects, and generated preview meshes.</li>
+                <li>Profile Cell and Creature with solo, two-player, four-player, and stress sessions.</li>
+                <li>Creature DNA and Cell legacy save/load paths are versioned and migration-tested.</li>
+                <li>Generated creature part assets are curated, named, and documented so future passes do not duplicate content.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Starting files</strong>
+              <code>RoobsWorld/Assets/Scripts/Save</code>
+              <code>RoobsWorld/Assets/Scripts/Creature/CreatureDNA.cs</code>
+              <code>RoobsWorld/Assets/Scripts/Stages/Cell</code>
+              <code>RoobsWorld/Assets/Scripts/Stages/Creature</code>
+              <code>RoobsWorld/Assets/Resources/Models/CreatureParts</code>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>P3 Validation Todo</h2>
+      <div class="todo-group">
+        <article class="task p3-border">
+          <div class="task-head">
+            <input type="checkbox" aria-label="Create verification plan">
+            <div>
+              <div class="task-title">Create an end-to-end verification plan for Cell and Creature</div>
+              <div class="task-subtitle">Automated tests should catch regressions; manual tests should judge feel, clarity, and flow.</div>
+            </div>
+            <span class="badge p3">P3</span>
+          </div>
+          <p>
+            The latest recorded EditMode result is healthy, but coverage is still low enough that large polish passes need targeted tests and repeatable playtest scripts.
+          </p>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li>Untracked <code>TestResults/EditMode.xml</code> reports 1127 tests, 1127 passed, 0 failed.</li>
+                <li>Coverage summary found during audit reports about 31.1 percent line coverage overall.</li>
+                <li>Existing revision todo docs include unchecked manual solo and multiplayer playtests.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Add automated tests for Cell progression thresholds, evolution UI opening, final transition, and save handoff.</li>
+                <li>Add tests for creature DNA editing, catalog validity, part cost validation, and save/load compatibility.</li>
+                <li>Add multiplayer simulation tests for shared food, organism death, growth, evolution readiness, and stage transition.</li>
+                <li>Run manual solo, two-player, four-player, and stress checklists before calling the polish pass complete.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Recommended Implementation Order</h2>
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Step</th>
+            <th>Area</th>
+            <th>Outcome</th>
+            <th>Why this order</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="owner">1</span></td>
+            <td>Cell progression</td>
+            <td>Eating to growth to evolution to Creature works from a fresh run.</td>
+            <td>This is the main spine of the whole two-stage game. Polish cannot land if the core arc can soft-lock.</td>
+          </tr>
+          <tr>
+            <td><span class="owner">2</span></td>
+            <td>Multiplayer authority</td>
+            <td>Shared ecology, evolution milestones, and stage transitions are deterministic.</td>
+            <td>This protects the multiplayer improvements while every later gameplay feature is added.</td>
+          </tr>
+          <tr>
+            <td><span class="owner">3</span></td>
+            <td>Cell editor and organelles</td>
+            <td>Player choices visibly alter movement, diet, attack, defense, and ability options.</td>
+            <td>This makes Cell feel like an organism-building stage instead of a top-down food arena.</td>
+          </tr>
+          <tr>
+            <td><span class="owner">4</span></td>
+            <td>Creature creator</td>
+            <td>Body sculpting, part placement, paint, and animation preview feel complete.</td>
+            <td>The Creature stage depends on DNA and part verbs being meaningful.</td>
+          </tr>
+          <tr>
+            <td><span class="owner">5</span></td>
+            <td>Creature world</td>
+            <td>Nests, species, food, socialization, combat, and migration create a true stage loop.</td>
+            <td>Once verbs exist, the world can reward them coherently.</td>
+          </tr>
+          <tr>
+            <td><span class="owner">6</span></td>
+            <td>Polish and QA</td>
+            <td>Audio, camera, UI, accessibility, performance, and tests lock the experience down.</td>
+            <td>This turns the systems into a shippable-feeling game mode set.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>Audit Notes By Area</h2>
+      <div class="grid cols-2">
+        <article class="note">
+          <h3>Cell Mode</h3>
+          <p>Strong amount of authored content and ecological intent. Highest leverage is restoring the growth/evolution trigger path, then making organelles visual, discoverable, and multiplayer-safe.</p>
+        </article>
+        <article class="note">
+          <h3>Creature Creator</h3>
+          <p>Good DNA/editor skeleton with undo and part catalogs. Needs body sculpting depth, curated part data, animation preview, paint, and an actual return-to-game lifecycle.</p>
+        </article>
+        <article class="note">
+          <h3>Creature Game Mode</h3>
+          <p>Readable action controller and encounter systems are in place. Needs a world loop: nest, diet, species relationships, social and combat routes, migration, and editing milestones.</p>
+        </article>
+        <article class="note">
+          <h3>Multiplayer</h3>
+          <p>The project has more multiplayer ambition than the reference game. Keep it. Make the host authoritative over shared ecology and progression so co-op feels like an upgrade, not a risk.</p>
+        </article>
+      </div>
+    </section>
+
+    <p class="footer">
+      This file is a project todo artifact, not a design freeze. Update checkboxes, priorities, and acceptance criteria as implementation discoveries land.
+    </p>
+  </main>
+</body>
+</html>

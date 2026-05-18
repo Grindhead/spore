@@ -18,6 +18,9 @@ const {
     validatePlayerId,
     validateRelayTarget,
     validateLobbyId,
+    normalizeChatMessage,
+    validateChatMessage,
+    filterProfanity,
     validateAuthToken,
     extractQueryParam,
 } = require('./security');
@@ -236,6 +239,34 @@ describe('validateLobbyId', () => {
         assert.equal(validateLobbyId('../session'), false);
         assert.equal(validateLobbyId('A'.repeat(25)), false);
         assert.equal(validateLobbyId(null), false);
+    });
+});
+
+// ---- chat validation and profanity filter ----
+
+describe('chat validation and filtering', () => {
+    it('normalizes chat whitespace before broadcast', () => {
+        assert.equal(normalizeChatMessage('  hello   tide\npool  '), 'hello tide pool');
+    });
+
+    it('accepts non-empty chat within the configured length', () => {
+        assert.ok(validateChatMessage('hello tide pool', 32));
+        assert.ok(validateChatMessage('  hello  ', 32));
+    });
+
+    it('rejects empty, oversized, and control-character chat', () => {
+        assert.equal(validateChatMessage('   ', 32), false);
+        assert.equal(validateChatMessage('x'.repeat(33), 32), false);
+        assert.equal(validateChatMessage('hello\u0001there', 32), false);
+    });
+
+    it('masks default profanity on whole-word boundaries', () => {
+        assert.equal(filterProfanity('that is crap'), 'that is ****');
+        assert.equal(filterProfanity('grass class pass'), 'grass class pass');
+    });
+
+    it('allows server operators to append custom filtered words', () => {
+        assert.equal(filterProfanity('bad kelp energy', 'kelp'), 'bad **** energy');
     });
 });
 

@@ -263,7 +263,12 @@ namespace RoobsWorld.Core
     }
 
     /// <summary>Fired when the player completes a cell upgrade milestone. Used for upgrade micro goals.</summary>
-    public struct CellPlayerReproducedEvent : IGameEvent { }
+    public struct CellPlayerReproducedEvent : IGameEvent
+    {
+        public RoobsWorld.Stages.Cell.Genome OffspringGenome;
+        public int SpeciesId;
+        public Vector3 Position;
+    }
 
     /// <summary>Fired when the player consumes a CellAI organism. PreyWasLarger is true when the prey's visual scale exceeded the player's.</summary>
     public struct CellAteLargerPreyEvent : IGameEvent { public bool PreyWasLarger; }
@@ -366,6 +371,15 @@ namespace RoobsWorld.Core
     {
         public int    PlayerId;
         public string LobbyId;
+    }
+
+    /// <summary>Fired when a server-filtered global chat message arrives for the active session.</summary>
+    public struct MultiplayerChatMessageEvent : IGameEvent
+    {
+        public int    FromPlayerId;
+        public string SenderName;
+        public string Message;
+        public bool   IsLocal;
     }
 
     /// <summary>Fired when the session host starts the shared multiplayer game.</summary>
