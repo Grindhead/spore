@@ -1,4 +1,5 @@
 using RoobsWorld.Core;
+using RoobsWorld.Creature;
 using RoobsWorld.Multiplayer;
 using System.Collections.Generic;
 using UnityEngine;
@@ -357,6 +358,15 @@ namespace RoobsWorld.Stages.Creature
                 CreatureCombatFeedbackType.Guard => 0.4f,
                 _ => 0f
             };
+        }
+
+        public static float ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType feedbackType, bool hasSocialAssist)
+        {
+            float delta = ComputeSpeciesRelationshipDelta(feedbackType);
+            if (hasSocialAssist &&
+                (feedbackType == CreatureCombatFeedbackType.Guard || feedbackType == CreatureCombatFeedbackType.Counter))
+                delta += 0.25f;
+            return delta;
         }
 
         private void EnsureArena()
@@ -955,10 +965,30 @@ namespace RoobsWorld.Stages.Creature
             bool hasPackMate)
         {
             int target = Mathf.Max(1, scaledTarget);
-            if (!hasPackMate || objective.UsesHoldTimer)
-                return target;
+            return Mathf.Max(1, target - ComputePackMateObjectiveAssist(objective, target, hasPackMate));
+        }
 
-            return Mathf.Max(1, target - 1);
+        public static int ComputePackMateObjectiveAssist(
+            CreatureStageObjective objective,
+            int scaledTarget,
+            bool hasPackMate)
+        {
+            int target = Mathf.Max(1, scaledTarget);
+            if (!hasPackMate || objective.UsesHoldTimer || target <= 1)
+                return 0;
+
+            return 1;
+        }
+
+        public static int ComputePacifyActionProgressIncrement(
+            CreatureCombatFeedbackType feedbackType,
+            CreatureVerbRating[] ratings)
+        {
+            if (feedbackType != CreatureCombatFeedbackType.Guard &&
+                feedbackType != CreatureCombatFeedbackType.Counter)
+                return 0;
+
+            return CreatureWorldPlanner.HasSocialPacifyAssist(ratings) ? 2 : 1;
         }
 
         public static int ComputeNextUpgradeMilestone(int completedUpgradeCount, int defeatsPerUpgrade)
@@ -1147,15 +1177,26 @@ namespace RoobsWorld.Stages.Creature
 
         private int GetObjectiveDefeatTarget()
         {
-            int scaledTarget = ComputeMultiplayerScaledCount(
+            return ComputePackMateAssistedObjectiveTarget(
+                _currentObjective,
+                GetScaledObjectiveDefeatTarget(),
+                _worldProgressionInitialized && _worldProgression.HasPackMate);
+        }
+
+        private int GetScaledObjectiveDefeatTarget()
+        {
+            return ComputeMultiplayerScaledCount(
                 _currentObjective.RivalDefeatTarget,
                 GetActiveCreaturePlayerCount(GameManager.HasInstance ? GameManager.Instance.Session : null),
                 MultiplayerObjectiveDefeatsPerExtraPlayer,
                 MultiplayerObjectiveDefeatsMaxBonus);
+        }
 
-            return ComputePackMateAssistedObjectiveTarget(
+        private int GetPackMateObjectiveAssistAmount()
+        {
+            return ComputePackMateObjectiveAssist(
                 _currentObjective,
-                scaledTarget,
+                GetScaledObjectiveDefeatTarget(),
                 _worldProgressionInitialized && _worldProgression.HasPackMate);
         }
 
@@ -1312,6 +1353,7 @@ namespace RoobsWorld.Stages.Creature
             string rewardLabel = BuildObjectiveRewardLabel(
                 _currentObjective,
                 BalanceConstants.CreatureDNAPointsObjectiveComplete);
+            string packAssistSuffix = CreatureStageHUD.BuildPackMateAssistSuffix(GetPackMateObjectiveAssistAmount());
             if (_currentObjective.UsesHoldTimer)
             {
                 return BuildHoldObjectiveProgressText(
@@ -1335,19 +1377,21 @@ namespace RoobsWorld.Stages.Creature
                     activeRivals,
                     Mathf.Max(1, _desiredActiveRivals),
                     streak);
-                return alphaProgress + BuildStreakTimerSuffix(streak, streakSecondsRemaining);
+                return alphaProgress + packAssistSuffix + BuildStreakTimerSuffix(streak, streakSecondsRemaining);
             }
             if (_currentObjective.Type == CreatureStageObjectiveType.PacifyRivals)
             {
+                string actionLabel = BuildPacifyActionLabel(GetBestPacifySocialVerb());
                 string pacifyProgress = string.Format(
                     Localization.Get("creature.objective.pacify_progress"),
                     rewardLabel,
+                    actionLabel,
                     defeatedRivals,
                     GetObjectiveDefeatTarget(),
                     activeRivals,
                     Mathf.Max(1, _desiredActiveRivals),
                     streak);
-                return pacifyProgress + BuildStreakTimerSuffix(streak, streakSecondsRemaining);
+                return pacifyProgress + packAssistSuffix + BuildStreakTimerSuffix(streak, streakSecondsRemaining);
             }
 
             string rivalProgress = string.Format(
@@ -1357,7 +1401,7 @@ namespace RoobsWorld.Stages.Creature
                 activeRivals,
                 Mathf.Max(1, _desiredActiveRivals),
                 streak);
-            return $"{rewardLabel}   {rivalProgress}{BuildStreakTimerSuffix(streak, streakSecondsRemaining)}";
+            return $"{rewardLabel}   {rivalProgress}{packAssistSuffix}{BuildStreakTimerSuffix(streak, streakSecondsRemaining)}";
         }
 
         private void UpdateObjectiveMarker()
@@ -1402,9 +1446,10 @@ namespace RoobsWorld.Stages.Creature
                 && (evt.Type == CreatureCombatFeedbackType.Guard || evt.Type == CreatureCombatFeedbackType.Counter);
             if (playerSourcedControl)
             {
+                int increment = ComputePacifyActionProgressIncrement(evt.Type, _worldPlan.VerbRatings);
                 _objectivePacifyCount = Mathf.Min(
                     GetObjectiveDefeatTarget(),
-                    _objectivePacifyCount + 1);
+                    _objectivePacifyCount + increment);
             }
 
             TrackSpeciesRelationship(evt);
@@ -1424,7 +1469,9 @@ namespace RoobsWorld.Stages.Creature
             if (!evt.IsPlayerSource || _encounterManager == null)
                 return;
 
-            float delta = ComputeSpeciesRelationshipDelta(evt.Type);
+            bool socialAssistApplies = _currentObjective.Type == CreatureStageObjectiveType.PacifyRivals
+                && CreatureWorldPlanner.HasSocialPacifyAssist(_worldPlan.VerbRatings);
+            float delta = ComputeSpeciesRelationshipDelta(evt.Type, socialAssistApplies);
             if (Mathf.Abs(delta) <= 0.001f)
                 return;
 
@@ -1501,6 +1548,29 @@ namespace RoobsWorld.Stages.Creature
                 return;
 
             TryAwardWorldProgression(CreatureProgressionEventType.RecruitPackMate, $"pack:{speciesLabel}");
+        }
+
+        private CreatureVerb? GetBestPacifySocialVerb()
+        {
+            return CreatureWorldPlanner.TryGetBestSocialVerb(_worldPlan.VerbRatings, out var verb, out _)
+                ? verb
+                : null;
+        }
+
+        public static string BuildPacifyActionLabel(CreatureVerb? verb)
+        {
+            if (!verb.HasValue)
+                return Localization.Get("creature.objective.pacify_actions");
+
+            string key = verb.Value switch
+            {
+                CreatureVerb.CallPack => "creature.objective.pacify_action.call_pack",
+                CreatureVerb.Charm => "creature.objective.pacify_action.charm",
+                CreatureVerb.Sing => "creature.objective.pacify_action.sing",
+                CreatureVerb.Pose => "creature.objective.pacify_action.pose",
+                _ => "creature.objective.pacify_actions"
+            };
+            return Localization.Get(key);
         }
     }
 }

@@ -14,6 +14,7 @@ namespace RoobsWorld.UI
         private Canvas _canvas;
         private SettingsUI _settingsUI;
         private AchievementsUI _achievementsUI;
+        private BugReportUI _bugReportUI;
         private Font _font;
 
         private bool _isShowing;
@@ -73,6 +74,8 @@ namespace RoobsWorld.UI
                 _settingsUI.Hide();
             if (_achievementsUI != null)
                 _achievementsUI.Hide();
+            if (_bugReportUI != null)
+                _bugReportUI.Hide();
         }
 
         private void BuildUI()
@@ -146,14 +149,18 @@ namespace RoobsWorld.UI
             titleShadow.effectColor = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.Shadow, 0.3f);
             titleShadow.effectDistance = new Vector2(0f, -1.4f);
 
-            float startY = 0.69f;
-            float spacing = 0.13f;
+            bool showBugReporting = BugReporting.IsAvailable;
+            float startY = showBugReporting ? 0.715f : 0.69f;
+            float spacing = showBugReporting ? 0.112f : 0.13f;
+            int index = 0;
 
-            CreatePauseButton(panel.transform, Localization.Get("pause.resume"), startY, OnResume, textScale, isPrimary: true);
-            CreatePauseButton(panel.transform, Localization.Get("menu.settings"), startY - spacing, OnSettings, textScale);
-            CreatePauseButton(panel.transform, Localization.Get("menu.achievements"), startY - spacing * 2, OnAchievements, textScale);
-            CreatePauseButton(panel.transform, Localization.Get("pause.main_menu"), startY - spacing * 3, OnNewRun, textScale);
-            CreatePauseButton(panel.transform, Localization.Get("menu.quit"), startY - spacing * 4, OnQuit, textScale);
+            CreatePauseButton(panel.transform, Localization.Get("pause.resume"), startY - spacing * index++, OnResume, textScale, isPrimary: true);
+            CreatePauseButton(panel.transform, Localization.Get("menu.settings"), startY - spacing * index++, OnSettings, textScale);
+            CreatePauseButton(panel.transform, Localization.Get("menu.achievements"), startY - spacing * index++, OnAchievements, textScale);
+            CreatePauseButton(panel.transform, Localization.Get("pause.main_menu"), startY - spacing * index++, OnNewRun, textScale);
+            if (showBugReporting)
+                CreatePauseButton(panel.transform, "Report Bug", startY - spacing * index++, OnReportBug, textScale);
+            CreatePauseButton(panel.transform, Localization.Get("menu.quit"), startY - spacing * index, OnQuit, textScale);
         }
 
         private void CreatePauseButton(Transform parent, string label, float yAnchor, System.Action onClick,
@@ -271,6 +278,19 @@ namespace RoobsWorld.UI
                 _achievementsUI.OnClosed = () => _achievementsUI.Hide();
             }
             _achievementsUI.Show();
+        }
+
+        private void OnReportBug()
+        {
+            if (_bugReportUI == null)
+            {
+                var reportObj = new GameObject("BugReportUI");
+                reportObj.transform.SetParent(transform, false);
+                _bugReportUI = reportObj.AddComponent<BugReportUI>();
+                _bugReportUI.OnClosed = () => _bugReportUI.Hide();
+            }
+
+            _bugReportUI.Show();
         }
 
         private void OnNewRun()

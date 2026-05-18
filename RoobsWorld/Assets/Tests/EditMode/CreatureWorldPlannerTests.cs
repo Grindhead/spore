@@ -110,9 +110,27 @@ namespace RoobsWorld.Tests.EditMode
 
             Assert.IsTrue(CreatureWorldPlanner.ShouldRecruitPackMate(alliedState, socialRatings));
             Assert.IsTrue(CreatureWorldPlanner.ShouldRecruitPackMate(alliedState, callPackRatings));
+            Assert.IsTrue(CreatureWorldPlanner.HasSocialPacifyAssist(socialRatings));
+            Assert.AreEqual(2, CreatureWorldPlanner.CountUsableSocialVerbs(socialRatings));
             Assert.IsFalse(CreatureWorldPlanner.ShouldRecruitPackMate(new CreatureProgressionState(), socialRatings));
             Assert.IsFalse(CreatureWorldPlanner.ShouldRecruitPackMate(alreadyPacked, callPackRatings));
             Assert.IsFalse(CreatureWorldPlanner.ShouldRecruitPackMate(alliedState, weakSocialRatings));
+        }
+
+        [Test]
+        public void TryGetBestSocialVerb_ReturnsHighestRatedSocialTool()
+        {
+            var ratings = new[]
+            {
+                new CreatureVerbRating(CreatureVerb.Sing, 1.2f),
+                new CreatureVerbRating(CreatureVerb.Charm, 2.4f),
+                new CreatureVerbRating(CreatureVerb.Bite, 8f)
+            };
+
+            Assert.IsTrue(CreatureWorldPlanner.TryGetBestSocialVerb(ratings, out var verb, out float rating));
+            Assert.AreEqual(CreatureVerb.Charm, verb);
+            Assert.AreEqual(2.4f, rating, 0.001f);
+            Assert.IsFalse(CreatureWorldPlanner.TryGetBestSocialVerb(null, out _, out _));
         }
 
         [Test]

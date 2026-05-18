@@ -638,6 +638,16 @@ namespace RoobsWorld.Stages.Creature
             return $"   {Localization.Get(key)}{distance}";
         }
 
+        public static string BuildPackMateAssistSuffix(int assistAmount)
+        {
+            if (assistAmount <= 0)
+                return string.Empty;
+
+            return "   " + string.Format(
+                Localization.Get("creature.objective.pack_assist"),
+                Mathf.Max(1, assistAmount));
+        }
+
         public static string BuildGuidanceDistanceLabel(float distance)
         {
             if (distance < 0f || float.IsNaN(distance) || float.IsInfinity(distance))

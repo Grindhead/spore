@@ -265,6 +265,31 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual(5, CreatureStage.ComputePackMateAssistedObjectiveTarget(holdGround, 5, hasPackMate: true));
             Assert.AreEqual(1, CreatureStage.ComputePackMateAssistedObjectiveTarget(rivalCull, 1, hasPackMate: true));
             Assert.AreEqual(5, CreatureStage.ComputePackMateAssistedObjectiveTarget(rivalCull, 5, hasPackMate: false));
+            Assert.AreEqual(1, CreatureStage.ComputePackMateObjectiveAssist(rivalCull, 5, hasPackMate: true));
+            Assert.AreEqual(0, CreatureStage.ComputePackMateObjectiveAssist(holdGround, 5, hasPackMate: true));
+            Assert.AreEqual(0, CreatureStage.ComputePackMateObjectiveAssist(rivalCull, 1, hasPackMate: true));
+            Assert.AreEqual("   Pack assist: -1 target", CreatureStageHUD.BuildPackMateAssistSuffix(1));
+            Assert.AreEqual(string.Empty, CreatureStageHUD.BuildPackMateAssistSuffix(0));
+        }
+
+        [Test]
+        public void SocialPacifyAssist_DoublesControlProgressAndImprovesRelationshipGain()
+        {
+            var socialRatings = new[]
+            {
+                new CreatureVerbRating(CreatureVerb.Sing, 0.8f),
+                new CreatureVerbRating(CreatureVerb.Charm, 0.8f)
+            };
+            var weakRatings = new[]
+            {
+                new CreatureVerbRating(CreatureVerb.Pose, 0.2f)
+            };
+
+            Assert.AreEqual(2, CreatureStage.ComputePacifyActionProgressIncrement(CreatureCombatFeedbackType.Guard, socialRatings));
+            Assert.AreEqual(1, CreatureStage.ComputePacifyActionProgressIncrement(CreatureCombatFeedbackType.Guard, weakRatings));
+            Assert.AreEqual(0, CreatureStage.ComputePacifyActionProgressIncrement(CreatureCombatFeedbackType.Hit, socialRatings));
+            Assert.AreEqual(0.65f, CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Guard, hasSocialAssist: true), 0.001f);
+            Assert.AreEqual(0.4f, CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Guard, hasSocialAssist: false), 0.001f);
         }
 
         [Test]
@@ -638,6 +663,8 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual("Counter: +14 stamina", CreatureStageHUD.BuildStaminaRestoredLabel("counter", 14f));
             Assert.AreEqual("Objective momentum: +18 stamina", CreatureStageHUD.BuildStaminaRestoredLabel("objective", 18f));
             Assert.AreEqual("Streak x5: +4 DNA", CreatureStageHUD.BuildStreakBonusLabel(5, 4));
+            Assert.AreEqual("Charm Display", CreatureStage.BuildPacifyActionLabel(CreatureVerb.Charm));
+            Assert.AreEqual("Pacify Actions", CreatureStage.BuildPacifyActionLabel(null));
         }
 
         [Test]

@@ -373,14 +373,49 @@ namespace RoobsWorld.Stages.Creature
             if (state.HasPackMate || state.Allies <= 0)
                 return false;
 
-            if (HasUsableVerb(ratings, CreatureVerb.CallPack, minimumRating))
-                return true;
+            return HasSocialPacifyAssist(ratings, minimumRating);
+        }
 
+        public static bool HasSocialPacifyAssist(CreatureVerbRating[] ratings, float minimumRating = 0.5f)
+        {
+            return CountUsableSocialVerbs(ratings, minimumRating) >= 2
+                || HasUsableVerb(ratings, CreatureVerb.CallPack, minimumRating);
+        }
+
+        public static int CountUsableSocialVerbs(CreatureVerbRating[] ratings, float minimumRating = 0.5f)
+        {
             int socialVerbCount = 0;
             if (HasUsableVerb(ratings, CreatureVerb.Sing, minimumRating)) socialVerbCount++;
             if (HasUsableVerb(ratings, CreatureVerb.Charm, minimumRating)) socialVerbCount++;
             if (HasUsableVerb(ratings, CreatureVerb.Pose, minimumRating)) socialVerbCount++;
-            return socialVerbCount >= 2;
+            return socialVerbCount;
+        }
+
+        public static bool TryGetBestSocialVerb(CreatureVerbRating[] ratings, out CreatureVerb verb, out float rating)
+        {
+            verb = CreatureVerb.Pose;
+            rating = 0f;
+            if (ratings == null)
+                return false;
+
+            for (int i = 0; i < ratings.Length; i++)
+            {
+                CreatureVerb candidate = ratings[i].Verb;
+                if (candidate != CreatureVerb.CallPack &&
+                    candidate != CreatureVerb.Charm &&
+                    candidate != CreatureVerb.Sing &&
+                    candidate != CreatureVerb.Pose)
+                    continue;
+
+                float candidateRating = ratings[i].Rating;
+                if (candidateRating <= rating)
+                    continue;
+
+                verb = candidate;
+                rating = candidateRating;
+            }
+
+            return rating > 0.01f;
         }
 
         public static bool HasUsableVerb(CreatureVerbRating[] ratings, CreatureVerb verb, float minimumRating = 0.5f)

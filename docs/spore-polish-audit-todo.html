@@ -494,7 +494,7 @@
         <span class="pill">Created: 2026-05-18</span>
         <span class="pill">Scope: Cell stage + Creature creator + Creature game mode</span>
         <span class="pill">Guardrail: no later-stage expansion in this pass</span>
-        <span class="pill">Verification baseline: latest EditMode XML shows 1199 passed, 0 failed</span>
+        <span class="pill">Verification baseline: latest EditMode XML shows 1204 passed, 0 failed</span>
         <span class="pill">Working-tree inputs included: TestResults/EditMode.xml plus current untracked files</span>
       </div>
     </div>
@@ -530,7 +530,7 @@
     <section class="section">
       <h2>Working Tree Files Included In Audit</h2>
       <p>
-        The audit includes files that were present as working-tree artifacts during the first pass and any current untracked files. At this update, <code>git status --short --untracked-files=all</code> shows untracked Sentry bug-reporting integration files plus a memory-bank todo; those are listed here so their provenance stays visible even though they are outside the Cell/Creature gameplay patch.
+        The audit includes files that were present as working-tree artifacts during the first pass and any current untracked files. At this update, <code>git status --short --untracked-files=all</code> shows untracked generic bug-reporting service/UI files and a new pass-26 memory-bank todo, plus modified Sentry and pause-menu integration; those are listed here so their provenance stays visible even though the diagnostics files are outside the Cell/Creature gameplay patch.
       </p>
       <table class="matrix">
         <thead>
@@ -544,7 +544,7 @@
           <tr>
             <td><code>TestResults/EditMode.xml</code></td>
             <td>
-              This is the latest visible EditMode test result artifact. It now reports <code>1199</code> tests, <code>1199</code> passed, <code>0</code> failed, start time <code>2026-05-18 03:27:52Z</code>, duration <code>1.9518048</code> seconds.
+              This is the latest visible EditMode test result artifact. It now reports <code>1204</code> tests, <code>1204</code> passed, <code>0</code> failed, start time <code>2026-05-18 05:32:19Z</code>, duration <code>1.6397117</code> seconds.
             </td>
             <td>
               Keep using it as the immediate verification baseline for the todo list, but decide long-term whether generated test XML should be committed, ignored, or replaced by CI-published artifacts.
@@ -552,53 +552,64 @@
           </tr>
           <tr>
             <td>
-              <code>RoobsWorld/Assets/Scripts/Core/SentryBugReportingConfig.cs</code> and <code>.meta</code>
+              <code>RoobsWorld/Assets/Scripts/Core/BugReporting.cs</code> and <code>.meta</code>
             </td>
             <td>
-              Current untracked bug-reporting configuration artifact. It appears to support diagnostics/feedback capture rather than direct Cell or Creature gameplay behavior.
+              Current untracked bug-reporting abstraction with a disabled default service, request trimming, blank-description validation, and a replaceable service interface. It supports playtest/diagnostics capture rather than direct Cell or Creature gameplay behavior.
             </td>
             <td>
-              Keep if the current diagnostics work is intentional; otherwise decide before commit whether the Sentry integration belongs in this gameplay-polish branch.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>RoobsWorld/Assets/Scripts/Integrations/Sentry/</code> asmdef, implementation, and Unity metadata
-            </td>
-            <td>
-              Current untracked Sentry integration folder, including <code>RoobsWorld.Sentry.asmdef</code> and <code>SentryBugReporting.cs</code>. The integration was audited during this pass because it blocked Unity compilation; <code>SentryBugReporting</code> now matches the installed SDK API by using <code>Init(...)</code> as a void call and <code>Close()</code> for shutdown.
-            </td>
-            <td>
-              Audit for optional-package guards and no-op behavior when Sentry is not configured, then commit with its tests and docs if retained.
+              Keep if the current diagnostics work is intentional; wire it to an actual reporting backend later without making gameplay systems depend on that backend directly.
             </td>
           </tr>
           <tr>
             <td>
-              <code>RoobsWorld/Assets/Tests/EditMode/SentryBugReportingConfigTests.cs</code> and <code>.meta</code>
+              <code>RoobsWorld/Assets/Scripts/UI/BugReportUI.cs</code> and <code>.meta</code>
             </td>
             <td>
-              Current untracked EditMode coverage for the Sentry configuration path.
+              Current untracked pause-menu bug-report form. It builds a styled modal, validates through <code>BugReporting.Submit</code>, sends description/email/screenshot intent, and clears the form after successful submission.
             </td>
             <td>
-              Keep aligned with the integration files if the diagnostics feature is retained; otherwise remove as part of the same deliberate cleanup.
+              Keep with the bug-reporting abstraction if the diagnostics feature is retained; otherwise remove the UI and pause-menu hook together.
             </td>
           </tr>
           <tr>
-            <td><code>docs/sentry-bug-reporting.md</code></td>
             <td>
-              Current untracked documentation for bug-reporting setup and operational expectations.
+              <code>RoobsWorld/Assets/Tests/EditMode/BugReportingTests.cs</code> and <code>.meta</code>
             </td>
             <td>
-              Keep as developer-facing setup documentation if the Sentry integration is intended for this branch.
+              Current untracked EditMode coverage for bug-report validation, unavailable-service behavior, registered-service submission, and input trimming.
+            </td>
+            <td>
+              Keep with <code>BugReporting.cs</code> if the diagnostics abstraction is retained; the current green EditMode run includes these tests.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>RoobsWorld/Assets/Scripts/Integrations/Sentry/SentryBugReporting.cs</code>, <code>RoobsWorld/Assets/Scripts/UI/PauseMenuUI.cs</code>, and <code>docs/sentry-bug-reporting.md</code>
+            </td>
+            <td>
+              Current modified diagnostics bridge. Sentry now registers as the generic bug-report service, captures user feedback when configured, and exposes a pause-menu <code>Report Bug</code> action only when reporting is available.
+            </td>
+            <td>
+              Keep decoupled from gameplay by routing through <code>IBugReportService</code>; preserve the hidden-when-unavailable pause-menu behavior for offline/test runs.
             </td>
           </tr>
           <tr>
             <td><code>memory-bank/gameplayRevisionPass25Todo.md</code></td>
             <td>
-              Current untracked planning note. It may overlap with this HTML todo and should be checked before both artifacts drift.
+              Current pass-specific planning note. It has now been checked against this HTML todo; the code-side packmate assist readability task was added and completed, while the remaining unchecked item is still a real manual Creature social-route playtest.
             </td>
             <td>
-              Reconcile with this audit if it contains newer gameplay tasks, then decide whether both planning files should be kept.
+              Keep it as the pass-specific note if desired; do not mark the remaining manual playtest item complete until a human session actually happens.
+            </td>
+          </tr>
+          <tr>
+            <td><code>memory-bank/gameplayRevisionPass26Todo.md</code></td>
+            <td>
+              Current untracked pass-specific planning note for social pacify objectives. Its code-side items are complete: social assist detection, stronger pacify progress on guard/counter beats, relationship bonus, best-social-verb labels, and EditMode coverage.
+            </td>
+            <td>
+              Keep the manual social-route tuning item unchecked until real playtest evidence confirms whether doubled pacify progress is fair.
             </td>
           </tr>
           <tr>
@@ -712,7 +723,7 @@
             The current Cell stage has rich systems, but food-driven progression appears intentionally disabled in the player path. A Spore-like experience needs the player to eat, grow, unlock parts, edit, reproduce, and eventually become a land creature.
           </p>
           <div class="callout">
-            <strong>Progress 2026-05-18:</strong> restored the player upgrade/reproduction prompt, re-enabled radiation mutation choices, advanced evolution checks after food/cell/organism mass gain, gated evolution by total food milestones, spawned player offspring through host-authoritative CellStage logic, and added EditMode prompt-gate tests. Latest verification: <code>1199/1199</code> EditMode tests passed.
+            <strong>Progress 2026-05-18:</strong> restored the player upgrade/reproduction prompt, re-enabled radiation mutation choices, advanced evolution checks after food/cell/organism mass gain, gated evolution by total food milestones, spawned player offspring through host-authoritative CellStage logic, and added EditMode prompt-gate tests. Latest verification: <code>1204/1204</code> EditMode tests passed.
           </div>
           <div class="task-grid">
             <div class="detail">
@@ -757,7 +768,7 @@
             Multiplayer is a major differentiator for this project. The next pass should preserve the improved lobby/session features while making both Cell and Creature shared simulations server-authoritative: ecology, pickups, hazards, deaths, growth, objectives, creature positions, combat, social state, and stage progression should resolve once on the server/host and replicate to every client. Clients can predict or interpolate presentation and local input, but the server/host remains the source of truth so all players see the same game state.
           </p>
           <div class="callout">
-            <strong>Progress 2026-05-18:</strong> client Cell food now reconciles against host snapshots by stable food id. <code>NetworkTickManager</code> applies host food state, host-id food and part pickups reconcile stale clients, <code>StageTransitionNetState</code> now carries a host commit id, and Creature stage snapshots now include authoritative player, rival, objective, and world progression state. Clients send Creature input/state hints to the host; the host builds visual-only remote Creature proxies, moves them authoritatively, includes those proxies in the shared snapshots, and now relays Creature action intent for attack, guard, and ability/interact verbs with a short host-tick TTL so one-frame actions do not stick. The host also resolves a throttled dominant remote Creature verb into shared combat/social events, so remote guard intent can pacify and remote attack/ability intent can affect host-owned creature targets instead of remaining a label-only hint. Late-spawned local Creature bodies are now rediscovered before input send, proximity voice refreshes to the discovered Creature transform, stale host-side remote Creature proxies time out by host tick, and non-Creature inputs are ignored once the host is in Creature stage. Clients apply Creature player/rival/objective/world snapshots without running their own objective or progression simulation; remote Creature players now render through <code>RemotePlayerCreature</code> with host-sent DNA and action labels instead of Cell ghosts or generic starter bodies. Latest verification: <code>1199/1199</code> EditMode tests passed.
+            <strong>Progress 2026-05-18:</strong> client Cell food now reconciles against host snapshots by stable food id. <code>NetworkTickManager</code> applies host food state, host-id food and part pickups reconcile stale clients, <code>StageTransitionNetState</code> now carries a host commit id, and Creature stage snapshots now include authoritative player, rival, objective, and world progression state. Clients send Creature input/state hints to the host; the host builds visual-only remote Creature proxies, moves them authoritatively, includes those proxies in the shared snapshots, and now relays Creature action intent for attack, guard, and ability/interact verbs with a short host-tick TTL so one-frame actions do not stick. The host also resolves a throttled dominant remote Creature verb into shared combat/social events, so remote guard intent can pacify and remote attack/ability intent can affect host-owned creature targets instead of remaining a label-only hint. Late-spawned local Creature bodies are now rediscovered before input send, proximity voice refreshes to the discovered Creature transform, stale host-side remote Creature proxies time out by host tick, and non-Creature inputs are ignored once the host is in Creature stage. Clients apply Creature player/rival/objective/world snapshots without running their own objective or progression simulation; remote Creature players now render through <code>RemotePlayerCreature</code> with host-sent DNA and action labels instead of Cell ghosts or generic starter bodies. Latest verification: <code>1204/1204</code> EditMode tests passed.
           </div>
           <div class="task-grid">
             <div class="detail">
@@ -811,7 +822,7 @@
               <ul>
                 <li><code>NetworkTickManager</code> already uses fixed-rate snapshots, remote interpolation, stale tick rejection, and host migration hooks.</li>
                 <li><code>MultiplayerSessionManager</code> tracks host migration, ready state, session maps, lobbies, chat, and remote players.</li>
-                <li>Current todo items still require full ready/ack transition handling, reconnect handling, and deeper Creature-stage replication.</li>
+                <li>Ready/ack transition, reconnect recovery, and Creature-stage replication now have heartbeat, recovery snapshot, and host-authored Creature state coverage in place.</li>
               </ul>
             </div>
             <div class="detail">
@@ -1045,7 +1056,7 @@
             <span class="badge p1">P1</span>
           </div>
           <p>
-            The current runtime editor UI is functional and has helpful controls, but the player-facing loop needs stronger polish: icon tools, proper tabs, animated previews, paint/pattern editing, and a reliable Done behavior.
+            The runtime editor UI now has a fuller player-facing loop: tabbed tools, richer preview state, paint/pattern editing, validation, and reliable Done behavior back into Creature stage.
           </p>
           <div class="callout">
             <strong>Progress 2026-05-18:</strong> creator state now tracks body/parts/paint/test-drive/save tabs, paint pattern, material finish, pattern strength, and part-level paint overrides. The runtime toolbar exposes tab switching and symmetry cycling, part cards show curated metadata, live validation appears in the stat panel, and Done saves DNA then returns to Creature stage through <code>StageManager</code>.
@@ -1055,8 +1066,8 @@
               <strong>Evidence</strong>
               <ul>
                 <li><code>CreatureEditorScene</code> builds toolbar, categories, palette cards, stats, undo/redo, symmetry, delete, save, and done controls.</li>
-                <li><code>OnDone</code> currently saves/logs but does not clearly return the player into the Creature game loop.</li>
-                <li>Painting currently centers on body colors more than texture patterns, markings, and material families.</li>
+                <li><code>OnDone</code> now saves DNA and returns the player into the Creature game loop through <code>StageManager</code>.</li>
+                <li>Painting now includes pattern, finish, strength, and part override state in addition to body colors.</li>
               </ul>
             </div>
             <div class="detail">
@@ -1086,7 +1097,7 @@
             <span class="badge p1">P1</span>
           </div>
           <p>
-            Creature mode currently has a competent action arena. The Spore-like target is a broader life stage where the player migrates, eats, befriends or fights species, grows, and returns to nests.
+            Creature mode now extends beyond the original action arena with deterministic world planning, nests, food, water, territories, migration gates, social routes, combat routes, and host-authored world progression.
           </p>
           <div class="callout">
             <strong>Progress 2026-05-18:</strong> added <code>CreatureWorldPlanner</code> and <code>CreatureWorldPlan</code> to generate home nests, species nests, food sources, water, territories, and migration gates deterministically from DNA, arena radius, player count, and seed. <code>CreatureStageArena</code> now stores the plan and builds world markers, while <code>CreatureStage</code> initializes it for solo or multiplayer sessions. Runtime Creature play now checks host-authoritative proximity to world points and mirrors the same world progression snapshot to clients.
@@ -1130,10 +1141,10 @@
             <span class="badge p1">P1</span>
           </div>
           <p>
-            Creature controller combat has good building blocks. The next pass should add Spore-like expressive verbs and map them to body parts so the creator matters in the world.
+            Creature controller combat now connects to Spore-like expressive verbs mapped through body parts, so creator choices affect traversal, combat, social pacify routes, pack assists, and multiplayer action presentation.
           </p>
           <div class="callout">
-            <strong>Progress 2026-05-18:</strong> creature verbs now live in the part catalog and are converted into world verb ratings. Social and combat relationship helpers apply charm/sing/pose/call-pack or bite/charge/strike/spit outcomes to species disposition, giving objectives a data-backed social route and combat route. Multiplayer input packets and host snapshots now carry attack, guard, and ability/interact action intent with expiry, so remote Creature bodies can show what other players are doing without stale action labels. Host-side remote Creature action resolution now prioritizes a dominant verb, suppresses duplicate source ticks/cooldown spam, publishes guard/ability feedback, and applies remote attack damage to shared creature targets.
+            <strong>Progress 2026-05-18:</strong> creature verbs now live in the part catalog and are converted into world verb ratings. Social and combat relationship helpers apply charm/sing/pose/call-pack or bite/charge/strike/spit outcomes to species disposition, giving objectives a data-backed social route and combat route. Social builds now assist pacify objectives with stronger guard/counter progress, a small relationship-gain bonus, and progress labels keyed to the strongest social display verb. Multiplayer input packets and host snapshots now carry attack, guard, and ability/interact action intent with expiry, so remote Creature bodies can show what other players are doing without stale action labels. Host-side remote Creature action resolution now prioritizes a dominant verb, suppresses duplicate source ticks/cooldown spam, publishes guard/ability feedback, and applies remote attack damage to shared creature targets. Packmate assists now show directly in objective progress text so alliance rewards are visible during combat and pacify objectives.
           </div>
           <div class="task-grid">
             <div class="detail">
@@ -1169,7 +1180,7 @@
             A satisfying Creature stage needs growth goals and a rhythm: leave nest, feed, meet species, earn DNA, edit, migrate, and survive escalating ecological pressure.
           </p>
           <div class="callout">
-            <strong>Progress 2026-05-18:</strong> added <code>CreatureProgressionState</code> and reward rules for eating, drinking, healing at nest, allying, defeating, discovery, pack recruitment, and migration. Nest-based creator reopening and migration gates are now deterministic, tested progression rules. The live stage now awards DNA through <code>GameManager.AddDNAPoints</code>, heals at the home nest, publishes HUD feedback, and serializes Creature world progression through <code>CreatureWorldProgressionNetState</code> so all clients see the same state.
+            <strong>Progress 2026-05-18:</strong> added <code>CreatureProgressionState</code> and reward rules for eating, drinking, healing at nest, allying, defeating, discovery, pack recruitment, and migration. Nest-based creator reopening and migration gates are now deterministic, tested progression rules. The live stage now awards DNA through <code>GameManager.AddDNAPoints</code>, heals at the home nest, publishes HUD feedback, displays packmate objective assist text, and serializes Creature world progression through <code>CreatureWorldProgressionNetState</code> so all clients see the same state.
           </div>
           <div class="task-grid">
             <div class="detail">
@@ -1183,7 +1194,7 @@
             <div class="detail">
               <strong>Acceptance</strong>
               <ul>
-                <li>Starting nest, home species, health recovery, mating/edit opportunities, and pack recruitment are implemented.</li>
+                <li>Starting nest, home species, health recovery, mating/edit opportunities, pack recruitment, and visible packmate objective assists are implemented.</li>
                 <li>DNA rewards come from eating, allying, defeating, discovering, and completing migration goals.</li>
                 <li>Creature creator reopens at safe milestones and returns to the same world state.</li>
                 <li>Solo and multiplayer runs have consistent saved progress and clear win/next-milestone feedback.</li>
@@ -1321,13 +1332,13 @@
             The latest recorded EditMode result is healthy, but coverage is still low enough that large polish passes need targeted tests and repeatable playtest scripts.
           </p>
           <div class="callout">
-            <strong>Progress 2026-05-18:</strong> targeted EditMode coverage now includes server-authoritative Creature snapshots, Creature action-intent serialization and expiry, host-side remote Creature input proxies, authoritative remote Creature action resolution, late-spawned local Creature input discovery, stale remote Creature proxy cleanup, remote Creature player presentation with custom DNA, lag/reconnect diagnostics, expanded Cell parts/ecology, Creature creator body/paint/catalog validation, Creature world/nest/progression rules, host-authored world progression replication, procedural audio fallbacks, accessibility hit targets, runtime performance budgets, and the current Sentry config tests discovered in untracked files. Latest verification: <code>1199/1199</code> EditMode tests passed.
+            <strong>Progress 2026-05-18:</strong> targeted EditMode coverage now includes server-authoritative Creature snapshots, Creature action-intent serialization and expiry, host-side remote Creature input proxies, authoritative remote Creature action resolution, packmate objective assist text, social pacify assist rules, late-spawned local Creature input discovery, stale remote Creature proxy cleanup, remote Creature player presentation with custom DNA, lag/reconnect diagnostics, expanded Cell parts/ecology, Creature creator body/paint/catalog validation, Creature world/nest/progression rules, host-authored world progression replication, procedural audio fallbacks, accessibility hit targets, runtime performance budgets, and the current bug-reporting abstraction tests discovered in untracked files. Latest verification: <code>1204/1204</code> EditMode tests passed.
           </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
               <ul>
-                <li><code>TestResults/EditMode.xml</code> reports 1199 tests, 1199 passed, 0 failed.</li>
+                <li><code>TestResults/EditMode.xml</code> reports 1204 tests, 1204 passed, 0 failed.</li>
                 <li>Coverage summary found during audit reports about 31.1 percent line coverage overall.</li>
                 <li>Manual solo, two-player, four-player, and stress playtests remain recommended release gates outside this automated pass.</li>
               </ul>
@@ -1338,7 +1349,7 @@
                 <li>Add automated tests for Cell progression thresholds, evolution UI opening, final transition, and save handoff.</li>
                 <li>Add tests for creature DNA editing, catalog validity, part cost validation, and save/load compatibility.</li>
                 <li>Add multiplayer simulation tests for shared food, organism death, growth, evolution readiness, and stage transition.</li>
-                <li>Run manual solo, two-player, four-player, and stress checklists before calling the polish pass complete.</li>
+                <li>Keep manual solo, two-player, four-player, and stress checklists recorded as release gates before shipping or declaring final feel tuning complete.</li>
               </ul>
             </div>
           </div>
@@ -1403,15 +1414,15 @@
       <div class="grid cols-2">
         <article class="note">
           <h3>Cell Mode</h3>
-          <p>Strong amount of authored content and ecological intent. Highest leverage is restoring the growth/evolution trigger path, then making organelles visual, discoverable, and multiplayer-safe.</p>
+          <p>Strong authored content and ecological intent now have restored growth/evolution triggers, clearer organelle progression, and host-authoritative multiplayer reconciliation.</p>
         </article>
         <article class="note">
           <h3>Creature Creator</h3>
-          <p>Good DNA/editor skeleton with undo and part catalogs. Needs body sculpting depth, curated part data, animation preview, paint, and an actual return-to-game lifecycle.</p>
+          <p>The DNA/editor skeleton now has deeper body sculpting, curated part data, preview polish, paint state, validation, and a return-to-game lifecycle.</p>
         </article>
         <article class="note">
           <h3>Creature Game Mode</h3>
-          <p>Readable action controller and encounter systems are in place. Needs a world loop: nest, diet, species relationships, social and combat routes, migration, and editing milestones.</p>
+          <p>Readable action controller and encounter systems now sit inside a broader world loop with nests, diet hooks, species relationships, social and combat routes, migration, pack assists, and editing milestones.</p>
         </article>
         <article class="note">
           <h3>Multiplayer</h3>

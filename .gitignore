@@ -26,4 +26,7 @@ ehthumbs.db
 /[Rr]eleases/
 /[Aa]rtifacts/
 
+# Download/temp artifacts
+/downloads/*.tmp
+
 # Keep RoobsWorld-specific ignores in RoobsWorld/.gitignore

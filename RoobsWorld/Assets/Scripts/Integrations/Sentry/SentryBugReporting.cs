@@ -7,12 +7,16 @@ namespace RoobsWorld.Integrations.Sentry
 {
     public static class SentryBugReporting
     {
+        private static readonly SentryBugReportService Service = new SentryBugReportService();
         private static bool _initialized;
         private static bool _initializing;
+
+        public static bool IsReady => _initialized;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void InitializeBeforeSceneLoad()
         {
+            BugReporting.Register(Service);
             TryInitialize();
         }
 
@@ -107,6 +111,28 @@ namespace RoobsWorld.Integrations.Sentry
             UnitySentrySdk.CaptureMessage(message);
         }
 
+        public static bool CaptureFeedback(BugReportRequest request, out string error)
+        {
+            error = null;
+
+            if (!_initialized && !TryInitialize())
+            {
+                error = "Bug reporting is not configured.";
+                return false;
+            }
+
+            try
+            {
+                UnitySentrySdk.CaptureFeedback(request.Description, request.Email, request.Name, request.AttachScreenshot);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = $"Could not send report: {ex.Message}";
+                return false;
+            }
+        }
+
         private static void Shutdown()
         {
             Application.quitting -= Shutdown;
@@ -135,6 +161,16 @@ namespace RoobsWorld.Integrations.Sentry
             catch
             {
                 return null;
+            }
+        }
+
+        private sealed class SentryBugReportService : IBugReportService
+        {
+            public bool IsAvailable => SentryBugReporting.IsReady || SentryBugReporting.TryInitialize();
+
+            public bool Submit(BugReportRequest request, out string error)
+            {
+                return SentryBugReporting.CaptureFeedback(request, out error);
             }
         }
     }

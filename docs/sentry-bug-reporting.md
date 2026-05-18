@@ -19,3 +19,5 @@ Optional launch/env overrides:
 Editor reporting is disabled by default to avoid sending local test/compiler failures. Player builds report as `production` by default, or `development` for debug builds.
 
 The runtime setup keeps default PII off, captures Unity `Debug.LogError` events and unhandled exceptions, and adds game/platform/build tags before sending events.
+
+When Sentry is configured, the pause menu shows a `Report Bug` action. It sends the player description, optional email, and a screenshot through Sentry user feedback. When no DSN is configured, that action stays hidden.
