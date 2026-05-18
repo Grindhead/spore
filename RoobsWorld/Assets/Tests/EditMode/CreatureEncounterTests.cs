@@ -1,6 +1,8 @@
 using NUnit.Framework;
 using RoobsWorld.Core;
 using RoobsWorld.Creature;
+using RoobsWorld.Creature.AI;
+using RoobsWorld.Multiplayer;
 using RoobsWorld.Stages.Creature;
 using UnityEngine;
 
@@ -203,6 +205,52 @@ namespace RoobsWorld.Tests.EditMode
         {
             Assert.AreEqual(0, CreatureStage.ComputeDesiredActiveRivals(-3, 0, -1, -1));
             Assert.AreEqual(3, CreatureStage.ComputeDesiredActiveRivals(99, 1, 3, 1));
+        }
+
+        [Test]
+        public void GetActiveCreaturePlayerCount_DefaultsToSinglePlayerWhenSessionMissing()
+        {
+            Assert.AreEqual(1, CreatureStage.GetActiveCreaturePlayerCount(null));
+        }
+
+        [Test]
+        public void GetActiveCreaturePlayerCount_UsesSessionPlayerCount()
+        {
+            var session = new MultiplayerSessionManager();
+            session.CreateSession();
+            session.AddRemotePlayer(1, "Player 1");
+            session.AddRemotePlayer(2, "Player 2");
+
+            Assert.AreEqual(3, CreatureStage.GetActiveCreaturePlayerCount(session));
+        }
+
+        [Test]
+        public void ComputeMultiplayerScaledCount_AddsPerExtraPlayerAndCapsBonus()
+        {
+            Assert.AreEqual(5, CreatureStage.ComputeMultiplayerScaledCount(5, 1, 2, 10));
+            Assert.AreEqual(9, CreatureStage.ComputeMultiplayerScaledCount(5, 3, 2, 10));
+            Assert.AreEqual(15, CreatureStage.ComputeMultiplayerScaledCount(5, 8, 2, 10));
+        }
+
+        [Test]
+        public void ComputeMultiplayerScaledCount_ClampsInvalidInputs()
+        {
+            Assert.AreEqual(0, CreatureStage.ComputeMultiplayerScaledCount(-4, 0, -2, -8));
+            Assert.AreEqual(3, CreatureStage.ComputeMultiplayerScaledCount(3, 4, -1, 5));
+        }
+
+        [Test]
+        public void CreatureObjectiveDefeatScaling_IncreasesPerExtraPlayer_AndCaps()
+        {
+            const int baseObjectiveDefeats = 5;
+            const int perExtraPlayer = 2;
+            const int maxBonus = 6;
+
+            Assert.AreEqual(5, CreatureStage.ComputeMultiplayerScaledCount(baseObjectiveDefeats, 1, perExtraPlayer, maxBonus));
+            Assert.AreEqual(7, CreatureStage.ComputeMultiplayerScaledCount(baseObjectiveDefeats, 2, perExtraPlayer, maxBonus));
+            Assert.AreEqual(9, CreatureStage.ComputeMultiplayerScaledCount(baseObjectiveDefeats, 3, perExtraPlayer, maxBonus));
+            Assert.AreEqual(11, CreatureStage.ComputeMultiplayerScaledCount(baseObjectiveDefeats, 4, perExtraPlayer, maxBonus));
+            Assert.AreEqual(11, CreatureStage.ComputeMultiplayerScaledCount(baseObjectiveDefeats, 6, perExtraPlayer, maxBonus));
         }
 
         [Test]
@@ -450,8 +498,17 @@ namespace RoobsWorld.Tests.EditMode
         [Test]
         public void ObjectivePlanner_CanSelectNonDefeatObjective()
         {
-            var dna = CreatureDNA.CreateDefault();
-            dna.Parts.Add(new PartPlacement { PartId = "tail_basic", AttachBone = 2, Offset = Vector3.back });
+            var dna = new CreatureDNA
+            {
+                CreatureId = "holdtest",
+                CreatureName = "Hold Test",
+                Body = new BodyPlan { SpineSegments = 3, Symmetry = SymmetryType.Bilateral, BodyScale = Vector3.one },
+                Parts = new System.Collections.Generic.List<PartPlacement>
+                {
+                    new PartPlacement { PartId = "tail_basic", AttachBone = 2, Offset = Vector3.back },
+                    new PartPlacement { PartId = "shell_basic", AttachBone = 1, Offset = Vector3.zero }
+                }
+            };
 
             var objective = CreatureStageObjectivePlanner.CreateObjective(dna);
 
@@ -468,10 +525,12 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual(0, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 0));
             Assert.AreEqual(1, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 1));
             Assert.AreEqual(2, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 2));
-            Assert.AreEqual(0, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 3));
+            Assert.AreEqual(3, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 3));
+            Assert.AreEqual(0, CreatureStageObjectivePlanner.ComputeObjectiveSlot(0, 0, 4));
             Assert.AreEqual(CreatureStageObjectiveType.RivalCull, CreatureStageObjectivePlanner.CreateObjective(dna, 0).Type);
             Assert.AreEqual(CreatureStageObjectiveType.AlphaHunt, CreatureStageObjectivePlanner.CreateObjective(dna, 1).Type);
             Assert.AreEqual(CreatureStageObjectiveType.HoldFeedingGround, CreatureStageObjectivePlanner.CreateObjective(dna, 2).Type);
+            Assert.AreEqual(CreatureStageObjectiveType.PacifyRivals, CreatureStageObjectivePlanner.CreateObjective(dna, 3).Type);
         }
 
         [Test]
@@ -605,6 +664,58 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual(0, CreatureStageEncounterManager.ComputeStreakBonusDNA(4, 3, 3, 2));
             Assert.AreEqual(4, CreatureStageEncounterManager.ComputeStreakBonusDNA(5, 3, 3, 2));
             Assert.AreEqual(5, CreatureStageEncounterManager.ComputeStreakBonusDNA(7, 3, 3, 2));
+        }
+
+        [Test]
+        public void TryResolveDispositionIntentOverride_DeescalatesFriendlySpecies()
+        {
+            bool nearOverride = CreatureRivalAI.TryResolveDispositionIntentOverride(
+                CreatureSpeciesDisposition.Friendly,
+                playerDistance: 1.8f,
+                aggroRange: 14f,
+                attackRange: 2f,
+                recentlyDamaged: false,
+                out CreatureRivalIntent nearIntent);
+            Assert.IsTrue(nearOverride);
+            Assert.AreEqual(CreatureRivalIntent.KeepDistance, nearIntent);
+
+            bool midOverride = CreatureRivalAI.TryResolveDispositionIntentOverride(
+                CreatureSpeciesDisposition.Friendly,
+                playerDistance: 6f,
+                aggroRange: 14f,
+                attackRange: 2f,
+                recentlyDamaged: false,
+                out CreatureRivalIntent midIntent);
+            Assert.IsTrue(midOverride);
+            Assert.AreEqual(CreatureRivalIntent.Wander, midIntent);
+        }
+
+        [Test]
+        public void TryResolveDispositionIntentOverride_EscalatesHostileSpecies()
+        {
+            bool hostileOverride = CreatureRivalAI.TryResolveDispositionIntentOverride(
+                CreatureSpeciesDisposition.Hostile,
+                playerDistance: 12f,
+                aggroRange: 10f,
+                attackRange: 2f,
+                recentlyDamaged: false,
+                out CreatureRivalIntent hostileIntent);
+            Assert.IsTrue(hostileOverride);
+            Assert.AreEqual(CreatureRivalIntent.Chase, hostileIntent);
+        }
+
+        [Test]
+        public void TryResolveDispositionIntentOverride_YieldsToRecentDamage()
+        {
+            bool overrideApplied = CreatureRivalAI.TryResolveDispositionIntentOverride(
+                CreatureSpeciesDisposition.Allied,
+                playerDistance: 1f,
+                aggroRange: 12f,
+                attackRange: 2f,
+                recentlyDamaged: true,
+                out CreatureRivalIntent intent);
+            Assert.IsFalse(overrideApplied);
+            Assert.AreEqual(CreatureRivalIntent.Wander, intent);
         }
 
         [Test]

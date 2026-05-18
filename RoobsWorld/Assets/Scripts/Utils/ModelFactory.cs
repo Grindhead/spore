@@ -641,13 +641,18 @@ namespace RoobsWorld.Utils
 
         public static GameObject CreateCreatureModel(Vector3 position, CreatureDNA dna)
         {
+            return CreateCreatureModel(position, dna, true);
+        }
+
+        public static GameObject CreateCreatureModel(Vector3 position, CreatureDNA dna, bool renderSegmentGeometry)
+        {
             dna ??= CreatureDNA.CreateDefault();
             var root = new GameObject("Creature");
             root.transform.position = position;
             root.transform.localScale = dna.Body != null && dna.Body.BodyScale != Vector3.zero
                 ? dna.Body.BodyScale
                 : Vector3.one;
-            CreatureModelBuilder.Build(root, dna, CreaturePartCatalog.GetDefaultCatalog());
+            CreatureModelBuilder.Build(root, dna, CreaturePartCatalog.GetDefaultCatalog(), renderSegmentGeometry);
             return root;
         }
 

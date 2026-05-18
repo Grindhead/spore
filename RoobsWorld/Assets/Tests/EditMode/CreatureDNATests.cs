@@ -17,9 +17,13 @@ namespace RoobsWorld.Tests
             Assert.IsNotNull(dna.CreatureId);
             Assert.IsNotEmpty(dna.CreatureId);
             Assert.AreEqual("Roob", dna.CreatureName);
-            Assert.AreEqual(3, dna.Body.SpineSegments);
+            Assert.AreEqual(2, dna.Body.SpineSegments);
             Assert.AreEqual(SymmetryType.Bilateral, dna.Body.Symmetry);
             Assert.IsTrue(dna.Parts.Count > 0);
+
+            int maxBone = dna.Body.SpineSegments - 1;
+            foreach (var part in dna.Parts)
+                Assert.That(part.AttachBone, Is.InRange(0, maxBone));
         }
 
         [Test]

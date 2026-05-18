@@ -98,7 +98,10 @@ namespace RoobsWorld.Tests.EditMode
             incompatible.Parts[0].AttachBone = 99;
             GameManager.Instance.CurrentSave.CreatureDNAJson = incompatible.ToJson();
 
-            LogAssert.Expect(LogType.Error, new Regex(@"\[GameManager\] Invalid CreatureDNAJson: parts\[0\] attach bone 99 is outside body range 0\.\.2\."));
+            int maxBone = incompatible.Body.SpineSegments - 1;
+            LogAssert.Expect(
+                LogType.Error,
+                new Regex($@"\[GameManager\] Invalid CreatureDNAJson: parts\[0\] attach bone 99 is outside body range 0\.\.{maxBone}\."));
 
             var loaded = GameManager.Instance.GetPlayerCreatureDNA();
 

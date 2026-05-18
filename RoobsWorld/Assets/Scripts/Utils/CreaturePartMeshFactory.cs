@@ -491,16 +491,17 @@ namespace RoobsWorld.Utils
 
         public static Mesh GetPartMesh(string partId)
         {
-            if (partId.StartsWith("eye")) return CreateEye();
-            if (partId.StartsWith("mouth")) return CreateMouth();
-            if (partId.StartsWith("leg")) return CreateLeg();
-            if (partId.StartsWith("arm")) return CreateArm();
-            if (partId.StartsWith("wing")) return CreateWing();
-            if (partId.StartsWith("tail")) return CreateTail();
-            if (partId.StartsWith("horn")) return CreateHorn();
-            if (partId.StartsWith("fin")) return CreateFin();
-            if (partId.StartsWith("shell")) return CreateShell();
-            if (partId.StartsWith("spike")) return CreateSpike();
+            string normalizedId = NormalizePartId(partId);
+            if (normalizedId.StartsWith("eye")) return CreateEye();
+            if (normalizedId.StartsWith("mouth") || normalizedId.StartsWith("head") || normalizedId.StartsWith("jaw")) return CreateMouth();
+            if (normalizedId.StartsWith("leg")) return CreateLeg();
+            if (normalizedId.StartsWith("arm")) return CreateArm();
+            if (normalizedId.StartsWith("wing")) return CreateWing();
+            if (normalizedId.StartsWith("tail")) return CreateTail();
+            if (normalizedId.StartsWith("horn")) return CreateHorn();
+            if (normalizedId.StartsWith("fin") || normalizedId.StartsWith("ear")) return CreateFin();
+            if (normalizedId.StartsWith("shell") || normalizedId.StartsWith("torso")) return CreateShell();
+            if (normalizedId.StartsWith("spike")) return CreateSpike();
             return CreateOrganicSphere(0.1f, 6);
         }
 
@@ -511,17 +512,29 @@ namespace RoobsWorld.Utils
 
         public static Color GetPartColor(string partId)
         {
-            if (partId.StartsWith("eye")) return Color.white;
-            if (partId.StartsWith("mouth")) return new Color(0.8f, 0.2f, 0.2f);
-            if (partId.StartsWith("leg")) return new Color(0.5f, 0.4f, 0.3f);
-            if (partId.StartsWith("arm")) return new Color(0.6f, 0.5f, 0.3f);
-            if (partId.StartsWith("wing")) return new Color(0.8f, 0.8f, 0.9f);
-            if (partId.StartsWith("tail")) return new Color(0.4f, 0.6f, 0.3f);
-            if (partId.StartsWith("horn")) return new Color(0.7f, 0.7f, 0.65f);
-            if (partId.StartsWith("fin")) return new Color(0.3f, 0.6f, 0.8f);
-            if (partId.StartsWith("shell")) return new Color(0.6f, 0.5f, 0.3f);
-            if (partId.StartsWith("spike")) return new Color(0.6f, 0.6f, 0.55f);
+            string normalizedId = NormalizePartId(partId);
+            if (normalizedId.StartsWith("eye")) return Color.white;
+            if (normalizedId.StartsWith("mouth") || normalizedId.StartsWith("head") || normalizedId.StartsWith("jaw")) return new Color(0.8f, 0.2f, 0.2f);
+            if (normalizedId.StartsWith("leg")) return new Color(0.5f, 0.4f, 0.3f);
+            if (normalizedId.StartsWith("arm")) return new Color(0.6f, 0.5f, 0.3f);
+            if (normalizedId.StartsWith("wing")) return new Color(0.8f, 0.8f, 0.9f);
+            if (normalizedId.StartsWith("tail")) return new Color(0.4f, 0.6f, 0.3f);
+            if (normalizedId.StartsWith("horn")) return new Color(0.7f, 0.7f, 0.65f);
+            if (normalizedId.StartsWith("fin") || normalizedId.StartsWith("ear")) return new Color(0.3f, 0.6f, 0.8f);
+            if (normalizedId.StartsWith("shell") || normalizedId.StartsWith("torso")) return new Color(0.6f, 0.5f, 0.3f);
+            if (normalizedId.StartsWith("spike")) return new Color(0.6f, 0.6f, 0.55f);
             return Color.magenta;
+        }
+
+        private static string NormalizePartId(string partId)
+        {
+            if (string.IsNullOrWhiteSpace(partId))
+                return string.Empty;
+
+            string id = partId.ToLowerInvariant();
+            if (id.StartsWith("animal_"))
+                id = id.Substring("animal_".Length);
+            return id;
         }
     }
 }

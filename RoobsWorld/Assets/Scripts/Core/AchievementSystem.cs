@@ -220,14 +220,6 @@ namespace RoobsWorld.Core
         bool IsOverlayEnabled { get; }
     }
 
-    public interface IPlatformCloudSaveProvider
-    {
-        bool IsAvailable { get; }
-        string PlatformName { get; }
-        bool TryWriteText(string remoteFileName, string contents);
-        bool TryReadText(string remoteFileName, out string contents);
-    }
-
     public interface IPlatformRichPresenceProvider
     {
         bool IsAvailable { get; }

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using RoobsWorld.Core;
 using RoobsWorld.Utils;
 using UnityEngine;
@@ -14,11 +16,14 @@ namespace RoobsWorld.Creature.Editor
     /// </summary>
     public class CreatureEditorScene : MonoBehaviour
     {
+        private const float PlacedPartDragStartThresholdPixels = 6f;
+
         [SerializeField] private float _orbitSpeed = 120f;
         [SerializeField] private float _orbitPitchSpeed = 80f;
         [SerializeField] private float _orbitDistance = 5f;
         [SerializeField] private float _orbitHeight = 2f;
         [SerializeField] private float _zoomSpeed = 2f;
+        [SerializeField] private float _wheelZoomSpeed = 0.025f;
         [SerializeField] private float _minZoom = 2f;
         [SerializeField] private float _maxZoom = 10f;
         [SerializeField] private float _minPitch = 10f;
@@ -38,10 +43,22 @@ namespace RoobsWorld.Creature.Editor
         private Text _nameText;
         private Text _statusText;
         private readonly List<GameObject> _partButtons = new List<GameObject>();
+        private readonly List<GameObject> _categoryButtons = new List<GameObject>();
         private readonly List<Transform> _spineAnchors = new List<Transform>();
+        private readonly Dictionary<string, Sprite> _partPreviewCache = new Dictionary<string, Sprite>();
+        private RectTransform _partGridContent;
+        private Text _partPanelTitle;
+        private Text _partTooltipText;
+        private PartCategory _selectedCategory;
+        private bool _hasSelectedCategory;
 
         private string _draggingPartId;
         private bool _isDraggingPart;
+        private bool _isMovingPlacedPart;
+        private int _draggingPartIndex = -1;
+        private bool _hasPendingPlacedPartDrag;
+        private int _pendingPlacedPartDragIndex = -1;
+        private Vector2 _pendingPlacedPartDragStartScreen;
         private bool _lastDropValid;
         private DropCandidate _lastDropCandidate;
         private GameObject _dragPreviewPart;
@@ -50,14 +67,11 @@ namespace RoobsWorld.Creature.Editor
         private Vector3 _bodyDragStartScale;
         private float _bodyDragStartFrontPull;
         private int _bodyDragStartAnchorIndex;
+        private float _selectedPartMoveSpeed = 0.9f;
+        private float _selectedPartRotateSpeed = 90f;
+        private float _selectedPartScaleSpeed = 0.6f;
 
         private Dictionary<string, CreaturePartDef> _partCatalog;
-        private static readonly string[] DEFAULT_PART_IDS =
-        {
-            "mouth_basic", "eye_basic", "leg_basic", "arm_basic", "wing_basic",
-            "tail_basic", "horn_basic", "fin_basic", "shell_basic", "spike_basic"
-        };
-
         public CreatureEditorState EditorState => _state;
 
         public void Initialize(CreatureDNA dna = null, Dictionary<string, CreaturePartDef> catalog = null)
@@ -66,6 +80,7 @@ namespace RoobsWorld.Creature.Editor
             _partCatalog = catalog ?? CreaturePartCatalog.GetDefaultCatalog();
             _gallery = new CreatureGallery();
             _currentZoom = _orbitDistance;
+            _partPreviewCache.Clear();
 
             BuildEnvironment();
             BuildUI();
@@ -75,6 +90,9 @@ namespace RoobsWorld.Creature.Editor
         private void Update()
         {
             UpdateOrbitCamera();
+            UpdatePartSelectionInput();
+            UpdatePlacedPartDragInput();
+            UpdateSelectedPartEditInput();
             UpdateBodySculptInput();
             UpdateDragPreview();
             UpdateStatDisplay();
@@ -86,6 +104,7 @@ namespace RoobsWorld.Creature.Editor
             look = FilterMouseLookWithoutRightClick(look);
             _currentAngle += look.x * _orbitSpeed * Time.deltaTime;
             _currentZoom = Mathf.Clamp(_currentZoom - look.y * _zoomSpeed * Time.deltaTime, _minZoom, _maxZoom);
+            _currentZoom = ApplyMouseWheelZoom(_currentZoom, _wheelZoomSpeed, _minZoom, _maxZoom);
 
             if (Mouse.current != null && Mouse.current.middleButton.isPressed)
             {
@@ -109,6 +128,20 @@ namespace RoobsWorld.Creature.Editor
                 );
                 cam.transform.LookAt(Vector3.up * 0.5f);
             }
+        }
+
+        private static float ApplyMouseWheelZoom(float currentZoom, float wheelZoomSpeed, float minZoom, float maxZoom)
+        {
+            if (Mouse.current == null)
+                return currentZoom;
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+                return currentZoom;
+
+            float wheelY = Mouse.current.scroll.ReadValue().y;
+            if (Mathf.Abs(wheelY) <= 0.001f)
+                return currentZoom;
+
+            return Mathf.Clamp(currentZoom - wheelY * wheelZoomSpeed, minZoom, maxZoom);
         }
 
         private static Vector2 FilterMouseLookWithoutRightClick(Vector2 lookInput)
@@ -207,21 +240,395 @@ namespace RoobsWorld.Creature.Editor
             palette.transform.SetParent(parent, false);
             var rect = palette.AddComponent<RectTransform>();
             rect.anchorMin = new Vector2(0, 0);
-            rect.anchorMax = new Vector2(0.15f, 0.8f);
-            rect.offsetMin = new Vector2(10, 10);
-            rect.offsetMax = new Vector2(-5, -10);
+            rect.anchorMax = new Vector2(0.34f, 0.96f);
+            rect.offsetMin = new Vector2(12, 12);
+            rect.offsetMax = new Vector2(-8, -8);
 
             var bg = palette.AddComponent<Image>();
-            bg.color = new Color(0, 0, 0, 0.7f);
+            bg.color = new Color(0.05f, 0.11f, 0.19f, 0.82f);
 
-            var titleObj = CreateUIText(palette.transform, "Parts", new Vector2(5, -5), 16);
+            CreateUIText(palette.transform, "PARTS", new Vector2(8, -6), 13);
 
-            float yOffset = -30f;
-            foreach (string partId in DEFAULT_PART_IDS)
+            var categoryRow = new GameObject("CategoryRow");
+            categoryRow.transform.SetParent(palette.transform, false);
+            var categoryRect = categoryRow.AddComponent<RectTransform>();
+            categoryRect.anchorMin = new Vector2(0f, 1f);
+            categoryRect.anchorMax = new Vector2(1f, 1f);
+            categoryRect.pivot = new Vector2(0.5f, 1f);
+            categoryRect.anchoredPosition = new Vector2(0f, -24f);
+            categoryRect.sizeDelta = new Vector2(-10f, 54f);
+
+            var categoryScroll = categoryRow.AddComponent<ScrollRect>();
+            categoryScroll.horizontal = true;
+            categoryScroll.vertical = false;
+            categoryScroll.scrollSensitivity = 50f;
+
+            var categoryViewport = new GameObject("CategoryViewport");
+            categoryViewport.transform.SetParent(categoryRow.transform, false);
+            var categoryViewportRect = categoryViewport.AddComponent<RectTransform>();
+            categoryViewportRect.anchorMin = new Vector2(0f, 0f);
+            categoryViewportRect.anchorMax = new Vector2(1f, 1f);
+            categoryViewportRect.offsetMin = new Vector2(3f, 3f);
+            categoryViewportRect.offsetMax = new Vector2(-3f, -3f);
+            categoryViewport.AddComponent<Image>().color = new Color(0.03f, 0.08f, 0.14f, 0.75f);
+            categoryViewport.AddComponent<Mask>().showMaskGraphic = false;
+
+            var categoryContentObj = new GameObject("CategoryContent");
+            categoryContentObj.transform.SetParent(categoryViewport.transform, false);
+            var categoryContentRect = categoryContentObj.AddComponent<RectTransform>();
+            categoryContentRect.anchorMin = new Vector2(0f, 0f);
+            categoryContentRect.anchorMax = new Vector2(0f, 1f);
+            categoryContentRect.pivot = new Vector2(0f, 0.5f);
+            categoryContentRect.anchoredPosition = Vector2.zero;
+            categoryContentRect.sizeDelta = new Vector2(0f, 0f);
+
+            categoryScroll.viewport = categoryViewportRect;
+            categoryScroll.content = categoryContentRect;
+
+            BuildCategoryButtons(categoryContentObj.transform, categoryContentRect);
+
+            _partPanelTitle = CreateUIText(palette.transform, "Select a category", new Vector2(8, -82), 11);
+            _partTooltipText = CreateUIText(palette.transform, "", new Vector2(8, -98), 10);
+            if (_partTooltipText != null)
+                _partTooltipText.color = new Color(0.80f, 0.90f, 1f, 0.95f);
+
+            var viewportObj = new GameObject("PartsViewport");
+            viewportObj.transform.SetParent(palette.transform, false);
+            var viewportRect = viewportObj.AddComponent<RectTransform>();
+            viewportRect.anchorMin = new Vector2(0f, 0f);
+            viewportRect.anchorMax = new Vector2(1f, 1f);
+            viewportRect.offsetMin = new Vector2(6f, 6f);
+            viewportRect.offsetMax = new Vector2(-6f, -102f);
+            var viewportImage = viewportObj.AddComponent<Image>();
+            viewportImage.color = new Color(0.04f, 0.09f, 0.15f, 0.58f);
+            viewportObj.AddComponent<Mask>().showMaskGraphic = false;
+
+            var contentObj = new GameObject("PartsContent");
+            contentObj.transform.SetParent(viewportObj.transform, false);
+            var contentRect = contentObj.AddComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0f, 1f);
+            contentRect.anchorMax = new Vector2(1f, 1f);
+            contentRect.pivot = new Vector2(0.5f, 1f);
+            contentRect.anchoredPosition = Vector2.zero;
+            contentRect.sizeDelta = new Vector2(0f, 0f);
+            _partGridContent = contentRect;
+
+            var scrollRect = palette.AddComponent<ScrollRect>();
+            scrollRect.viewport = viewportRect;
+            scrollRect.content = contentRect;
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.scrollSensitivity = 25f;
+
+            SelectFirstCategoryWithParts();
+        }
+
+        private void BuildCategoryButtons(Transform parent, RectTransform contentRect)
+        {
+            _categoryButtons.Clear();
+            var categories = GetSortedCategories();
+            float x = 4f;
+            for (int i = 0; i < categories.Count; i++)
             {
-                CreatePartButton(palette.transform, partId, yOffset);
-                yOffset -= 28f;
+                PartCategory category = categories[i];
+                int count = CountPartsInCategory(category);
+                string label = $"{GetCategoryGlyph(category)}\n{count}";
+                var btnObj = CreateCategoryButton(parent, label, x, category);
+                AttachCategoryIcon(btnObj.transform, category);
+                _categoryButtons.Add(btnObj);
+                x += 56f;
             }
+            contentRect.sizeDelta = new Vector2(x + 4f, 0f);
+        }
+
+        private static string GetCategoryGlyph(PartCategory category)
+        {
+            switch (category)
+            {
+                case PartCategory.Mouth: return "M";
+                case PartCategory.Eye: return "E";
+                case PartCategory.Leg: return "L";
+                case PartCategory.Arm: return "A";
+                case PartCategory.Wing: return "W";
+                case PartCategory.Tail: return "T";
+                case PartCategory.Horn: return "H";
+                case PartCategory.Fin: return "F";
+                case PartCategory.Shell: return "S";
+                case PartCategory.Spike: return "P";
+                default: return "?";
+            }
+        }
+
+        private List<PartCategory> GetSortedCategories()
+        {
+            var categories = new HashSet<PartCategory>();
+            if (_partCatalog != null)
+            {
+                foreach (var kvp in _partCatalog)
+                    categories.Add(kvp.Value.Category);
+            }
+            var list = categories.ToList();
+            list.Sort((a, b) => a.CompareTo(b));
+            return list;
+        }
+
+        private int CountPartsInCategory(PartCategory category)
+        {
+            if (_partCatalog == null)
+                return 0;
+            int count = 0;
+            foreach (var kvp in _partCatalog)
+            {
+                if (kvp.Value.Category == category)
+                    count++;
+            }
+            return count;
+        }
+
+        private GameObject CreateCategoryButton(Transform parent, string label, float xOffset, PartCategory category)
+        {
+            var btnObj = new GameObject($"Category_{category}");
+            btnObj.transform.SetParent(parent, false);
+            var rect = btnObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.anchoredPosition = new Vector2(xOffset, 0f);
+            rect.sizeDelta = new Vector2(52f, 0f);
+
+            var bg = btnObj.AddComponent<Image>();
+            bg.color = new Color(0.16f, 0.23f, 0.33f, 0.95f);
+            var outline = btnObj.AddComponent<Outline>();
+            outline.effectColor = new Color(0.45f, 0.65f, 0.85f, 0.35f);
+            outline.effectDistance = new Vector2(1f, -1f);
+            var btn = btnObj.AddComponent<Button>();
+            btn.onClick.AddListener(() => SelectCategory(category));
+            CreateUIText(btnObj.transform, label, new Vector2(0f, -2f), 9);
+            return btnObj;
+        }
+
+        private void AttachCategoryIcon(Transform buttonTransform, PartCategory category)
+        {
+            string representativePartId = GetRepresentativePartIdForCategory(category);
+            if (string.IsNullOrWhiteSpace(representativePartId))
+                return;
+
+            Sprite icon = GetOrCreatePartPreviewSprite(representativePartId);
+            if (icon == null)
+                return;
+
+            var iconObj = new GameObject("Icon");
+            iconObj.transform.SetParent(buttonTransform, false);
+            var iconRect = iconObj.AddComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+            iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+            iconRect.pivot = new Vector2(0.5f, 0.5f);
+            iconRect.anchoredPosition = new Vector2(0f, 8f);
+            iconRect.sizeDelta = new Vector2(22f, 22f);
+
+            var image = iconObj.AddComponent<Image>();
+            image.sprite = icon;
+            image.preserveAspect = true;
+            image.color = new Color(1f, 1f, 1f, 0.95f);
+        }
+
+        private string GetRepresentativePartIdForCategory(PartCategory category)
+        {
+            if (_partCatalog == null || _partCatalog.Count == 0)
+                return null;
+
+            return _partCatalog
+                .Where(kvp => kvp.Value.Category == category)
+                .Select(kvp => kvp.Key)
+                .OrderBy(id => id)
+                .FirstOrDefault();
+        }
+
+        private void SelectFirstCategoryWithParts()
+        {
+            var categories = GetSortedCategories();
+            for (int i = 0; i < categories.Count; i++)
+            {
+                if (CountPartsInCategory(categories[i]) > 0)
+                {
+                    SelectCategory(categories[i]);
+                    return;
+                }
+            }
+        }
+
+        private void SelectCategory(PartCategory category)
+        {
+            _selectedCategory = category;
+            _hasSelectedCategory = true;
+            UpdateCategoryButtonVisuals();
+            RebuildPartsGrid();
+        }
+
+        private void UpdateCategoryButtonVisuals()
+        {
+            for (int i = 0; i < _categoryButtons.Count; i++)
+            {
+                var go = _categoryButtons[i];
+                if (go == null)
+                    continue;
+                var image = go.GetComponent<Image>();
+                if (image == null)
+                    continue;
+
+                bool selected = go.name == $"Category_{_selectedCategory}";
+                image.color = selected
+                    ? new Color(0.34f, 0.63f, 0.31f, 0.96f)
+                    : new Color(0.16f, 0.23f, 0.33f, 0.95f);
+            }
+        }
+
+        private void RebuildPartsGrid()
+        {
+            if (_partGridContent == null || _partPanelTitle == null)
+                return;
+
+            for (int i = _partGridContent.childCount - 1; i >= 0; i--)
+                Destroy(_partGridContent.GetChild(i).gameObject);
+            _partButtons.Clear();
+
+            if (!_hasSelectedCategory || _partCatalog == null)
+                return;
+
+            var partIds = _partCatalog
+                .Where(kvp => kvp.Value.Category == _selectedCategory)
+                .Select(kvp => kvp.Key)
+                .OrderBy(id => id)
+                .ToList();
+
+            _partPanelTitle.text = $"{_selectedCategory.ToString().ToUpperInvariant()}  ({partIds.Count})";
+
+            const int columns = 4;
+            const float cardW = 66f;
+            const float cardH = 72f;
+            const float spacing = 6f;
+
+            for (int i = 0; i < partIds.Count; i++)
+            {
+                string partId = partIds[i];
+                int row = i / columns;
+                int col = i % columns;
+                float x = 4f + col * (cardW + spacing);
+                float y = -4f - row * (cardH + spacing);
+                CreatePartCard(_partGridContent, partId, x, y, cardW, cardH);
+            }
+
+            int rows = Mathf.CeilToInt(partIds.Count / (float)columns);
+            float contentHeight = 8f + rows * (cardH + spacing);
+            _partGridContent.sizeDelta = new Vector2(0f, Mathf.Max(10f, contentHeight));
+        }
+
+        private void CreatePartCard(Transform parent, string partId, float x, float y, float width, float height)
+        {
+            var card = new GameObject($"Card_{partId}");
+            card.transform.SetParent(parent, false);
+            var rect = card.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(x, y);
+            rect.sizeDelta = new Vector2(width, height);
+
+            var bg = card.AddComponent<Image>();
+            bg.color = new Color(0.10f, 0.17f, 0.27f, 0.92f);
+            var outline = card.AddComponent<Outline>();
+            outline.effectColor = new Color(0.48f, 0.69f, 0.92f, 0.20f);
+            outline.effectDistance = new Vector2(1f, -1f);
+            var shadow = card.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
+            shadow.effectDistance = new Vector2(1.5f, -1.5f);
+            card.AddComponent<CardHoverAnimator>();
+            var btn = card.AddComponent<Button>();
+            string id = partId;
+            btn.onClick.AddListener(() => OnPartSelected(id));
+            var dragHandler = card.AddComponent<PalettePartDragHandler>();
+            dragHandler.Initialize(this, id);
+            var hover = card.AddComponent<PalettePartHoverHandler>();
+            hover.Initialize(this, id);
+
+            var previewObj = new GameObject("Preview");
+            previewObj.transform.SetParent(card.transform, false);
+            var previewRect = previewObj.AddComponent<RectTransform>();
+            previewRect.anchorMin = new Vector2(0f, 1f);
+            previewRect.anchorMax = new Vector2(1f, 1f);
+            previewRect.pivot = new Vector2(0.5f, 1f);
+            previewRect.anchoredPosition = new Vector2(0f, -2f);
+            previewRect.sizeDelta = new Vector2(-6f, 56f);
+
+            var previewBgObj = new GameObject("PreviewBg");
+            previewBgObj.transform.SetParent(previewObj.transform, false);
+            var previewBgRect = previewBgObj.AddComponent<RectTransform>();
+            previewBgRect.anchorMin = Vector2.zero;
+            previewBgRect.anchorMax = Vector2.one;
+            previewBgRect.offsetMin = Vector2.zero;
+            previewBgRect.offsetMax = Vector2.zero;
+            var previewBg = previewBgObj.AddComponent<Image>();
+            previewBg.color = new Color(0.12f, 0.16f, 0.22f, 0.98f);
+
+            var previewSpriteObj = new GameObject("PreviewSprite");
+            previewSpriteObj.transform.SetParent(previewObj.transform, false);
+            var previewSpriteRect = previewSpriteObj.AddComponent<RectTransform>();
+            previewSpriteRect.anchorMin = new Vector2(0.05f, 0.05f);
+            previewSpriteRect.anchorMax = new Vector2(0.95f, 0.95f);
+            previewSpriteRect.offsetMin = Vector2.zero;
+            previewSpriteRect.offsetMax = Vector2.zero;
+            var previewImage = previewSpriteObj.AddComponent<Image>();
+            previewImage.color = Color.white;
+            previewImage.sprite = GetOrCreatePartPreviewSprite(partId);
+            previewImage.preserveAspect = true;
+
+            CreateUIText(card.transform, CompactPartLabel(partId), new Vector2(3f, -60f), 8);
+            _partButtons.Add(card);
+        }
+
+        private static string CompactPartLabel(string partId)
+        {
+            if (string.IsNullOrWhiteSpace(partId))
+                return "part";
+            string[] parts = partId.Split('_');
+            if (parts.Length >= 3)
+                return $"{parts[1]} {parts[2]}";
+            return partId.Replace("_", " ");
+        }
+
+        private void OnPartCardHover(string partId, bool entering, Transform cardTransform)
+        {
+            var hoverAnim = cardTransform != null ? cardTransform.GetComponent<CardHoverAnimator>() : null;
+            if (hoverAnim != null)
+                hoverAnim.SetHovered(entering);
+
+            if (_partTooltipText != null)
+            {
+                _partTooltipText.text = entering
+                    ? $"Preview: {partId.Replace("_", " ")}"
+                    : string.Empty;
+            }
+        }
+
+        private Sprite GetOrCreatePartPreviewSprite(string partId)
+        {
+            if (_partPreviewCache.TryGetValue(partId, out var cached) && cached != null)
+                return cached;
+
+            var created = RenderPartPreviewSprite(partId);
+            if (created == null && _partCatalog != null && _partCatalog.TryGetValue(partId, out var def) && def != null)
+                created = def.Icon;
+
+            _partPreviewCache[partId] = created;
+            return created;
+        }
+
+        private Sprite RenderPartPreviewSprite(string partId)
+        {
+            if (_partCatalog == null || !_partCatalog.TryGetValue(partId, out var def) || def == null)
+                return null;
+
+            return CreatureThumbnail.CapturePartPreview(def, partId);
         }
 
         private void BuildStatsPanel(Transform parent)
@@ -259,8 +666,9 @@ namespace RoobsWorld.Creature.Editor
             CreateToolButton(toolbar.transform, "Undo", 0, () => { _state.Undo(); RefreshCreaturePreview(); });
             CreateToolButton(toolbar.transform, "Redo", 60, () => { _state.Redo(); RefreshCreaturePreview(); });
             CreateToolButton(toolbar.transform, "Sym", 120, () => _state.SetSymmetry(!_state.SymmetryEnabled));
-            CreateToolButton(toolbar.transform, "Save", 180, () => _gallery.Save(_state.DNA));
-            CreateToolButton(toolbar.transform, "Done", 240, OnDone);
+            CreateToolButton(toolbar.transform, "Delete", 180, DeleteSelectedPart);
+            CreateToolButton(toolbar.transform, "Save", 240, () => _gallery.Save(_state.DNA));
+            CreateToolButton(toolbar.transform, "Done", 300, OnDone);
         }
 
         private void CreatePartButton(Transform parent, string partId, float yOffset)
@@ -331,6 +739,149 @@ namespace RoobsWorld.Creature.Editor
             SetStatus($"Drag {partId.Replace("_", " ")} onto the creature.");
         }
 
+        private void UpdatePartSelectionInput()
+        {
+            if (_isDraggingPart || _hasPendingPlacedPartDrag || _isBodySculptDrag || Mouse.current == null)
+                return;
+
+            if (!Mouse.current.leftButton.wasPressedThisFrame)
+                return;
+
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+                return;
+
+            if (TryGetPartHit(out _, out CreaturePartMount mount))
+            {
+                _state.SelectPart(mount.PartIndex);
+                _hasPendingPlacedPartDrag = true;
+                _pendingPlacedPartDragIndex = mount.PartIndex;
+                _pendingPlacedPartDragStartScreen = Mouse.current.position.ReadValue();
+                SetStatus($"Selected {mount.PartId.Replace("_", " ")}. Drag to move, or use WASD/RF, Q/E, +/- and Del.");
+                return;
+            }
+
+            _state.DeselectPart();
+        }
+
+        private void UpdatePlacedPartDragInput()
+        {
+            if (!_hasPendingPlacedPartDrag && !_isMovingPlacedPart)
+                return;
+
+            if (Mouse.current == null)
+            {
+                ClearPendingPlacedPartDrag();
+                if (_isMovingPlacedPart)
+                    EndPartDrag();
+                return;
+            }
+
+            if (_hasPendingPlacedPartDrag)
+            {
+                if (!Mouse.current.leftButton.isPressed)
+                {
+                    ClearPendingPlacedPartDrag();
+                    return;
+                }
+
+                Vector2 current = Mouse.current.position.ReadValue();
+                float dragDistance = (current - _pendingPlacedPartDragStartScreen).magnitude;
+                if (dragDistance >= PlacedPartDragStartThresholdPixels)
+                {
+                    BeginPlacedPartDrag(_pendingPlacedPartDragIndex);
+                    ClearPendingPlacedPartDrag();
+                }
+            }
+
+            if (_isMovingPlacedPart)
+            {
+                if (Mouse.current.leftButton.isPressed)
+                    UpdatePartDrag();
+
+                if (Mouse.current.leftButton.wasReleasedThisFrame)
+                    EndPartDrag();
+            }
+        }
+
+        private void ClearPendingPlacedPartDrag()
+        {
+            _hasPendingPlacedPartDrag = false;
+            _pendingPlacedPartDragIndex = -1;
+            _pendingPlacedPartDragStartScreen = Vector2.zero;
+        }
+
+        private void UpdateSelectedPartEditInput()
+        {
+            if (_isDraggingPart || _hasPendingPlacedPartDrag || _isBodySculptDrag || Keyboard.current == null)
+                return;
+
+            int selected = _state.SelectedPartIndex;
+            if (selected < 0 || selected >= _state.DNA.Parts.Count)
+                return;
+
+            if (Keyboard.current.deleteKey.wasPressedThisFrame || Keyboard.current.backspaceKey.wasPressedThisFrame)
+            {
+                DeleteSelectedPart();
+                return;
+            }
+
+            bool changed = false;
+            PartPlacement part = _state.DNA.Parts[selected];
+            float dt = Time.deltaTime;
+
+            Vector3 move = Vector3.zero;
+            if (Keyboard.current.aKey.isPressed) move.x -= 1f;
+            if (Keyboard.current.dKey.isPressed) move.x += 1f;
+            if (Keyboard.current.rKey.isPressed) move.y += 1f;
+            if (Keyboard.current.fKey.isPressed) move.y -= 1f;
+            if (Keyboard.current.wKey.isPressed) move.z += 1f;
+            if (Keyboard.current.sKey.isPressed) move.z -= 1f;
+            if (move.sqrMagnitude > 0.0001f)
+            {
+                Vector3 newOffset = part.Offset + move.normalized * (_selectedPartMoveSpeed * dt);
+                changed |= _state.MovePart(selected, newOffset);
+            }
+
+            Vector3 rotation = part.Rotation;
+            if (Keyboard.current.qKey.isPressed)
+            {
+                rotation.y -= _selectedPartRotateSpeed * dt;
+                changed = true;
+            }
+            if (Keyboard.current.eKey.isPressed)
+            {
+                rotation.y += _selectedPartRotateSpeed * dt;
+                changed = true;
+            }
+            if (changed && (Keyboard.current.qKey.isPressed || Keyboard.current.eKey.isPressed))
+                _state.RotatePart(selected, rotation);
+
+            float scaleDelta = 0f;
+            if (Keyboard.current.equalsKey.isPressed || Keyboard.current.numpadPlusKey.isPressed) scaleDelta += 1f;
+            if (Keyboard.current.minusKey.isPressed || Keyboard.current.numpadMinusKey.isPressed) scaleDelta -= 1f;
+            if (Mathf.Abs(scaleDelta) > 0.01f)
+                changed |= _state.ScalePart(selected, part.Scale + (scaleDelta * _selectedPartScaleSpeed * dt));
+
+            if (changed)
+                RefreshCreaturePreview();
+        }
+
+        private void DeleteSelectedPart()
+        {
+            int selected = _state.SelectedPartIndex;
+            if (selected < 0)
+            {
+                SetStatus("Select a part first, then delete.");
+                return;
+            }
+
+            if (_state.RemovePart(selected))
+            {
+                RefreshCreaturePreview();
+                SetStatus("Part removed.");
+            }
+        }
+
         private void UpdateDragPreview()
         {
             if (!_isDraggingPart)
@@ -341,21 +892,22 @@ namespace RoobsWorld.Creature.Editor
 
             _lastDropValid = TryGetDropCandidate(out _lastDropCandidate, out string reason);
             string partLabel = _draggingPartId != null ? _draggingPartId.Replace("_", " ") : "part";
+            string actionLabel = _isMovingPlacedPart ? "Move" : "Drop";
             if (_lastDropValid)
             {
-                SetStatus($"Drop {partLabel}: valid snap");
-                UpdateDragPreviewPart();
+                SetStatus($"{actionLabel} {partLabel}: valid snap");
             }
             else
             {
-                SetStatus($"Drop {partLabel}: {reason}");
-                DestroyDragPreviewPart();
+                SetStatus($"{actionLabel} {partLabel}: {reason}");
             }
+
+            UpdateDragPreviewPart();
         }
 
         private void UpdateBodySculptInput()
         {
-            if (_isDraggingPart || _state?.DNA?.Body == null || Mouse.current == null)
+            if (_isDraggingPart || _hasPendingPlacedPartDrag || _state?.DNA?.Body == null || Mouse.current == null)
                 return;
 
             if (Mouse.current.leftButton.wasPressedThisFrame)
@@ -372,6 +924,12 @@ namespace RoobsWorld.Creature.Editor
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
                 return;
+
+            if (TryGetPartHit(out _, out CreaturePartMount mount))
+            {
+                _state.SelectPart(mount.PartIndex);
+                return;
+            }
 
             if (!TryGetBodyHit(out var hit, out int nearestAnchor))
                 return;
@@ -427,7 +985,7 @@ namespace RoobsWorld.Creature.Editor
             if (!Physics.Raycast(ray, out hit, 50f))
                 return false;
 
-            if (!hit.transform.IsChildOf(_creaturePreview.transform))
+            if (!IsMainBodyHit(hit.transform))
                 return false;
 
             float bestSqr = float.MaxValue;
@@ -449,10 +1007,43 @@ namespace RoobsWorld.Creature.Editor
             if (_creaturePreview != null)
                 Destroy(_creaturePreview);
 
-            _creaturePreview = ModelFactory.CreateCreatureModel(Vector3.zero, _state.DNA);
+            _creaturePreview = ModelFactory.CreateCreatureModel(Vector3.zero, _state.DNA, false);
             _creaturePreview.name = "CreaturePreview";
             CacheSpineAnchors();
             EnsurePreviewColliders();
+            HighlightSelectedPart();
+        }
+
+        private void HighlightSelectedPart()
+        {
+            int selected = _state != null ? _state.SelectedPartIndex : -1;
+            if (_creaturePreview == null || selected < 0)
+                return;
+
+            var mounts = _creaturePreview.GetComponentsInChildren<CreaturePartMount>(true);
+            for (int i = 0; i < mounts.Length; i++)
+            {
+                var mount = mounts[i];
+                if (mount == null || mount.PartIndex != selected)
+                    continue;
+
+                var renderers = mount.GetComponentsInChildren<Renderer>(true);
+                for (int r = 0; r < renderers.Length; r++)
+                {
+                    var renderer = renderers[r];
+                    if (renderer == null)
+                        continue;
+
+                    var materials = renderer.materials;
+                    for (int m = 0; m < materials.Length; m++)
+                    {
+                        var mat = materials[m];
+                        if (mat != null && mat.HasProperty("_Color"))
+                            mat.color = Color.Lerp(mat.color, new Color(1f, 0.94f, 0.5f, mat.color.a), 0.45f);
+                    }
+                    renderer.materials = materials;
+                }
+            }
         }
 
         private void CacheSpineAnchors()
@@ -494,9 +1085,31 @@ namespace RoobsWorld.Creature.Editor
 
         internal void BeginPartDrag(string partId)
         {
+            ClearPendingPlacedPartDrag();
             _draggingPartId = partId;
             _isDraggingPart = true;
+            _isMovingPlacedPart = false;
+            _draggingPartIndex = -1;
             _lastDropValid = false;
+        }
+
+        private void BeginPlacedPartDrag(int partIndex)
+        {
+            if (_state?.DNA?.Parts == null || partIndex < 0 || partIndex >= _state.DNA.Parts.Count)
+                return;
+
+            var placement = _state.DNA.Parts[partIndex];
+            if (placement == null || string.IsNullOrWhiteSpace(placement.PartId))
+                return;
+
+            _state.SelectPart(partIndex);
+            _draggingPartId = placement.PartId;
+            _draggingPartIndex = partIndex;
+            _isMovingPlacedPart = true;
+            _isDraggingPart = true;
+            _lastDropValid = false;
+            DestroyDragPreviewPart();
+            SetStatus($"Moving {placement.PartId.Replace("_", " ")}. Release over the body to place it.");
         }
 
         internal void UpdatePartDrag()
@@ -514,17 +1127,45 @@ namespace RoobsWorld.Creature.Editor
 
             if (_lastDropValid && !string.IsNullOrWhiteSpace(_draggingPartId))
             {
-                _state.AddPart(_draggingPartId, _lastDropCandidate.AttachBone, _lastDropCandidate.Offset);
-                RefreshCreaturePreview();
-                SetStatus($"Placed {_draggingPartId.Replace("_", " ")}.");
+                if (_isMovingPlacedPart)
+                {
+                    if (_state.MovePart(
+                        _draggingPartIndex,
+                        _lastDropCandidate.AttachBone,
+                        _lastDropCandidate.Offset,
+                        _lastDropCandidate.RotationEuler))
+                    {
+                        RefreshCreaturePreview();
+                        SetStatus($"Moved {_draggingPartId.Replace("_", " ")}.");
+                    }
+                    else
+                    {
+                        SetStatus("Move blocked. Select the part and try again.");
+                    }
+                }
+                else
+                {
+                    _state.AddPart(
+                        _draggingPartId,
+                        _lastDropCandidate.AttachBone,
+                        _lastDropCandidate.Offset,
+                        1f,
+                        _lastDropCandidate.RotationEuler);
+                    RefreshCreaturePreview();
+                    SetStatus($"Placed {_draggingPartId.Replace("_", " ")}.");
+                }
             }
             else
             {
-                SetStatus("Drop blocked. Move to a clear body location.");
+                SetStatus(_isMovingPlacedPart
+                    ? "Move blocked. Release over a clear body location."
+                    : "Drop blocked. Move to a clear body location.");
             }
 
             _isDraggingPart = false;
+            _isMovingPlacedPart = false;
             _draggingPartId = null;
+            _draggingPartIndex = -1;
             DestroyDragPreviewPart();
         }
 
@@ -545,10 +1186,7 @@ namespace RoobsWorld.Creature.Editor
                 return false;
 
             Ray ray = Camera.main.ScreenPointToRay(pointerPos);
-            if (!Physics.Raycast(ray, out var hit, 50f))
-                return false;
-
-            if (!hit.transform.IsChildOf(_creaturePreview.transform))
+            if (!TryRaycastMainBody(ray, out var hit))
                 return false;
 
             if (_spineAnchors.Count == 0)
@@ -567,16 +1205,27 @@ namespace RoobsWorld.Creature.Editor
             }
 
             Transform anchor = _spineAnchors[nearestAnchor];
+            float partScale = GetDraggingPartScale();
+            float newPartRadius = EstimatePartRadius(_draggingPartId, partScale);
             Vector3 localHit = _creaturePreview.transform.InverseTransformPoint(hit.point);
             Vector3 localAnchor = _creaturePreview.transform.InverseTransformPoint(anchor.position);
             Vector3 localNormal = _creaturePreview.transform.InverseTransformDirection(hit.normal).normalized;
-            Vector3 offset = localHit - localAnchor + (localNormal * 0.04f);
+            Vector3 localBodyCenter = _creaturePreview.transform.InverseTransformPoint(_creaturePreview.transform.position);
+            Vector3 radialOut = (localHit - localBodyCenter).normalized;
+            if (Vector3.Dot(localNormal, radialOut) < 0f)
+                localNormal = -localNormal;
+            float surfacePush = Mathf.Max(0.04f, newPartRadius * 0.78f);
+            Vector3 offset = localHit - localAnchor + (localNormal * surfacePush);
 
-            if (offset.magnitude > 1.25f)
-                offset = offset.normalized * 1.25f;
+            float maxOffset = 1.25f;
+            if (_state?.DNA?.Body != null)
+                maxOffset = Mathf.Max(maxOffset, _state.DNA.Body.BodyScale.magnitude * 1.1f);
 
-            float newPartRadius = EstimatePartRadius(_draggingPartId, 1f);
-            if (HasOverlap(_draggingPartId, nearestAnchor, offset, newPartRadius))
+            if (offset.magnitude > maxOffset)
+                offset = offset.normalized * maxOffset;
+
+            int ignoredPartIndex = _isMovingPlacedPart ? _draggingPartIndex : -1;
+            if (HasOverlap(_draggingPartId, nearestAnchor, offset, newPartRadius, ignoredPartIndex))
             {
                 reason = "overlaps existing part";
                 return false;
@@ -585,13 +1234,77 @@ namespace RoobsWorld.Creature.Editor
             candidate = new DropCandidate
             {
                 AttachBone = nearestAnchor,
-                Offset = offset
+                Offset = offset,
+                SurfaceNormal = localNormal,
+                RotationEuler = ComputePlacementRotationEuler(_draggingPartId, offset, localNormal)
             };
             reason = "valid";
             return true;
         }
 
-        private bool HasOverlap(string partId, int attachBone, Vector3 offset, float newRadius)
+        private bool IsMainBodyHit(Transform hitTransform)
+        {
+            if (_creaturePreview == null || hitTransform == null)
+                return false;
+
+            Transform bodyRoot = _creaturePreview.transform.Find("Body");
+            if (bodyRoot == null)
+                return false;
+
+            return hitTransform == bodyRoot || hitTransform.IsChildOf(bodyRoot);
+        }
+
+        private bool TryRaycastMainBody(Ray ray, out RaycastHit bodyHit)
+        {
+            bodyHit = default;
+
+            var hits = Physics.RaycastAll(ray, 50f);
+            if (hits == null || hits.Length == 0)
+                return false;
+
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                if (!IsMainBodyHit(hits[i].transform))
+                    continue;
+
+                bodyHit = hits[i];
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryGetPartHit(out RaycastHit hit, out CreaturePartMount mount)
+        {
+            hit = default;
+            mount = null;
+
+            if (_creaturePreview == null || Camera.main == null || Mouse.current == null)
+                return false;
+
+            Vector2 pointerPos = Mouse.current.position.ReadValue();
+            Ray ray = Camera.main.ScreenPointToRay(pointerPos);
+            var hits = Physics.RaycastAll(ray, 50f);
+            if (hits == null || hits.Length == 0)
+                return false;
+
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var candidateMount = hits[i].transform.GetComponentInParent<CreaturePartMount>();
+                if (candidateMount == null)
+                    continue;
+
+                hit = hits[i];
+                mount = candidateMount;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool HasOverlap(string partId, int attachBone, Vector3 offset, float newRadius, int ignoredPartIndex = -1)
         {
             var parts = _state?.DNA?.Parts;
             if (parts == null)
@@ -599,6 +1312,9 @@ namespace RoobsWorld.Creature.Editor
 
             for (int i = 0; i < parts.Count; i++)
             {
+                if (i == ignoredPartIndex)
+                    continue;
+
                 var existing = parts[i];
                 if (existing == null || existing.AttachBone != attachBone)
                     continue;
@@ -610,6 +1326,17 @@ namespace RoobsWorld.Creature.Editor
             }
 
             return false;
+        }
+
+        private float GetDraggingPartScale()
+        {
+            if (!_isMovingPlacedPart || _state?.DNA?.Parts == null)
+                return 1f;
+
+            if (_draggingPartIndex < 0 || _draggingPartIndex >= _state.DNA.Parts.Count)
+                return 1f;
+
+            return Mathf.Max(0.1f, _state.DNA.Parts[_draggingPartIndex]?.Scale ?? 1f);
         }
 
         private float EstimatePartRadius(string partId, float scale)
@@ -637,15 +1364,46 @@ namespace RoobsWorld.Creature.Editor
             if (_dragPreviewPart == null)
                 return;
 
-            int anchorIndex = Mathf.Clamp(_lastDropCandidate.AttachBone, 0, Mathf.Max(0, _spineAnchors.Count - 1));
-            Transform anchor = _spineAnchors.Count > 0 ? _spineAnchors[anchorIndex] : null;
-            if (anchor == null)
+            if (_lastDropValid)
+            {
+                int anchorIndex = Mathf.Clamp(_lastDropCandidate.AttachBone, 0, Mathf.Max(0, _spineAnchors.Count - 1));
+                Transform anchor = _spineAnchors.Count > 0 ? _spineAnchors[anchorIndex] : null;
+                if (anchor == null)
+                    return;
+
+                Vector3 anchorLocal = _creaturePreview.transform.InverseTransformPoint(anchor.position);
+                Vector3 localPos = anchorLocal + _lastDropCandidate.Offset + (_lastDropCandidate.SurfaceNormal * 0.015f);
+                _dragPreviewPart.transform.position = _creaturePreview.transform.TransformPoint(localPos);
+                Quaternion partLocalRotation = GetAutoRotation(_draggingPartId, _lastDropCandidate.Offset) * Quaternion.Euler(_lastDropCandidate.RotationEuler);
+                _dragPreviewPart.transform.rotation = _creaturePreview.transform.rotation * partLocalRotation;
+                return;
+            }
+
+            if (!TryGetPointerPosition(out Vector2 pointerPos) || Camera.main == null)
                 return;
 
-            Vector3 anchorLocal = _creaturePreview.transform.InverseTransformPoint(anchor.position);
-            Vector3 localPos = anchorLocal + _lastDropCandidate.Offset;
-            _dragPreviewPart.transform.position = _creaturePreview.transform.TransformPoint(localPos);
-            _dragPreviewPart.transform.rotation = _creaturePreview.transform.rotation * GetAutoRotation(_draggingPartId, _lastDropCandidate.Offset);
+            Ray ray = Camera.main.ScreenPointToRay(pointerPos);
+            float previewDistance = Mathf.Max(1.5f, _currentZoom * 0.45f);
+            _dragPreviewPart.transform.position = ray.GetPoint(previewDistance);
+            _dragPreviewPart.transform.rotation = Quaternion.LookRotation(-ray.direction, Vector3.up);
+        }
+
+        private static bool TryGetPointerPosition(out Vector2 pointerPos)
+        {
+            pointerPos = default;
+            if (Mouse.current != null)
+            {
+                pointerPos = Mouse.current.position.ReadValue();
+                return true;
+            }
+
+            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
+            {
+                pointerPos = Touchscreen.current.primaryTouch.position.ReadValue();
+                return true;
+            }
+
+            return false;
         }
 
         private GameObject CreateDragPreviewPart(string partId)
@@ -670,6 +1428,7 @@ namespace RoobsWorld.Creature.Editor
                 }
 
                 Vector3 scale = def.DefaultScale == Vector3.zero ? Vector3.one : def.DefaultScale;
+                scale *= GetDraggingPartScale();
                 previewObj.transform.localScale = scale;
             }
 
@@ -720,6 +1479,15 @@ namespace RoobsWorld.Creature.Editor
             return Quaternion.identity;
         }
 
+        private static Vector3 ComputePlacementRotationEuler(string partId, Vector3 offset, Vector3 surfaceNormal)
+        {
+            Vector3 outward = surfaceNormal.sqrMagnitude > 0.00001f ? surfaceNormal.normalized : Vector3.forward;
+            Quaternion autoRotation = GetAutoRotation(partId, offset);
+            Quaternion targetRotation = Quaternion.FromToRotation(Vector3.forward, outward);
+            Quaternion userRotation = Quaternion.Inverse(autoRotation) * targetRotation;
+            return userRotation.eulerAngles;
+        }
+
         private void DestroyDragPreviewPart()
         {
             if (_dragPreviewPart != null)
@@ -749,6 +1517,8 @@ namespace RoobsWorld.Creature.Editor
         {
             public int AttachBone;
             public Vector3 Offset;
+            public Vector3 SurfaceNormal;
+            public Vector3 RotationEuler;
         }
 
         private sealed class PalettePartDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
@@ -775,6 +1545,58 @@ namespace RoobsWorld.Creature.Editor
             public void OnEndDrag(PointerEventData eventData)
             {
                 _scene?.EndPartDrag();
+            }
+        }
+
+        private sealed class PalettePartHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+        {
+            private CreatureEditorScene _scene;
+            private string _partId;
+
+            public void Initialize(CreatureEditorScene scene, string partId)
+            {
+                _scene = scene;
+                _partId = partId;
+            }
+
+            public void OnPointerEnter(PointerEventData eventData)
+            {
+                _scene?.OnPartCardHover(_partId, true, transform);
+            }
+
+            public void OnPointerExit(PointerEventData eventData)
+            {
+                _scene?.OnPartCardHover(_partId, false, transform);
+            }
+        }
+
+        private sealed class CardHoverAnimator : MonoBehaviour
+        {
+            private Vector3 _targetScale = Vector3.one;
+            private Image _image;
+            private Color _baseColor;
+
+            private void Awake()
+            {
+                _image = GetComponent<Image>();
+                if (_image != null)
+                    _baseColor = _image.color;
+            }
+
+            public void SetHovered(bool hovered)
+            {
+                _targetScale = hovered ? new Vector3(1.08f, 1.08f, 1f) : Vector3.one;
+                if (_image != null)
+                {
+                    _image.color = hovered
+                        ? new Color(_baseColor.r + 0.05f, _baseColor.g + 0.06f, _baseColor.b + 0.08f, _baseColor.a)
+                        : _baseColor;
+                }
+            }
+
+            private void Update()
+            {
+                transform.localScale = Vector3.Lerp(transform.localScale, _targetScale, Time.unscaledDeltaTime * 14f);
             }
         }
     }

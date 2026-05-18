@@ -1,3 +1,4 @@
+using RoobsWorld.Multiplayer;
 using UnityEngine;
 
 namespace RoobsWorld.Stages.Creature
@@ -40,7 +41,31 @@ namespace RoobsWorld.Stages.Creature
         private const string FloorName = "Floor";
         private const string WallsName = "ArenaWalls";
         private const string LandmarksName = "ArenaLandmarks";
+        private CreatureArenaLandmark[] _configuredLandmarks;
         private bool _built;
+
+        public int IslandSeed => _islandSeed;
+        public float ArenaRadius => _arenaRadius;
+        public int ConfiguredLandmarkCount => _configuredLandmarks?.Length ?? 0;
+
+        public void ApplyMapDefinition(SessionMapDefinition map)
+        {
+            if (!map.IsValid || !map.IsCreatureMap)
+                return;
+
+            _arenaRadius = Mathf.Max(10f, map.ArenaRadius);
+            _islandResolution = Mathf.Max(16, map.IslandResolution);
+            _islandHeight = Mathf.Max(0.1f, map.IslandHeight);
+            _islandNoiseScale = Mathf.Max(0.001f, map.IslandNoiseScale);
+            _islandSeed = Mathf.Max(1, map.Seed);
+            _configuredLandmarks = ConvertLandmarks(map.Landmarks);
+
+            if (_built)
+            {
+                ClearGeneratedArena();
+                _built = false;
+            }
+        }
 
         public void EnsureBuilt()
         {
@@ -133,7 +158,7 @@ namespace RoobsWorld.Stages.Creature
 
             var root = new GameObject(LandmarksName);
             root.transform.SetParent(transform, false);
-            var landmarks = GetDefaultLandmarks(Mathf.Max(10f, _arenaRadius));
+            var landmarks = GetConfiguredOrDefaultLandmarks(Mathf.Max(10f, _arenaRadius));
             for (int i = 0; i < landmarks.Length; i++)
             {
                 var landmark = landmarks[i];
@@ -143,6 +168,13 @@ namespace RoobsWorld.Stages.Creature
                     landmark.Scale);
                 CreateLandmark(root.transform, i, landmark);
             }
+        }
+
+        private CreatureArenaLandmark[] GetConfiguredOrDefaultLandmarks(float arenaRadius)
+        {
+            return _configuredLandmarks != null && _configuredLandmarks.Length > 0
+                ? _configuredLandmarks
+                : GetDefaultLandmarks(arenaRadius);
         }
 
         public static CreatureArenaLandmark[] GetDefaultLandmarks(float arenaRadius)
@@ -156,6 +188,43 @@ namespace RoobsWorld.Stages.Creature
                 new CreatureArenaLandmark(CreatureArenaLandmarkType.NarrowPassage, new Vector3(r * 0.08f, 1.0f, -r * 0.34f), new Vector3(2.2f, 2f, 9f)),
                 new CreatureArenaLandmark(CreatureArenaLandmarkType.HealingZone, new Vector3(-r * 0.18f, 0.08f, r * 0.08f), new Vector3(4.8f, 0.12f, 4.8f))
             };
+        }
+
+        private static CreatureArenaLandmark[] ConvertLandmarks(SessionMapLandmark[] mapLandmarks)
+        {
+            if (mapLandmarks == null || mapLandmarks.Length == 0)
+                return null;
+
+            var landmarks = new CreatureArenaLandmark[mapLandmarks.Length];
+            for (int i = 0; i < mapLandmarks.Length; i++)
+            {
+                var source = mapLandmarks[i];
+                var type = TryParseLandmarkType(source.Type, out var parsed)
+                    ? parsed
+                    : CreatureArenaLandmarkType.Cover;
+                landmarks[i] = new CreatureArenaLandmark(
+                    type,
+                    new Vector3(source.X, 0f, source.Z),
+                    new Vector3(
+                        Mathf.Max(0.05f, source.ScaleX),
+                        Mathf.Max(0.05f, source.ScaleY),
+                        Mathf.Max(0.05f, source.ScaleZ)));
+            }
+
+            return landmarks;
+        }
+
+        private static bool TryParseLandmarkType(string value, out CreatureArenaLandmarkType type)
+        {
+            if (!string.IsNullOrWhiteSpace(value)
+                && System.Enum.TryParse(value, ignoreCase: true, out type)
+                && System.Enum.IsDefined(typeof(CreatureArenaLandmarkType), type))
+            {
+                return true;
+            }
+
+            type = CreatureArenaLandmarkType.Cover;
+            return false;
         }
 
         private static void CreateLandmark(Transform parent, int index, CreatureArenaLandmark landmark)
@@ -195,6 +264,29 @@ namespace RoobsWorld.Stages.Creature
                 case CreatureArenaLandmarkType.HealingZone: return new Color(0.18f, 0.55f, 0.42f, 0.86f);
                 default: return new Color(0.18f, 0.22f, 0.15f, 1f);
             }
+        }
+
+        private void ClearGeneratedArena()
+        {
+            DestroyChild(FloorName);
+            DestroyChild(WallsName);
+            DestroyChild(LandmarksName);
+        }
+
+        private void DestroyChild(string childName)
+        {
+            Transform child = transform.Find(childName);
+            if (child == null)
+                return;
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                DestroyImmediate(child.gameObject);
+            else
+                Destroy(child.gameObject);
+#else
+            Destroy(child.gameObject);
+#endif
         }
 
         private static void EnsureDirectionalLight()

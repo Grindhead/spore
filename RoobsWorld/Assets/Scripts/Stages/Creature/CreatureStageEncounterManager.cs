@@ -107,6 +107,49 @@ namespace RoobsWorld.Stages.Creature
             return ComputeNearestRivalDistanceFlat(_player.position, positions.ToArray());
         }
 
+        public bool TryGetTrackedRivalLabel(string creatureId, out string speciesLabel)
+        {
+            speciesLabel = string.Empty;
+            if (string.IsNullOrWhiteSpace(creatureId))
+                return false;
+            if (!_trackedRivals.TryGetValue(creatureId, out var rival) || rival == null)
+                return false;
+
+            speciesLabel = BuildRivalLabel(rival.Archetype, rival.IsAlpha);
+            return !string.IsNullOrWhiteSpace(speciesLabel);
+        }
+
+        public bool TryGetNearestTrackedRivalLabel(Vector3 worldPosition, out string speciesLabel)
+        {
+            speciesLabel = string.Empty;
+            float bestDistanceSq = float.MaxValue;
+            CreatureRivalAI best = null;
+
+            foreach (var pair in _trackedRivals)
+            {
+                var rival = pair.Value;
+                if (rival == null)
+                    continue;
+
+                var creature = rival.GetComponent<RoobsWorld.Creature.CreatureInstance>();
+                if (creature == null || !creature.IsAlive)
+                    continue;
+
+                float distSq = (creature.transform.position - worldPosition).sqrMagnitude;
+                if (distSq < bestDistanceSq)
+                {
+                    bestDistanceSq = distSq;
+                    best = rival;
+                }
+            }
+
+            if (best == null)
+                return false;
+
+            speciesLabel = BuildRivalLabel(best.Archetype, best.IsAlpha);
+            return !string.IsNullOrWhiteSpace(speciesLabel);
+        }
+
         /// <summary>
         /// Attempts to find a respawn point that maximizes distance from living rivals.
         /// Returns true when the selected point satisfies the configured safe-distance threshold.

@@ -2,4 +2,5 @@
   <Project Path="RoobsWorld.csproj" />
   <Project Path="RoobsWorld.Tests.EditMode.csproj" />
   <Project Path="RoobsWorld.Editor.csproj" />
+  <Project Path="RoobsWorld.Cell.Services.csproj" />
 </Solution>

@@ -72,6 +72,16 @@ namespace RoobsWorld.Core
         LowHealth
     }
 
+    /// <summary>Lightweight per-species stance used in Creature stage to mirror Spore-style relationship drift.</summary>
+    public enum CreatureSpeciesDisposition
+    {
+        Hostile,
+        Annoyed,
+        Curious,
+        Friendly,
+        Allied
+    }
+
     /// <summary>Fired for readable Creature-stage combat beats such as misses, hits, blocks, and telegraphs.</summary>
     public struct CreatureCombatFeedbackEvent : IGameEvent
     {
@@ -90,6 +100,16 @@ namespace RoobsWorld.Core
         public string CreatureId;
         public string ArchetypeName;
         public bool IsAlpha;
+    }
+
+    /// <summary>Fired when a rival species relationship stance changes because of player actions.</summary>
+    public struct CreatureSpeciesRelationshipChangedEvent : IGameEvent
+    {
+        public string SpeciesLabel;
+        public CreatureSpeciesDisposition PreviousDisposition;
+        public CreatureSpeciesDisposition NewDisposition;
+        public float Score;
+        public float Delta;
     }
 
     /// <summary>Fired when a Creature-stage kill streak grants a bonus DNA payout.</summary>

@@ -70,7 +70,6 @@ namespace RoobsWorld.Core
                 GameManager.Instance.SetPlatformAchievementProvider(_provider);
                 GameManager.Instance.SetPlatformUserProvider(_provider);
                 GameManager.Instance.SetPlatformRichPresenceProvider(_provider);
-                PlatformCloudSaveSync.SetProvider(_provider);
                 PlatformAchievementSync.ReportUnlockedAchievements(GameManager.Instance.Achievements, _provider);
                 _providerBound = true;
             }

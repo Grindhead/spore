@@ -1,4 +1,5 @@
 using RoobsWorld.Core;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RoobsWorld.Creature
@@ -55,6 +56,8 @@ namespace RoobsWorld.Creature
 
             if (dna?.Body != null && dna.Body.BodyScale != Vector3.zero)
                 transform.localScale = dna.Body.BodyScale;
+
+            RebuildVisualModel();
         }
 
         /// <summary>
@@ -163,6 +166,26 @@ namespace RoobsWorld.Creature
 
             if (!_isPlayer)
                 Destroy(gameObject, 1.25f);
+        }
+
+        private void RebuildVisualModel()
+        {
+            var staleRoots = new List<Transform>(3);
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                var child = transform.GetChild(i);
+                if (child == null)
+                    continue;
+
+                if (child.name == CreatureModelBuilder.BodyRootName ||
+                    child.name == CreatureModelBuilder.PartsRootName)
+                    staleRoots.Add(child);
+            }
+
+            for (int i = 0; i < staleRoots.Count; i++)
+                Destroy(staleRoots[i].gameObject);
+
+            CreatureModelBuilder.Build(gameObject, _dna, CreaturePartCatalog.GetDefaultCatalog());
         }
     }
 }

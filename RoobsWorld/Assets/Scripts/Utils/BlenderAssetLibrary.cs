@@ -27,10 +27,17 @@ namespace RoobsWorld.Utils
         private static GameObject LoadPrefab(string resourcePath)
         {
             if (PrefabCache.TryGetValue(resourcePath, out var cached))
-                return cached;
+            {
+                if (cached != null)
+                    return cached;
+
+                // Retry if a previous attempt stored null (e.g. before assets became available).
+                PrefabCache.Remove(resourcePath);
+            }
 
             var loaded = Resources.Load<GameObject>(resourcePath);
-            PrefabCache[resourcePath] = loaded;
+            if (loaded != null)
+                PrefabCache[resourcePath] = loaded;
             return loaded;
         }
 
@@ -40,6 +47,47 @@ namespace RoobsWorld.Utils
             var colliders = root.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
                 UnityObjectUtil.Destroy(colliders[i]);
+            HideGeneratedColliderMeshes(root);
+        }
+
+        public static void HideGeneratedColliderMeshes(GameObject root)
+        {
+            if (root == null) return;
+
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null)
+                    continue;
+
+                if (IsGeneratedColliderMesh(renderer.transform))
+                    renderer.enabled = false;
+            }
+        }
+
+        private static bool IsGeneratedColliderMesh(Transform transform)
+        {
+            if (transform == null)
+                return false;
+
+            if (HasColliderMeshName(transform.name))
+                return true;
+
+            var meshFilter = transform.GetComponent<MeshFilter>();
+            return meshFilter != null &&
+                   meshFilter.sharedMesh != null &&
+                   HasColliderMeshName(meshFilter.sharedMesh.name);
+        }
+
+        private static bool HasColliderMeshName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            return name.EndsWith("_COL", System.StringComparison.OrdinalIgnoreCase) ||
+                   name.EndsWith("_COLLIDER", System.StringComparison.OrdinalIgnoreCase) ||
+                   name.IndexOf("_COL_", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static void TintRenderers(GameObject root, Color color, float emissionMultiplier = 0f)

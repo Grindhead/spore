@@ -40,28 +40,53 @@ namespace RoobsWorld.Creature
         /// </summary>
         public static CreatureDNA CreateDefault()
         {
+            string mouthPart = ResolveStarterPartId("animal_head_001", "animal_jaw_001", "mouth_basic");
+            string eyePart = ResolveStarterPartId("animal_ear_001", "eye_basic");
+            string legPart = ResolveStarterPartId("animal_leg_001", "leg_basic");
+
             return new CreatureDNA
             {
                 CreatureId = Guid.NewGuid().ToString("N")[..8],
                 CreatureName = "Roob",
                 Body = new BodyPlan
                 {
-                    SpineSegments = 3,
+                    SpineSegments = 2,
                     Symmetry = SymmetryType.Bilateral,
                     BodyScale = Vector3.one
                 },
                 Parts = new List<PartPlacement>
                 {
-                    new PartPlacement { PartId = "mouth_basic", AttachBone = 0, Offset = Vector3.forward * 0.5f },
-                    new PartPlacement { PartId = "eye_basic", AttachBone = 0, Offset = new Vector3(0.2f, 0.3f, 0.4f) },
-                    new PartPlacement { PartId = "eye_basic", AttachBone = 0, Offset = new Vector3(-0.2f, 0.3f, 0.4f) },
-                    new PartPlacement { PartId = "leg_basic", AttachBone = 1, Offset = new Vector3(0.4f, -0.3f, 0) },
-                    new PartPlacement { PartId = "leg_basic", AttachBone = 1, Offset = new Vector3(-0.4f, -0.3f, 0) },
-                    new PartPlacement { PartId = "leg_basic", AttachBone = 2, Offset = new Vector3(0.4f, -0.3f, 0) },
-                    new PartPlacement { PartId = "leg_basic", AttachBone = 2, Offset = new Vector3(-0.4f, -0.3f, 0) },
+                    new PartPlacement { PartId = mouthPart, AttachBone = 0, Offset = new Vector3(0f, 0.06f, 0.5f) },
+                    new PartPlacement { PartId = eyePart, AttachBone = 0, Offset = new Vector3(0.23f, 0.24f, 0.34f), Scale = 0.9f },
+                    new PartPlacement { PartId = eyePart, AttachBone = 0, Offset = new Vector3(-0.23f, 0.24f, 0.34f), Scale = 0.9f },
+                    new PartPlacement { PartId = legPart, AttachBone = 0, Offset = new Vector3(0.36f, -0.34f, 0.1f) },
+                    new PartPlacement { PartId = legPart, AttachBone = 0, Offset = new Vector3(-0.36f, -0.34f, 0.1f) },
+                    new PartPlacement { PartId = legPart, AttachBone = 1, Offset = new Vector3(0.34f, -0.34f, -0.08f) },
+                    new PartPlacement { PartId = legPart, AttachBone = 1, Offset = new Vector3(-0.34f, -0.34f, -0.08f) },
                 },
                 Upgrades = new List<CreatureUpgradeRecord>()
             };
+        }
+
+        private static string ResolveStarterPartId(params string[] candidates)
+        {
+            if (candidates == null || candidates.Length == 0)
+                return string.Empty;
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                string id = candidates[i];
+                if (string.IsNullOrWhiteSpace(id))
+                    continue;
+
+                if (Resources.Load<GameObject>($"Models/CreatureParts/{id}") != null)
+                    return id;
+
+                if (Resources.Load<GameObject>($"Models/CellParts/{id}") != null)
+                    return id;
+            }
+
+            return candidates[0];
         }
     }
 
@@ -71,7 +96,7 @@ namespace RoobsWorld.Creature
     [Serializable]
     public class BodyPlan
     {
-        public int SpineSegments = 3;
+        public int SpineSegments = 1;
         public SymmetryType Symmetry = SymmetryType.Bilateral;
         public Vector3 BodyScale = Vector3.one;
         public float FrontPull = 0f;

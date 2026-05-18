@@ -9,6 +9,7 @@ namespace RoobsWorld.Creature.Animation
     {
         public Transform[] Joints;
         public Vector3 FootTarget;
+        public Vector3 FloorNormal = Vector3.up;
         public Vector3 FootRestPosition;
         public Vector3 StepOrigin;
         public Vector3 StepDestination;
@@ -28,6 +29,15 @@ namespace RoobsWorld.Creature.Animation
 
             for (int i = 1; i < Joints.Length; i++)
                 Joints[i].position = solved[i];
+
+            Vector3 up = FloorNormal.sqrMagnitude > 0.0001f ? FloorNormal.normalized : Vector3.up;
+            for (int i = 0; i < Joints.Length - 1; i++)
+            {
+                Vector3 toChild = Joints[i + 1].position - Joints[i].position;
+                if (toChild.sqrMagnitude < 0.000001f) continue;
+
+                Joints[i].rotation = Quaternion.LookRotation(toChild.normalized, up);
+            }
         }
     }
 }

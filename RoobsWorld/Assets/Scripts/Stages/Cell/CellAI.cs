@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using RoobsWorld.Core;
 using RoobsWorld.Utils;
@@ -8,7 +9,7 @@ namespace RoobsWorld.Stages.Cell
     /// Simple AI controller for non-player cells that wander, chase smaller cells, and flee larger threats.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
-    public class CellAI : MonoBehaviour
+    public class CellAI : MonoBehaviour, ICellStageContextAware
     {
         private enum CellBehavior { Wander, SeekFood, Chase, Flee }
         private const float MinimumAliveScale = 0.12f;
@@ -32,6 +33,17 @@ namespace RoobsWorld.Stages.Cell
         private const float StuckVelocityThreshold = 0.14f;
         private const float ForcedExploreDuration = 1.9f;
         private const float ForcedExploreBlend = 0.72f;
+        private const float RouteMemoryCellSize = 2.2f;
+        private const int RecentRouteCapacity = 22;
+        private const int WanderCandidateCount = 9;
+        private const float WanderProjectionDistance = 6.2f;
+        private const float OrganicTurnRateDegrees = 170f;
+        private const float NonFleeBacktrackDot = -0.25f;
+        private const float WanderMeanderStrength = 0.18f;
+        private const float GoalMeanderStrength = 0.05f;
+        private const float FleeMeanderStrength = 0.025f;
+        private const float LocomotionPulseMagnitude = 0.055f;
+        private const float LocomotionPulseRate = 2.4f;
 
         [SerializeField] private float _moveSpeed = 1.55f;
         [SerializeField] private float _perceptionRadius = 7.2f;
@@ -49,6 +61,9 @@ namespace RoobsWorld.Stages.Cell
         private float _forcedExploreTimer;
         private Vector3 _forcedExploreDirection;
         private readonly Collider[] _predationProbeHits = new Collider[32];
+        private readonly Queue<Vector2Int> _recentRouteCells = new Queue<Vector2Int>();
+        private Vector3 _currentMoveDirection;
+        private float _locomotionPulseOffset;
 
         public struct RiskTradeoffScores
         {
@@ -72,17 +87,30 @@ namespace RoobsWorld.Stages.Cell
 
         private void Start()
         {
-            _foodManager = FindAnyObjectByType<FoodManager>();
-            _cellStage = FindAnyObjectByType<CellStage>();
+            _foodManager ??= FindAnyObjectByType<FoodManager>();
+            _cellStage ??= FindAnyObjectByType<CellStage>();
             _stuckCheckTimer = StuckCheckInterval;
             _lastStuckCheckPosition = transform.position;
             _forcedExploreDirection = transform.forward.sqrMagnitude > 0.01f ? transform.forward.normalized : Vector3.forward;
-            PickRandomWanderDirection();
+            _currentMoveDirection = _forcedExploreDirection;
+            _locomotionPulseOffset = Random.Range(0f, 20f);
+            PickNovelWanderDirection();
             CellSwimVisual.Ensure(gameObject, CellSwimVisual.SwimProfile.Npc);
+        }
+
+        public void BindCellStageContext(CellStage stage, FoodManager foodManager)
+        {
+            _cellStage = stage;
+            _foodManager = foodManager;
         }
 
         private void FixedUpdate()
         {
+            CellRouteMemory.RecordRecentLocation(
+                _recentRouteCells,
+                transform.position,
+                RouteMemoryCellSize,
+                RecentRouteCapacity);
             UpdateStuckState(Time.fixedDeltaTime);
             Perceive();
             ProbeNearbyPredationContacts();
@@ -285,9 +313,13 @@ namespace RoobsWorld.Stages.Cell
         {
             _wanderTimer -= Time.fixedDeltaTime;
             if (_wanderTimer <= 0)
-                PickRandomWanderDirection();
+                PickNovelWanderDirection();
 
-            ApplyVelocity(_wanderDirection, _moveSpeed * CellFeelDirector.NpcCellSpeedMultiplier);
+            ApplyVelocity(
+                _wanderDirection,
+                _moveSpeed * CellFeelDirector.NpcCellSpeedMultiplier,
+                allowImmediateReverse: false,
+                meanderStrength: WanderMeanderStrength);
         }
 
         private void Chase()
@@ -295,7 +327,11 @@ namespace RoobsWorld.Stages.Cell
             if (_target == null) return;
             var dir = (_target.position - transform.position).normalized;
             dir.y = 0;
-            ApplyVelocity(dir, _moveSpeed * 1.06f * CellFeelDirector.NpcCellSpeedMultiplier);
+            ApplyVelocity(
+                dir,
+                _moveSpeed * 1.06f * CellFeelDirector.NpcCellSpeedMultiplier,
+                allowImmediateReverse: false,
+                meanderStrength: GoalMeanderStrength);
         }
 
         private void SeekFood()
@@ -308,7 +344,11 @@ namespace RoobsWorld.Stages.Cell
 
             var dir = (_target.position - transform.position).normalized;
             dir.y = 0;
-            ApplyVelocity(dir, _moveSpeed * 0.98f * CellFeelDirector.NpcCellSpeedMultiplier);
+            ApplyVelocity(
+                dir,
+                _moveSpeed * 0.98f * CellFeelDirector.NpcCellSpeedMultiplier,
+                allowImmediateReverse: false,
+                meanderStrength: GoalMeanderStrength);
         }
 
         private void Flee()
@@ -316,17 +356,84 @@ namespace RoobsWorld.Stages.Cell
             if (_target == null) return;
             var dir = (transform.position - _target.position).normalized;
             dir.y = 0;
-            ApplyVelocity(dir, _moveSpeed * 1.22f * CellFeelDirector.NpcCellSpeedMultiplier);
+            ApplyVelocity(
+                dir,
+                _moveSpeed * 1.22f * CellFeelDirector.NpcCellSpeedMultiplier,
+                allowImmediateReverse: true,
+                meanderStrength: FleeMeanderStrength);
         }
 
-        private void PickRandomWanderDirection()
+        private void PickNovelWanderDirection()
         {
-            float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-            _wanderDirection = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+            Vector3[] candidates = new Vector3[WanderCandidateCount];
+            Vector3 basis = _wanderDirection.sqrMagnitude > 0.0001f
+                ? _wanderDirection.normalized
+                : (_currentMoveDirection.sqrMagnitude > 0.0001f ? _currentMoveDirection.normalized : Vector3.forward);
+            float basisAngle = Mathf.Atan2(basis.z, basis.x);
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                float angle = i == 0
+                    ? basisAngle + Random.Range(-0.45f, 0.45f)
+                    : Random.Range(0f, Mathf.PI * 2f);
+                candidates[i] = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+            }
+
+            _wanderDirection = SelectNovelWanderDirection(
+                transform.position,
+                candidates,
+                _recentRouteCells,
+                RouteMemoryCellSize,
+                WanderProjectionDistance,
+                basis);
             _wanderTimer = _wanderChangeInterval + Random.Range(-1f, 1f);
         }
 
-        private void ApplyVelocity(Vector3 direction, float speed)
+        public static Vector3 SelectNovelWanderDirection(
+            Vector3 currentPosition,
+            IReadOnlyList<Vector3> candidateDirections,
+            IEnumerable<Vector2Int> recentCells,
+            float memoryCellSize,
+            float projectionDistance,
+            Vector3 previousDirection)
+        {
+            Vector3 fallback = NormalizePlanar(previousDirection, Vector3.forward);
+            if (candidateDirections == null || candidateDirections.Count == 0)
+                return fallback;
+
+            float safeProjection = Mathf.Max(0.5f, projectionDistance);
+            Vector3 previous = NormalizePlanar(previousDirection, Vector3.zero);
+            Vector3 bestDirection = Vector3.zero;
+            float bestScore = float.NegativeInfinity;
+
+            for (int i = 0; i < candidateDirections.Count; i++)
+            {
+                Vector3 candidate = NormalizePlanar(candidateDirections[i], Vector3.zero);
+                if (candidate.sqrMagnitude < 0.0001f)
+                    continue;
+
+                Vector3 projected = currentPosition + candidate * safeProjection;
+                float score = CellRouteMemory.ComputeNoveltyScore(projected, recentCells, memoryCellSize);
+
+                if (previous.sqrMagnitude > 0.0001f)
+                {
+                    float dot = Vector3.Dot(previous, candidate);
+                    score += Mathf.Max(0f, dot) * 0.18f;
+                    if (dot < NonFleeBacktrackDot)
+                        score -= (NonFleeBacktrackDot - dot) * 2.1f;
+                }
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestDirection = candidate;
+                }
+            }
+
+            return bestDirection.sqrMagnitude > 0.0001f ? bestDirection.normalized : fallback;
+        }
+
+        private void ApplyVelocity(Vector3 direction, float speed, bool allowImmediateReverse, float meanderStrength)
         {
             direction.y = 0f;
             if (direction.sqrMagnitude < 0.0001f)
@@ -336,11 +443,66 @@ namespace RoobsWorld.Stages.Cell
             }
 
             Vector3 biased = ApplyForcedExploreBias(direction.normalized);
+            biased = ApplyOrganicMeander(biased, meanderStrength);
             Vector3 separation = CellSeparation.GetDirection(transform);
             biased = CellSeparation.Apply(biased, separation);
+            biased = ApplyOrganicSteering(biased, allowImmediateReverse);
             float cappedSpeed = Organism.ClampSpeedToPlayer(speed, BalanceConstants.CellNpcMaxSpeedToPlayerRatio);
-            Vector3 velocity = biased * cappedSpeed + separation * (cappedSpeed * CellSeparation.PushSpeedMultiplier);
+            float pulse = GetLocomotionPulse();
+            Vector3 velocity = biased * (cappedSpeed * pulse) + separation * (cappedSpeed * CellSeparation.PushSpeedMultiplier);
             _rb.linearVelocity = Organism.ClampVelocityToPlayer(velocity, BalanceConstants.CellNpcMaxSpeedToPlayerRatio);
+        }
+
+        private Vector3 ApplyOrganicMeander(Vector3 direction, float strength)
+        {
+            direction.y = 0f;
+            if (strength <= 0f || direction.sqrMagnitude < 0.0001f)
+                return direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.zero;
+
+            Vector3 normalized = direction.normalized;
+            Vector3 tangent = new Vector3(-normalized.z, 0f, normalized.x);
+            float t = Time.time + _locomotionPulseOffset;
+            float wave = Mathf.Sin(t * 1.55f) + Mathf.Sin(t * 0.73f + _locomotionPulseOffset) * 0.45f;
+            Vector3 meandered = normalized + tangent * (wave * strength);
+            return meandered.sqrMagnitude > 0.0001f ? meandered.normalized : normalized;
+        }
+
+        private Vector3 ApplyOrganicSteering(Vector3 desiredDirection, bool allowImmediateReverse)
+        {
+            desiredDirection.y = 0f;
+            if (desiredDirection.sqrMagnitude < 0.0001f)
+                return Vector3.zero;
+
+            Vector3 desired = desiredDirection.normalized;
+            if (_currentMoveDirection.sqrMagnitude < 0.0001f || allowImmediateReverse)
+            {
+                _currentMoveDirection = desired;
+                return desired;
+            }
+
+            Vector3 previous = _currentMoveDirection.normalized;
+            float dot = Mathf.Clamp(Vector3.Dot(previous, desired), -1f, 1f);
+            if (dot < NonFleeBacktrackDot)
+            {
+                Vector3 tangent = new Vector3(-previous.z, 0f, previous.x);
+                if (Vector3.Dot(tangent, desired) < 0f)
+                    tangent = -tangent;
+
+                desired = Vector3.Lerp(previous, tangent, 0.75f).normalized;
+            }
+
+            float maxRadians = OrganicTurnRateDegrees * Mathf.Deg2Rad * Mathf.Max(0.001f, Time.fixedDeltaTime);
+            _currentMoveDirection = Vector3.RotateTowards(previous, desired, maxRadians, 0f);
+            if (_currentMoveDirection.sqrMagnitude < 0.0001f)
+                _currentMoveDirection = desired;
+
+            return _currentMoveDirection.normalized;
+        }
+
+        private float GetLocomotionPulse()
+        {
+            float pulse = Mathf.Sin((Time.time + _locomotionPulseOffset) * LocomotionPulseRate);
+            return Mathf.Max(0.75f, 1f + pulse * LocomotionPulseMagnitude);
         }
 
         private Vector3 ApplyForcedExploreBias(Vector3 baseDirection)
@@ -375,7 +537,7 @@ namespace RoobsWorld.Stages.Cell
 
             _forcedExploreTimer = ForcedExploreDuration + Random.Range(0f, 0.5f);
             _forcedExploreDirection = PickForcedExploreDirection();
-            PickRandomWanderDirection();
+            PickNovelWanderDirection();
         }
 
         private Vector3 PickForcedExploreDirection()
@@ -394,7 +556,20 @@ namespace RoobsWorld.Stages.Cell
             Vector3 exploratory = (inward * 0.65f) + (tangent * tangentSign * 0.35f) + (direction * 0.4f);
             if (exploratory.sqrMagnitude < 0.0001f)
                 exploratory = inward;
-            return exploratory.normalized;
+            Vector3[] candidates =
+            {
+                exploratory,
+                inward * 0.65f + tangent * tangentSign * 0.55f,
+                inward * 0.65f - tangent * tangentSign * 0.55f,
+                direction
+            };
+            return SelectNovelWanderDirection(
+                transform.position,
+                candidates,
+                _recentRouteCells,
+                RouteMemoryCellSize,
+                WanderProjectionDistance,
+                exploratory);
         }
 
         /// <summary>
@@ -584,6 +759,94 @@ namespace RoobsWorld.Stages.Cell
             if (inParent != null) return inParent;
 
             return other.GetComponentInChildren<T>();
+        }
+
+        private static Vector3 NormalizePlanar(Vector3 direction, Vector3 fallback)
+        {
+            direction.y = 0f;
+            if (direction.sqrMagnitude > 0.0001f)
+                return direction.normalized;
+
+            fallback.y = 0f;
+            return fallback.sqrMagnitude > 0.0001f ? fallback.normalized : Vector3.zero;
+        }
+    }
+
+    /// <summary>
+    /// Quantized short-term route memory for cell-stage AI. It keeps wander targets novel enough
+    /// that NPC cells do not pace across the same strip of water every retarget.
+    /// </summary>
+    public static class CellRouteMemory
+    {
+        public static Vector2Int QuantizePlanar(Vector3 position, float cellSize)
+        {
+            float safeCellSize = Mathf.Max(0.1f, cellSize);
+            return new Vector2Int(
+                Mathf.RoundToInt(position.x / safeCellSize),
+                Mathf.RoundToInt(position.z / safeCellSize));
+        }
+
+        public static void RecordRecentLocation(
+            Queue<Vector2Int> recentCells,
+            Vector3 position,
+            float cellSize,
+            int capacity)
+        {
+            if (recentCells == null)
+                return;
+
+            int safeCapacity = Mathf.Max(1, capacity);
+            Vector2Int cell = QuantizePlanar(position, cellSize);
+            if (recentCells.Count == 0 || GetLastCell(recentCells) != cell)
+                recentCells.Enqueue(cell);
+
+            while (recentCells.Count > safeCapacity)
+                recentCells.Dequeue();
+        }
+
+        public static float ComputeNoveltyScore(
+            Vector3 candidate,
+            IEnumerable<Vector2Int> recentCells,
+            float cellSize)
+        {
+            if (recentCells == null)
+                return 100f;
+
+            int recentCount = 0;
+            if (recentCells is ICollection<Vector2Int> collection)
+            {
+                recentCount = collection.Count;
+            }
+            else
+            {
+                foreach (Vector2Int _ in recentCells)
+                    recentCount++;
+            }
+
+            if (recentCount == 0)
+                return 100f;
+
+            Vector2Int candidateCell = QuantizePlanar(candidate, cellSize);
+            float nearestCellDistance = float.MaxValue;
+            int index = 0;
+            foreach (Vector2Int recentCell in recentCells)
+            {
+                int age = recentCount - 1 - index;
+                float cellDistance = Vector2Int.Distance(candidateCell, recentCell);
+                float recencyPenalty = Mathf.Max(0f, 8f - age) * 0.25f;
+                nearestCellDistance = Mathf.Min(nearestCellDistance, cellDistance - recencyPenalty);
+                index++;
+            }
+
+            return nearestCellDistance;
+        }
+
+        private static Vector2Int GetLastCell(Queue<Vector2Int> cells)
+        {
+            Vector2Int last = default;
+            foreach (Vector2Int cell in cells)
+                last = cell;
+            return last;
         }
     }
 

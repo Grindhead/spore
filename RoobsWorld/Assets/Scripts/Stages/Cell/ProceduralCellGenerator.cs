@@ -17,6 +17,8 @@ namespace RoobsWorld.Stages.Cell
         private const float SpikeBaseRadius = 0.025f;
         private const float FlagellaLength = 0.28f;
         private const float FlagellaBaseRadius = 0.015f;
+        private const float PartSurfaceInset = 0.035f;
+        private const float LoadoutPartSurfaceInset = 0.03f;
         private const float DetailSurfaceY = 0.47f;
         private const float DetailSurfaceRadius = 0.34f;
         private static Shader s_cellUnlitShader;
@@ -256,7 +258,7 @@ namespace RoobsWorld.Stages.Cell
             var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
             var child = new GameObject($"Spike_{index}");
             child.transform.SetParent(root.transform, false);
-            child.transform.localPosition = CellSphereRadius * direction;
+            child.transform.localPosition = Mathf.Max(0.01f, CellSphereRadius - PartSurfaceInset) * direction;
             child.transform.localRotation = Quaternion.FromToRotation(Vector3.up, direction);
             child.transform.localScale = Vector3.one;
             var childMf = child.AddComponent<MeshFilter>();
@@ -272,7 +274,7 @@ namespace RoobsWorld.Stages.Cell
             var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
             var child = new GameObject($"Flagella_{index}");
             child.transform.SetParent(root.transform, false);
-            child.transform.localPosition = CellSphereRadius * direction;
+            child.transform.localPosition = Mathf.Max(0.01f, CellSphereRadius - PartSurfaceInset) * direction;
             child.transform.localRotation = Quaternion.FromToRotation(Vector3.up, direction);
             child.transform.localScale = Vector3.one;
             var childMf = child.AddComponent<MeshFilter>();
@@ -299,7 +301,7 @@ namespace RoobsWorld.Stages.Cell
 
                 var holder = new GameObject($"Loadout_{partName}_{i}");
                 holder.transform.SetParent(root.transform, false);
-                holder.transform.localPosition = direction * radius + Vector3.up * yOffset;
+                holder.transform.localPosition = direction * Mathf.Max(0.01f, radius - LoadoutPartSurfaceInset) + Vector3.up * yOffset;
                 holder.transform.localRotation = Quaternion.FromToRotation(Vector3.up, direction);
                 holder.transform.localScale = Vector3.one;
                 var mf = holder.AddComponent<MeshFilter>();
@@ -315,7 +317,7 @@ namespace RoobsWorld.Stages.Cell
         {
             var holder = new GameObject("Loadout_Jet_0");
             holder.transform.SetParent(root.transform, false);
-            holder.transform.localPosition = new Vector3(0f, -0.02f, -CellSphereRadius * 1.04f);
+            holder.transform.localPosition = new Vector3(0f, -0.02f, -Mathf.Max(0.01f, (CellSphereRadius * 1.04f) - LoadoutPartSurfaceInset));
             holder.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             holder.transform.localScale = Vector3.one;
             var mf = holder.AddComponent<MeshFilter>();

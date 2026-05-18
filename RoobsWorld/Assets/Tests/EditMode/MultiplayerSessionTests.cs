@@ -320,6 +320,35 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void ApplySessionMap_Stores_Server_Map()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.CreateSession();
+            bool eventFired = false;
+            var map = new SessionMapDefinition(
+                SessionMapDefinition.CreatureMode,
+                SessionMapDefinition.CurrentVersion,
+                2468,
+                48f,
+                72,
+                8f,
+                0.055f,
+                new[] { new SessionMapLandmark("Cover", 2f, 3f, 4f, 1.5f, 3f) });
+            mgr.OnSessionMapChanged += received =>
+            {
+                eventFired = true;
+                Assert.AreEqual(map.Seed, received.Seed);
+            };
+
+            Assert.IsTrue(mgr.ApplySessionMap(map));
+
+            Assert.IsTrue(eventFired);
+            Assert.IsTrue(mgr.TryGetSessionMap(out var stored));
+            Assert.AreEqual(2468, stored.Seed);
+            Assert.AreEqual(1, stored.Landmarks.Length);
+        }
+
+        [Test]
         public void SetLocalLobby_Valid_Lobby_Updates_Local_State()
         {
             var mgr = new MultiplayerSessionManager();

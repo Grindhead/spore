@@ -61,9 +61,11 @@ namespace RoobsWorld.Tests.EditMode
                 Assert.IsNotNull(mount);
                 Assert.AreEqual("tail_basic", mount.PartId);
                 Assert.AreEqual(2, mount.AttachBone);
+                Assert.AreEqual($"{CreatureModelBuilder.SpineAnchorPrefix}2", mount.transform.parent.name);
+                Assert.AreEqual(dna.Parts[0].Offset, mount.transform.localPosition);
                 Assert.AreEqual(
                     CreatureModelBuilder.GetSpineAnchorLocalPosition(2, 3) + dna.Parts[0].Offset,
-                    mount.transform.localPosition);
+                    mount.transform.position);
             }
             finally
             {
@@ -97,6 +99,73 @@ namespace RoobsWorld.Tests.EditMode
             finally
             {
                 Object.DestroyImmediate(creature);
+            }
+        }
+
+        [Test]
+        public void Build_CreatesVisibleSkeletonAndLimbBonesForArmsAndLegs()
+        {
+            var dna = new CreatureDNA
+            {
+                Body = new BodyPlan { SpineSegments = 3, BodyScale = Vector3.one },
+                Colors = new CreatureColors(),
+                Parts = new System.Collections.Generic.List<PartPlacement>
+                {
+                    new PartPlacement { PartId = "arm_basic", AttachBone = 1, Offset = new Vector3(0.45f, 0.2f, 0.05f), Scale = 1f },
+                    new PartPlacement { PartId = "leg_basic", AttachBone = 1, Offset = new Vector3(-0.4f, -0.3f, 0.05f), Scale = 1f }
+                }
+            };
+
+            var root = new GameObject("BuilderSkeleton_Test");
+
+            try
+            {
+                CreatureModelBuilder.Build(root, dna, CreaturePartCatalog.GetDefaultCatalog());
+                var skeleton = root.transform.Find($"{CreatureModelBuilder.BodyRootName}/{CreatureModelBuilder.SkeletonRootName}");
+
+                Assert.IsNotNull(skeleton);
+                Assert.IsTrue(skeleton.Find("Vertebra_0") != null);
+                Assert.IsTrue(skeleton.Find("LimbUpper_00") != null);
+                Assert.IsTrue(skeleton.Find("LimbLower_00") != null);
+                Assert.IsTrue(skeleton.Find("LimbUpper_01") != null);
+                Assert.IsTrue(skeleton.Find("LimbLower_01") != null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Build_CreatesLimbSkeletonForAnimalPrefixedArmAndLegIds()
+        {
+            var dna = new CreatureDNA
+            {
+                Body = new BodyPlan { SpineSegments = 3, BodyScale = Vector3.one },
+                Colors = new CreatureColors(),
+                Parts = new System.Collections.Generic.List<PartPlacement>
+                {
+                    new PartPlacement { PartId = "animal_arm_001", AttachBone = 1, Offset = new Vector3(0.45f, 0.2f, 0.05f), Scale = 1f },
+                    new PartPlacement { PartId = "animal_leg_001", AttachBone = 1, Offset = new Vector3(-0.4f, -0.3f, 0.05f), Scale = 1f }
+                }
+            };
+
+            var root = new GameObject("BuilderSkeletonAnimalIds_Test");
+
+            try
+            {
+                CreatureModelBuilder.Build(root, dna, CreaturePartCatalog.GetDefaultCatalog());
+                var skeleton = root.transform.Find($"{CreatureModelBuilder.BodyRootName}/{CreatureModelBuilder.SkeletonRootName}");
+
+                Assert.IsNotNull(skeleton);
+                Assert.IsTrue(skeleton.Find("LimbUpper_00") != null);
+                Assert.IsTrue(skeleton.Find("LimbLower_00") != null);
+                Assert.IsTrue(skeleton.Find("LimbUpper_01") != null);
+                Assert.IsTrue(skeleton.Find("LimbLower_01") != null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
             }
         }
     }

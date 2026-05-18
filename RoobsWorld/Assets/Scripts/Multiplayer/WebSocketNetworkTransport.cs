@@ -77,6 +77,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>Fired when the host starts the shared game.</summary>
         public event Action              OnGameStarted;
 
+        /// <summary>Fired when the relay sends the server-owned shared map definition.</summary>
+        public event Action<SessionMapDefinition> OnSessionMapReceived;
+
         /// <summary>Fired when the relay returns the current public lobby list.</summary>
         public event Action<IReadOnlyList<PublicLobbyInfo>> OnPublicLobbies;
 
@@ -344,6 +347,16 @@ namespace RoobsWorld.Multiplayer
                 case "game_started":
                 {
                     _mainThreadCbs.Enqueue(() => OnGameStarted?.Invoke());
+                    break;
+                }
+
+                case "creature_map":
+                {
+                    string encoded = ParseStringField(json, "map");
+                    if (SessionMapDefinition.TryDecode(encoded, out var map))
+                        _mainThreadCbs.Enqueue(() => OnSessionMapReceived?.Invoke(map));
+                    else
+                        Debug.LogWarning("[WebSocketTransport] Ignored invalid creature map payload.");
                     break;
                 }
 

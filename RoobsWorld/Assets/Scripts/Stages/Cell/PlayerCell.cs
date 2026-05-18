@@ -1,4 +1,5 @@
 using RoobsWorld.Core;
+using RoobsWorld.Stages.Cell.Services;
 using RoobsWorld.Utils;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -9,7 +10,7 @@ namespace RoobsWorld.Stages.Cell
     /// Controls the player-controlled cell: movement, growth from food, evolution triggers, and death handling.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
-    public class PlayerCell : MonoBehaviour
+    public class PlayerCell : MonoBehaviour, ICellStageContextAware
     {
         private static PlayerCell _activeInstance;
 
@@ -67,6 +68,7 @@ namespace RoobsWorld.Stages.Cell
         private float _peakMass;
         private float _maxUnlockedBaseScale;
         private CellStage _stageCache;
+        private FoodManager _foodManagerCache;
         private int _foodConsumedTotal;
         private int _foodConsumedSinceUpgrade;
         private FoodType? _lastConsumedFoodType;
@@ -181,7 +183,8 @@ namespace RoobsWorld.Stages.Cell
         private void Start()
         {
             CameraManager.Instance.SetFollowTarget(transform);
-            _stageCache = FindAnyObjectByType<CellStage>();
+            _stageCache ??= FindAnyObjectByType<CellStage>();
+            _foodManagerCache ??= _stageCache != null ? _stageCache.FoodManager : FindAnyObjectByType<FoodManager>();
             SpeciationSystem.EnsureSpeciesExists(0, _playerGenome);
             RefreshGenomeVisuals();
             UpdateVisualScale();
@@ -596,7 +599,12 @@ namespace RoobsWorld.Stages.Cell
             bool consumedAuthoritatively = false;
             if (foodManagerId != 0)
             {
-                var fm = FindAnyObjectByType<FoodManager>();
+                var fm = _foodManagerCache;
+                if (fm == null && _stageCache != null)
+                    fm = _stageCache.FoodManager;
+                if (fm == null)
+                    fm = FindAnyObjectByType<FoodManager>();
+                _foodManagerCache = fm;
                 if (fm != null)
                     consumedAuthoritatively = fm.ConsumeFood(foodManagerId);
 
@@ -831,25 +839,29 @@ namespace RoobsWorld.Stages.Cell
 
         /// <summary>Returns true when the current symbiosis level can still be upgraded.</summary>
         public static bool CanUpgradeSymbiosisLevel(int currentLevel)
-            => currentLevel < MaxSymbiosisLevel;
+            => PlayerCellSymbiosisRules.CanUpgradeSymbiosisLevel(currentLevel, MaxSymbiosisLevel);
 
         /// <summary>Increments symbiosis level by one and clamps to the max supported level.</summary>
         public static int UpgradeSymbiosisLevel(int currentLevel)
-            => Mathf.Clamp(currentLevel + 1, 0, MaxSymbiosisLevel);
+            => PlayerCellSymbiosisRules.UpgradeSymbiosisLevel(currentLevel, MaxSymbiosisLevel);
 
         /// <summary>Trait passive scalar based on symbiosis reinforcement level.</summary>
         public static float GetTraitPassiveMultiplier(int symbiosisLevel)
-            => 1f + Mathf.Max(0, symbiosisLevel) * TraitPassiveSymbiosisBonusPerLevel;
+            => PlayerCellSymbiosisRules.GetTraitPassiveMultiplier(Mathf.Max(0, symbiosisLevel), TraitPassiveSymbiosisBonusPerLevel);
 
         /// <summary>Computes armoured damage reduction including symbiosis reinforcement.</summary>
         public static float GetArmouredDamageReduction(float baseReduction, int armouredLevel)
-            => Mathf.Clamp(baseReduction + Mathf.Max(0, armouredLevel) * TraitArmouredReductionBonusPerLevel, 0f, 0.85f);
+            => Mathf.Clamp(
+                PlayerCellSymbiosisRules.GetArmouredDamageReduction(baseReduction, Mathf.Max(0, armouredLevel), TraitArmouredReductionBonusPerLevel),
+                0f,
+                0.85f);
 
         /// <summary>Computes electric pulse cooldown with symbiosis reinforcement.</summary>
         public static float GetElectricPulseInterval(float baseInterval, int electricLevel)
         {
-            float scalar = 1f - Mathf.Max(0, electricLevel) * TraitElectricIntervalReductionPerLevel;
-            return Mathf.Max(0.35f, baseInterval * scalar);
+            return Mathf.Max(
+                0.35f,
+                PlayerCellSymbiosisRules.GetElectricPulseInterval(baseInterval, Mathf.Max(0, electricLevel), TraitElectricIntervalReductionPerLevel));
         }
 
         /// <summary>
@@ -1350,6 +1362,12 @@ namespace RoobsWorld.Stages.Cell
                 Cause = _lastDeathCauseKey,
                 RecommendationKey = _lastDeathRecommendationKey
             });
+        }
+
+        public void BindCellStageContext(CellStage stage, FoodManager foodManager)
+        {
+            _stageCache = stage;
+            _foodManagerCache = foodManager;
         }
     }
 }

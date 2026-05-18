@@ -155,17 +155,8 @@ namespace RoobsWorld.Stages.Cell
 
             if (_threatIndicator.IsThreatDetected)
             {
-                string direction = GetCompassLabel(_threatIndicator.PrimaryThreatDirection);
-                string distanceLabel = float.IsInfinity(_threatIndicator.NearestThreatDistance)
-                    ? string.Empty
-                    : $" {_threatIndicator.NearestThreatDistance:F0}m";
-                string threatLabel = ThreatIndicator.GetThreatCueLabel(_threatIndicator.PrimaryThreatType);
-                _threatWarningText.text = $"{threatLabel} nearby {direction}{distanceLabel}";
-                float t = Mathf.Clamp01(_threatIndicator.ThreatIntensity);
-                _threatWarningText.color = Color.Lerp(
-                    UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGold, 0.95f),
-                    UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.CoralBright, 0.98f),
-                    t);
+                _threatWarningText.text = CellHudPresenter.BuildThreatText(_threatIndicator);
+                _threatWarningText.color = CellHudPresenter.BuildThreatColor(_threatIndicator.ThreatIntensity);
                 _threatWarningText.enabled = true;
                 if (_threatWarningPanel != null)
                     _threatWarningPanel.SetActive(true);

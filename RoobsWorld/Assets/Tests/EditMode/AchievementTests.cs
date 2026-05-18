@@ -206,7 +206,6 @@ namespace RoobsWorld.Tests.EditMode
             Assert.IsTrue(PlatformServicesConfig.UsesDevelopmentSteamAppId);
             Assert.IsTrue(PlatformServicesConfig.UsesPlaceholderPlayStationServiceId);
             Assert.IsTrue(PlatformServicesConfig.UsesPlaceholderXboxTitleId);
-            Assert.AreEqual("saves", PlatformServicesConfig.SteamCloudSaveDirectory);
         }
 
         [Test]
@@ -250,15 +249,6 @@ namespace RoobsWorld.Tests.EditMode
             var mock = new MockPlatformAchievementProvider();
             Assert.DoesNotThrow(() => GameManager.UnlockAchievementCore(null, mock, "cell_first_eat"));
             Assert.AreEqual(0, mock.ReportedIds.Count);
-        }
-
-        [Test]
-        public void PlatformCloudSaveSync_NormalizesSlotNamesForSteamRemoteStorage()
-        {
-            Assert.AreEqual("autosave", PlatformCloudSaveSync.NormalizeSlotName(null));
-            Assert.AreEqual("slot_1", PlatformCloudSaveSync.NormalizeSlotName("slot 1"));
-            Assert.AreEqual("profile-A.2", PlatformCloudSaveSync.NormalizeSlotName(" profile-A.2 "));
-            Assert.AreEqual("saves/slot_1.json", PlatformCloudSaveSync.BuildRemoteFileName("slot 1"));
         }
 
         [Test]

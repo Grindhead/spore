@@ -3,7 +3,8 @@
 /**
  * RoobsWorld Multiplayer Relay Server — hardened edition
  *
- * Pure packet relay: no game logic runs here.
+ * Session relay plus server-owned session setup.
+ * The relay owns shared lobby/session metadata such as the creature map seed.
  * The host client has authority over food, organisms, and events.
  *
  * Security measures:
@@ -32,6 +33,7 @@
  *   Server → Client:
  *     { type: "created",       code, playerId }
  *     { type: "joined",        code, playerId, hostPlayerId }
+ *     { type: "creature_map",  map } // compact server-generated map definition
  *     { type: "public_lobbies", lobbies: "ABCD12,1,0,Tide%20Pool;EFGH34,2,0,Open%20Water" } // max 0 = unlimited
  *     { type: "player_joined", playerId }
  *     { type: "player_left",   playerId, wasHost }
@@ -43,6 +45,8 @@
  */
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer } = require('ws');
 const {
     RateLimiter,
@@ -79,6 +83,14 @@ const CFG = {
     MSG_RATE_MAX:       parseInt(process.env.MSG_RATE_MAX       ?? '120'),  // gameplay input + voice chunks
     JOIN_RATE_WINDOW_MS:parseInt(process.env.JOIN_RATE_WINDOW   ?? '60000'),
     JOIN_RATE_MAX:      parseInt(process.env.JOIN_RATE_MAX      ?? '10'),   // 10 join attempts/min per IP
+    MAX_AUTOSAVE_BYTES: parseInt(process.env.MAX_AUTOSAVE_BYTES ?? String(256 * 1024)),
+    AUTOSAVE_DIR:             process.env.AUTOSAVE_DIR          ?? path.join(process.cwd(), 'player-progress'),
+    CREATURE_MAP_SEED:         process.env.CREATURE_MAP_SEED    ?? '',
+    CREATURE_MAP_RADIUS: parseFloat(process.env.CREATURE_MAP_RADIUS ?? '48'),
+    CREATURE_MAP_RESOLUTION: parseInt(process.env.CREATURE_MAP_RESOLUTION ?? '72'),
+    CREATURE_MAP_HEIGHT: parseFloat(process.env.CREATURE_MAP_HEIGHT ?? '8'),
+    CREATURE_MAP_NOISE_SCALE: parseFloat(process.env.CREATURE_MAP_NOISE_SCALE ?? '0.055'),
+    CREATURE_MAP_LANDMARKS: parseInt(process.env.CREATURE_MAP_LANDMARKS ?? '7'),
 };
 
 // ---- rate limiters ----
@@ -98,6 +110,8 @@ const connsByIp = new Map(); // ip → Set<ws>
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const OPEN = 1;
 const PING_TEXT = JSON.stringify({ type: 'ping' });
+const CREATURE_MAP_MODE = 'creature';
+const CREATURE_MAP_VERSION = 1;
 
 function hasPlayerLimit() {
     return Number.isInteger(CFG.MAX_PLAYERS) && CFG.MAX_PLAYERS > 0;
@@ -121,6 +135,7 @@ class Session {
         this.nextId    = 1;         // 0 = host (creator)
         this.nextClanId = 1;
         this.createdAt = Date.now();
+        this.creatureMap = generateCreatureMap();
     }
 
     get hostId() {
@@ -134,6 +149,9 @@ class Session {
     get isExpired() { return !this.official && Date.now() - this.createdAt > CFG.SESSION_TTL_MS; }
 
     add(ws) {
+        if (this.official && this.size === 0)
+            this.creatureMap = generateCreatureMap();
+
         const id = this.size === 0 ? 0 : this.nextId++;
         this.players.set(id, ws);
         this.ready.set(id, id === 0);
@@ -276,6 +294,145 @@ function genCode() {
     throw new Error('Failed to generate unique session code'); // extremely unlikely
 }
 
+function normalizeCreatureMapSeed(seed) {
+    const parsed = Number(seed);
+    if (!Number.isFinite(parsed)) return 1;
+
+    const integer = Math.trunc(Math.abs(parsed));
+    const normalized = integer % 2147483647;
+    return normalized === 0 ? 1 : normalized;
+}
+
+function generateCreatureMapSeed() {
+    if (CFG.CREATURE_MAP_SEED !== '') {
+        return normalizeCreatureMapSeed(CFG.CREATURE_MAP_SEED);
+    }
+
+    return Math.floor(Math.random() * 2147483646) + 1;
+}
+
+function seededRandom(seed) {
+    let state = normalizeCreatureMapSeed(seed) >>> 0;
+    return () => {
+        state += 0x6D2B79F5;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function roundNumber(value, places = 3) {
+    const multiplier = Math.pow(10, places);
+    return Math.round(value * multiplier) / multiplier;
+}
+
+function range(rng, min, max, places = 3) {
+    return roundNumber(min + (max - min) * rng(), places);
+}
+
+function clampNumber(value, fallback, min, max) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+}
+
+function landmarkScaleForType(type, rng) {
+    switch (type) {
+        case 'HighGround':
+            return {
+                x: range(rng, 6.2, 9.4),
+                y: range(rng, 0.7, 1.15),
+                z: range(rng, 4.8, 7.6),
+            };
+        case 'NarrowPassage':
+            return {
+                x: range(rng, 1.7, 2.8),
+                y: range(rng, 1.6, 2.4),
+                z: range(rng, 7.2, 10.5),
+            };
+        case 'HealingZone':
+            return {
+                x: range(rng, 4.2, 6.1),
+                y: range(rng, 0.1, 0.18),
+                z: range(rng, 4.2, 6.1),
+            };
+        default:
+            return {
+                x: range(rng, 3.2, 5.8),
+                y: range(rng, 1.1, 1.9),
+                z: range(rng, 2.6, 5.2),
+            };
+    }
+}
+
+function generateCreatureMap(seed = generateCreatureMapSeed()) {
+    const normalizedSeed = normalizeCreatureMapSeed(seed);
+    const rng = seededRandom(normalizedSeed);
+    const radius = clampNumber(CFG.CREATURE_MAP_RADIUS, 48, 20, 120);
+    const islandResolution = Math.trunc(clampNumber(CFG.CREATURE_MAP_RESOLUTION, 72, 16, 160));
+    const islandHeight = clampNumber(CFG.CREATURE_MAP_HEIGHT, 8, 1, 32);
+    const islandNoiseScale = clampNumber(CFG.CREATURE_MAP_NOISE_SCALE, 0.055, 0.005, 0.25);
+    const landmarkCount = Math.trunc(clampNumber(CFG.CREATURE_MAP_LANDMARKS, 7, 3, 16));
+    const landmarkPattern = ['HealingZone', 'Cover', 'Cover', 'HighGround', 'NarrowPassage', 'Cover', 'HighGround'];
+    const landmarks = [];
+
+    for (let i = 0; i < landmarkCount; i++) {
+        const type = landmarkPattern[i % landmarkPattern.length];
+        const angle = rng() * Math.PI * 2;
+        const distance = range(rng, radius * 0.12, radius * 0.72);
+        const scale = landmarkScaleForType(type, rng);
+        landmarks.push({
+            type,
+            x: roundNumber(Math.cos(angle) * distance),
+            z: roundNumber(Math.sin(angle) * distance),
+            sx: scale.x,
+            sy: scale.y,
+            sz: scale.z,
+        });
+    }
+
+    return {
+        mode: CREATURE_MAP_MODE,
+        version: CREATURE_MAP_VERSION,
+        seed: normalizedSeed,
+        arenaRadius: roundNumber(radius),
+        islandResolution,
+        islandHeight: roundNumber(islandHeight),
+        islandNoiseScale: roundNumber(islandNoiseScale, 5),
+        landmarks,
+    };
+}
+
+function formatMapNumber(value, places = 3) {
+    return Number(value).toFixed(places).replace(/\.?0+$/, '');
+}
+
+function encodeCreatureMap(map) {
+    if (!map || map.mode !== CREATURE_MAP_MODE) return '';
+
+    const header = [
+        map.mode,
+        map.version,
+        map.seed,
+        formatMapNumber(map.arenaRadius),
+        map.islandResolution,
+        formatMapNumber(map.islandHeight),
+        formatMapNumber(map.islandNoiseScale, 5),
+    ].join(',');
+
+    const landmarks = (map.landmarks ?? []).map(landmark => [
+        landmark.type,
+        formatMapNumber(landmark.x),
+        formatMapNumber(landmark.z),
+        formatMapNumber(landmark.sx),
+        formatMapNumber(landmark.sy),
+        formatMapNumber(landmark.sz),
+    ].join(','));
+
+    return [header, ...landmarks].join(';');
+}
+
 function log(level, ...parts) {
     const ts = new Date().toISOString();
     // eslint-disable-next-line no-console
@@ -286,6 +443,11 @@ function log(level, ...parts) {
 
 function send(ws, obj) {
     if (ws.readyState === OPEN) ws.send(JSON.stringify(obj));
+}
+
+function sendCreatureMap(ws, session) {
+    if (!session?.creatureMap) return;
+    send(ws, { type: 'creature_map', map: encodeCreatureMap(session.creatureMap) });
 }
 
 function closeUnauthorized(ws) {
@@ -368,20 +530,122 @@ function encodePublicLobbies(lobbies = getPublicLobbies()) {
         .join(';');
 }
 
+function sanitizePlayerKey(value) {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const safe = trimmed.replace(/[^A-Za-z0-9_.-]/g, '_');
+    return safe.length > 0 ? safe.slice(0, 128) : null;
+}
+
+function sendJson(res, statusCode, body) {
+    res.writeHead(statusCode, {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+    });
+    res.end(JSON.stringify(body));
+}
+
+function handleAutosaveRequest(req, res) {
+    if (req.method !== 'POST') {
+        return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
+    }
+
+    const authHeader = req.headers['authorization'];
+    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length).trim()
+        : '';
+    if (!validateAuthToken(token, CFG.GAME_TOKEN || null)) {
+        return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
+    }
+
+    const playerHeader = req.headers['x-player-id'];
+    const playerId = sanitizePlayerKey(Array.isArray(playerHeader) ? playerHeader[0] : playerHeader);
+    if (!playerId) {
+        return sendJson(res, 400, { ok: false, reason: 'missing_player_id' });
+    }
+
+    let body = '';
+    req.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > CFG.MAX_AUTOSAVE_BYTES) {
+            req.destroy();
+        }
+    });
+
+    req.on('end', () => {
+        try {
+            const parsed = JSON.parse(body);
+            if (!parsed || typeof parsed !== 'object') {
+                return sendJson(res, 400, { ok: false, reason: 'invalid_payload' });
+            }
+
+            fs.mkdirSync(CFG.AUTOSAVE_DIR, { recursive: true });
+            const outputPath = path.join(CFG.AUTOSAVE_DIR, `${playerId}.json`);
+            fs.writeFileSync(outputPath, JSON.stringify(parsed, null, 2), 'utf8');
+            return sendJson(res, 200, { ok: true });
+        } catch {
+            return sendJson(res, 400, { ok: false, reason: 'invalid_json' });
+        }
+    });
+
+    req.on('error', () => {
+        sendJson(res, 500, { ok: false, reason: 'request_error' });
+    });
+}
+
+function handleAutosaveLookupRequest(req, res) {
+    if (req.method !== 'GET') {
+        return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
+    }
+
+    const authHeader = req.headers['authorization'];
+    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length).trim()
+        : '';
+    if (!validateAuthToken(token, CFG.GAME_TOKEN || null)) {
+        return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
+    }
+
+    const match = /^\/api\/progress\/autosave\/([^/?#]+)$/.exec(req.url || '');
+    const playerId = sanitizePlayerKey(match ? decodeURIComponent(match[1]) : '');
+    if (!playerId) {
+        return sendJson(res, 400, { ok: false, reason: 'missing_player_id' });
+    }
+
+    try {
+        const inputPath = path.join(CFG.AUTOSAVE_DIR, `${playerId}.json`);
+        if (!fs.existsSync(inputPath)) {
+            return sendJson(res, 404, { ok: false, reason: 'not_found' });
+        }
+
+        const json = fs.readFileSync(inputPath, 'utf8');
+        const parsed = JSON.parse(json);
+        return sendJson(res, 200, { ok: true, data: parsed });
+    } catch {
+        return sendJson(res, 500, { ok: false, reason: 'read_failed' });
+    }
+}
+
 // ---- WebSocket server ----
 
 const server = http.createServer((req, res) => {
+    if (req.url === '/api/progress/autosave') {
+        handleAutosaveRequest(req, res);
+        return;
+    }
+    if ((req.url || '').startsWith('/api/progress/autosave/')) {
+        handleAutosaveLookupRequest(req, res);
+        return;
+    }
+
     if (req.url === '/healthz' || req.url === '/') {
-        const body = JSON.stringify({
+        const body = {
             ok: true,
             sessions: sessions.size,
             clients: wss.clients.size,
-        });
-        res.writeHead(200, {
-            'content-type': 'application/json',
-            'cache-control': 'no-store',
-        });
-        res.end(body);
+        };
+        sendJson(res, 200, body);
         return;
     }
 
@@ -514,6 +778,7 @@ wss.on('connection', (ws, req) => {
                 const playerId = session.add(ws);
                 log('info', `created code=${code} name=${session.serverName} ip=${ip}`);
                 send(ws, { type: 'created', code, playerId, serverName: session.serverName });
+                sendCreatureMap(ws, session);
                 break;
             }
 
@@ -540,6 +805,7 @@ wss.on('connection', (ws, req) => {
                 const playerId = session.add(ws);
                 log('info', `joined code=${msg.code} player=${playerId} ip=${ip}`);
                 send(ws, { type: 'joined', code: msg.code, playerId, hostPlayerId: session.hostId });
+                sendCreatureMap(ws, session);
                 for (const [existingId] of session.players) {
                     if (existingId === playerId) continue;
                     send(ws, { type: 'player_joined', playerId: existingId });
@@ -647,6 +913,7 @@ wss.on('connection', (ws, req) => {
                     return send(ws, { type: 'error', reason: 'not_ready' });
                 }
                 log('info', `game started code=${session.code} host=${ws._playerId}`);
+                session.broadcast(-1, { type: 'creature_map', map: encodeCreatureMap(session.creatureMap) });
                 session.broadcast(-1, { type: 'game_started' });
                 break;
             }
@@ -753,4 +1020,7 @@ module.exports = {
     ensureOfficialSessions,
     getPublicLobbies,
     encodePublicLobbies,
+    generateCreatureMap,
+    encodeCreatureMap,
+    normalizeCreatureMapSeed,
 };

@@ -1,20 +1,14 @@
-attempt to write a readonly database
-attempt to write a readonly database
 [Licensing::Module] Trying to connect to existing licensing client channel...
-Built from '6000.4/staging' branch; Version is '6000.4.2f1 (7a4c1aeef971) revision 8014874'; Using compiler version '194234433'; Build Type 'Release'
-[Licensing::IpcConnector] Connection to channel LicenseClient-craig refused
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig" at "2026-05-18T00:16:31.4244827Z"
+Built from '6000.4/staging' branch; Version is '6000.4.7f1 (f3c3c4248748) revision 15975364'; Using compiler version '194234433'; Build Type 'Release'
 OS: 'Windows 11  (10.0.26200) Core' Language: 'en' Physical Memory: 31859 MB
 BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
 System  architecture: x64
 Process architecture: x64
-Date: 2026-05-13T20:34:05Z
-[Licensing::Module] Successfully launched the LicensingClient (PId: 29428)
-Assertion failed on expression: 'SUCCEEDED(hr)'
-Assertion failed on expression: 'SUCCEEDED(hr)'
-Assertion failed on expression: 'ERROR_SUCCESS == status'
+Date: 2026-05-18T00:16:31Z
 
 COMMAND LINE ARGUMENTS:
-C:\Program Files\Unity\Hub\Editor\6000.4.2f1\Editor\Unity.exe
+C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Unity.exe
 -nographics
 -batchmode
 -runTests
@@ -63,15 +57,21 @@ C:/Users/craig/work/spores/RoobsWorld
     "memorysetup-job-temp-allocator-block-size=2097152"
     "memorysetup-job-temp-allocator-block-size-background=1048576"
     "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
-Player connection [29468]  Target information:
+Player connection [13268]  Target information:
 
-Player connection [29468]  * "[IP] 192.168.1.234 [Port] 55504 [Flags] 2 [Guid] 3500372232 [EditorId] 3500372232 [Version] 1048832 [Id] WindowsEditor(7,Roobs-World) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+Player connection [13268]  * "[IP] 192.168.1.234 [Port] 55504 [Flags] 2 [Guid] 3692758328 [EditorId] 3692758328 [Version] 1048832 [Id] WindowsEditor(7,Roobs-World) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
 
-Player connection [29468] Host joined multi-casting on [225.0.0.222:54997]...
-Player connection [29468] Host joined alternative multi-casting on [225.0.0.222:34997]...
+Player connection [13268] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [13268] Host joined alternative multi-casting on [225.0.0.222:34997]...
 Input System module state changed to: Initialized.
 [Physics::Module] Initialized fallback backend.
 [Physics::Module] Id: 0xdecafbad
-[Package Manager] Could not connect to IPC stream "Upm-28296" after 30.0 seconds.
-[Package Manager] Could not establish a connection with the Unity Package Manager local server process.
-Exiting without the bug reporter. Application will terminate with return code 1
+[Licensing::Client] Error: HandshakeResponse reported an error:
+	ResponseCode: 505
+	ResponseStatus: Unsupported protocol version '1.18.1'.
+[Licensing::Module] Error: Failed to handshake to channel: "LicenseClient-craig"
+[Licensing::IpcConnector] LicenseClient-craig channel disconnected successfully.
+[Licensing::IpcConnector] Channel LicenseClient-craig-6000.4.7 doesn't exist
+[Licensing::Module] Successfully launched the LicensingClient (PId: 22176)
+[Package Manager] Connected to IPC stream "Upm-33544" after 0.2 seconds.
+[Licensing::Module] Licensing is not yet initialized.

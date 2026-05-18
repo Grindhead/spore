@@ -268,6 +268,31 @@ describe('Session lobbies', () => {
     });
 });
 
+// ---- Creature map generation ----
+
+describe('Creature map generation', () => {
+    it('generates deterministic maps for the same seed', () => {
+        const { generateCreatureMap, encodeCreatureMap } = require('./relay-server');
+
+        const a = generateCreatureMap(12345);
+        const b = generateCreatureMap(12345);
+
+        assert.deepEqual(a, b);
+        assert.equal(encodeCreatureMap(a), encodeCreatureMap(b));
+        assert.equal(a.mode, 'creature');
+        assert.ok(a.landmarks.length > 0);
+    });
+
+    it('creates sessions with a server-owned creature map', () => {
+        const { Session, encodeCreatureMap } = require('./relay-server');
+        const session = new Session('MAP123');
+
+        assert.equal(session.creatureMap.mode, 'creature');
+        assert.ok(session.creatureMap.seed > 0);
+        assert.match(encodeCreatureMap(session.creatureMap), /^creature,1,\d+,/);
+    });
+});
+
 // ---- Public lobby discovery ----
 
 describe('Public lobby discovery', () => {

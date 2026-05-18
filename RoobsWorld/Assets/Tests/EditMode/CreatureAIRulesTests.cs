@@ -221,6 +221,75 @@ namespace RoobsWorld.Tests.EditMode
             Assert.IsFalse(recent.Contains(new Vector2Int(0, 0)));
         }
 
+        [Test]
+        public void AmbientActivity_UsesArchetypeFlavorAndInjuryCaution()
+        {
+            Assert.AreEqual(
+                CreatureRivalAmbientActivity.Forage,
+                CreatureRivalAI.ChooseAmbientActivity(
+                    random01: 0.1f,
+                    healthRatio: 1f,
+                    recentlyDamaged: false,
+                    CreatureRivalArchetype.Tank));
+
+            Assert.AreEqual(
+                CreatureRivalAmbientActivity.Investigate,
+                CreatureRivalAI.ChooseAmbientActivity(
+                    random01: 0.5f,
+                    healthRatio: 1f,
+                    recentlyDamaged: false,
+                    CreatureRivalArchetype.Stalker));
+
+            Assert.AreEqual(
+                CreatureRivalAmbientActivity.Roam,
+                CreatureRivalAI.ChooseAmbientActivity(
+                    random01: 0.1f,
+                    healthRatio: 0.2f,
+                    recentlyDamaged: false,
+                    CreatureRivalArchetype.Tank));
+        }
+
+        [Test]
+        public void SocialSpacingDirection_MovesAwayFromNearbyCreatures()
+        {
+            Vector3 direction = CreatureRivalAI.ComputeSocialSpacingDirection(
+                selfPosition: Vector3.zero,
+                neighborPositions: new[]
+                {
+                    new Vector3(1f, 0f, 0f),
+                    new Vector3(8f, 0f, 0f)
+                },
+                personalSpaceRadius: 3f);
+
+            Assert.That(direction.x, Is.LessThan(0f));
+            Assert.That(direction.z, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(direction.magnitude, Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [Test]
+        public void BlendSocialSteering_AllowsIdleCreatureToStepAwayFromCrowd()
+        {
+            Vector3 direction = CreatureRivalAI.BlendSocialSteering(
+                desiredDirection: Vector3.zero,
+                socialSpacingDirection: Vector3.left,
+                socialSpacingWeight: 0.5f);
+
+            Assert.That(direction.x, Is.EqualTo(-1f).Within(0.001f));
+        }
+
+        [Test]
+        public void ApplyPlanarMeander_AddsSubtleSidewaysDrift()
+        {
+            Vector3 direction = CreatureRivalAI.ApplyPlanarMeander(
+                desiredDirection: Vector3.forward,
+                phase: Mathf.PI * 0.5f,
+                strength: 0.5f);
+
+            Assert.That(direction.x, Is.LessThan(0f));
+            Assert.That(direction.z, Is.GreaterThan(0f));
+            Assert.That(direction.magnitude, Is.EqualTo(1f).Within(0.001f));
+        }
+
         private static CreatureDNA CreateDna(string id, float bodyScale)
         {
             var dna = CreatureDNA.CreateDefault();

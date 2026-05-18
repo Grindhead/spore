@@ -1,4 +1,6 @@
 using RoobsWorld.Core;
+using RoobsWorld.Multiplayer;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RoobsWorld.Stages.Creature
@@ -14,6 +16,10 @@ namespace RoobsWorld.Stages.Creature
         private const float RespawnDelaySeconds = 2.5f;
         private const float RespawnProtectionSeconds = 2.2f;
         private const float NextObjectiveDelaySeconds = 6f;
+        private const int MultiplayerRivalsPerExtraPlayer = 1;
+        private const int MultiplayerRivalsMaxBonus = 3;
+        private const int MultiplayerObjectiveDefeatsPerExtraPlayer = 2;
+        private const int MultiplayerObjectiveDefeatsMaxBonus = 6;
 
         private GameObject _playerCreature;
         private CreatureStageHUD _hud;
@@ -30,11 +36,15 @@ namespace RoobsWorld.Stages.Creature
         private int _objectiveStartDefeatedCount;
         private int _objectiveStartAlphaDefeatedCount;
         private int _objectiveStartSpawnedCount;
+        private int _objectivePacifyCount;
         private int _objectivesCompleted;
         private float _objectiveStartedAt;
         private float _nextObjectiveTimer = -1f;
         private GameObject _objectiveMarker;
         private bool _playerInsideHoldGround;
+        private readonly Dictionary<string, float> _speciesRelationshipScores = new Dictionary<string, float>(8);
+        private int _minDesiredActiveRivals = MinDesiredActiveRivals;
+        private int _maxDesiredActiveRivals = MaxDesiredActiveRivals;
 
         public GameStageType StageType => GameStageType.Creature;
 
@@ -56,7 +66,19 @@ namespace RoobsWorld.Stages.Creature
             _objectiveCompleteAnnounced = false;
             _objectivesCompleted = 0;
             _nextObjectiveTimer = -1f;
-            _desiredActiveRivals = MinDesiredActiveRivals;
+            var session = GameManager.HasInstance ? GameManager.Instance.Session : null;
+            int activePlayerCount = GetActiveCreaturePlayerCount(session);
+            _minDesiredActiveRivals = ComputeMultiplayerScaledCount(
+                MinDesiredActiveRivals,
+                activePlayerCount,
+                MultiplayerRivalsPerExtraPlayer,
+                MultiplayerRivalsMaxBonus);
+            _maxDesiredActiveRivals = ComputeMultiplayerScaledCount(
+                MaxDesiredActiveRivals,
+                activePlayerCount,
+                MultiplayerRivalsPerExtraPlayer,
+                MultiplayerRivalsMaxBonus);
+            _desiredActiveRivals = _minDesiredActiveRivals;
             EnsureArena();
             SpawnPlayerIfNeeded();
             InitializeUpgradeMilestone();
@@ -68,6 +90,8 @@ namespace RoobsWorld.Stages.Creature
                 EnsureHud(_playerCreature);
             }
             InitializeObjective();
+            EventBus.Subscribe<CreatureCombatFeedbackEvent>(OnCombatFeedback);
+            EventBus.Subscribe<CreatureRivalDefeatedEvent>(OnRivalDefeated);
             _telemetryTracker = GameplayTelemetryTracker.Attach(
                 "CreatureGameplayTelemetry",
                 panelVisible: Application.isEditor || Debug.isDebugBuild);
@@ -75,6 +99,9 @@ namespace RoobsWorld.Stages.Creature
 
         public void OnExit()
         {
+            EventBus.Unsubscribe<CreatureCombatFeedbackEvent>(OnCombatFeedback);
+            EventBus.Unsubscribe<CreatureRivalDefeatedEvent>(OnRivalDefeated);
+            _speciesRelationshipScores.Clear();
             CameraManager.Instance.SetFollowTarget(null);
             _hud?.SetVisible(false);
             if (_objectiveMarker != null)
@@ -92,8 +119,8 @@ namespace RoobsWorld.Stages.Creature
                 int desiredActive = ComputeDesiredActiveRivals(
                     objectivePopulationProgress,
                     GetObjectiveDefeatTarget(),
-                    MinDesiredActiveRivals,
-                    MaxDesiredActiveRivals);
+                    _minDesiredActiveRivals,
+                    _maxDesiredActiveRivals);
                 _desiredActiveRivals = desiredActive;
                 _encounterManager.UpdatePopulation(
                     Time.deltaTime,
@@ -161,8 +188,43 @@ namespace RoobsWorld.Stages.Creature
             _nextObjectiveTimer = -1f;
             _holdObjectiveSeconds = 0f;
             _playerInsideHoldGround = false;
+            _objectivePacifyCount = 0;
             _encounterManager?.SetObjectiveFocus(_currentObjective);
             UpdateObjectiveMarker();
+        }
+
+        public static CreatureSpeciesDisposition EvaluateSpeciesDisposition(float relationshipScore)
+        {
+            if (relationshipScore <= -2f) return CreatureSpeciesDisposition.Hostile;
+            if (relationshipScore < 0f) return CreatureSpeciesDisposition.Annoyed;
+            if (relationshipScore < 1.5f) return CreatureSpeciesDisposition.Curious;
+            if (relationshipScore < 3f) return CreatureSpeciesDisposition.Friendly;
+            return CreatureSpeciesDisposition.Allied;
+        }
+
+        public bool TryGetSpeciesDispositionForRival(string creatureId, out CreatureSpeciesDisposition disposition)
+        {
+            disposition = CreatureSpeciesDisposition.Curious;
+            if (_encounterManager == null || string.IsNullOrWhiteSpace(creatureId))
+                return false;
+            if (!_encounterManager.TryGetTrackedRivalLabel(creatureId, out string speciesLabel) || string.IsNullOrWhiteSpace(speciesLabel))
+                return false;
+
+            _speciesRelationshipScores.TryGetValue(speciesLabel, out float score);
+            disposition = EvaluateSpeciesDisposition(score);
+            return true;
+        }
+
+        public static float ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType feedbackType)
+        {
+            return feedbackType switch
+            {
+                CreatureCombatFeedbackType.Kill => -1f,
+                CreatureCombatFeedbackType.Hit => -0.45f,
+                CreatureCombatFeedbackType.Counter => 0.7f,
+                CreatureCombatFeedbackType.Guard => 0.4f,
+                _ => 0f
+            };
         }
 
         private void EnsureArena()
@@ -175,7 +237,18 @@ namespace RoobsWorld.Stages.Creature
                 _arena = arenaRoot.AddComponent<CreatureStageArena>();
             }
 
+            ApplySessionMapToArena(_arena);
             _arena.EnsureBuilt();
+        }
+
+        private static void ApplySessionMapToArena(CreatureStageArena arena)
+        {
+            if (arena == null || !GameManager.HasInstance)
+                return;
+
+            var session = GameManager.Instance.Session;
+            if (session != null && session.TryGetSessionMap(out var map))
+                arena.ApplyMapDefinition(map);
         }
 
         private void EnsureHud(GameObject playerCreature)
@@ -407,6 +480,20 @@ namespace RoobsWorld.Stages.Creature
             return min + tier;
         }
 
+        public static int GetActiveCreaturePlayerCount(MultiplayerSessionManager session)
+        {
+            return Mathf.Max(1, session?.PlayerCount ?? 1);
+        }
+
+        public static int ComputeMultiplayerScaledCount(int baseCount, int playerCount, int perExtraPlayer, int maxBonus)
+        {
+            int count = Mathf.Max(0, baseCount);
+            int players = Mathf.Max(1, playerCount);
+            int extras = players - 1;
+            int bonus = Mathf.Clamp(extras * Mathf.Max(0, perExtraPlayer), 0, Mathf.Max(0, maxBonus));
+            return count + bonus;
+        }
+
         public static int ComputeNextUpgradeMilestone(int completedUpgradeCount, int defeatsPerUpgrade)
         {
             int completed = Mathf.Max(0, completedUpgradeCount);
@@ -421,6 +508,7 @@ namespace RoobsWorld.Stages.Creature
             {
                 CreatureStageObjectiveType.AlphaHunt => reward + 6,
                 CreatureStageObjectiveType.HoldFeedingGround => reward + 4,
+                CreatureStageObjectiveType.PacifyRivals => reward + 5,
                 _ => reward
             };
         }
@@ -592,7 +680,11 @@ namespace RoobsWorld.Stages.Creature
 
         private int GetObjectiveDefeatTarget()
         {
-            return Mathf.Max(1, _currentObjective.RivalDefeatTarget);
+            return Mathf.Max(1, ComputeMultiplayerScaledCount(
+                _currentObjective.RivalDefeatTarget,
+                GetActiveCreaturePlayerCount(GameManager.HasInstance ? GameManager.Instance.Session : null),
+                MultiplayerObjectiveDefeatsPerExtraPlayer,
+                MultiplayerObjectiveDefeatsMaxBonus));
         }
 
         private int GetObjectivePopulationProgress()
@@ -607,6 +699,8 @@ namespace RoobsWorld.Stages.Creature
         {
             if (_currentObjective.Type == CreatureStageObjectiveType.AlphaHunt)
                 return GetObjectiveAlphaProgress();
+            if (_currentObjective.Type == CreatureStageObjectiveType.PacifyRivals)
+                return Mathf.Max(0, _objectivePacifyCount);
 
             int totalDefeats = _encounterManager != null ? _encounterManager.DefeatedCount : 0;
             return ComputeObjectiveDefeatProgress(totalDefeats, _objectiveStartDefeatedCount);
@@ -735,6 +829,9 @@ namespace RoobsWorld.Stages.Creature
             if (_encounterManager == null)
                 return -1f;
 
+            if (_currentObjective.Type == CreatureStageObjectiveType.PacifyRivals)
+                return _encounterManager.GetNearestTrackedRivalDistance(false);
+
             return _encounterManager.GetNearestTrackedRivalDistance(_currentObjective.Type == CreatureStageObjectiveType.AlphaHunt);
         }
 
@@ -767,6 +864,18 @@ namespace RoobsWorld.Stages.Creature
                     Mathf.Max(1, _desiredActiveRivals),
                     streak);
                 return alphaProgress + BuildStreakTimerSuffix(streak, streakSecondsRemaining);
+            }
+            if (_currentObjective.Type == CreatureStageObjectiveType.PacifyRivals)
+            {
+                string pacifyProgress = string.Format(
+                    Localization.Get("creature.objective.pacify_progress"),
+                    rewardLabel,
+                    defeatedRivals,
+                    GetObjectiveDefeatTarget(),
+                    activeRivals,
+                    Mathf.Max(1, _desiredActiveRivals),
+                    streak);
+                return pacifyProgress + BuildStreakTimerSuffix(streak, streakSecondsRemaining);
             }
 
             string rivalProgress = string.Format(
@@ -807,6 +916,87 @@ namespace RoobsWorld.Stages.Creature
                 markerPos = _arena.SnapToIslandSurface(Vector3.zero) + new Vector3(0f, 0.08f, 0f);
             _objectiveMarker.transform.position = markerPos;
             _objectiveMarker.transform.localScale = new Vector3(radius * 2f, 0.08f, radius * 2f);
+        }
+
+        private void OnCombatFeedback(CreatureCombatFeedbackEvent evt)
+        {
+            if (_objectiveCompleteAnnounced || _currentObjective.Type != CreatureStageObjectiveType.PacifyRivals)
+            {
+                TrackSpeciesRelationship(evt);
+                return;
+            }
+
+            bool playerSourcedControl = evt.IsPlayerSource
+                && (evt.Type == CreatureCombatFeedbackType.Guard || evt.Type == CreatureCombatFeedbackType.Counter);
+            if (playerSourcedControl)
+            {
+                _objectivePacifyCount = Mathf.Min(
+                    GetObjectiveDefeatTarget(),
+                    _objectivePacifyCount + 1);
+            }
+
+            TrackSpeciesRelationship(evt);
+        }
+
+        private void OnRivalDefeated(CreatureRivalDefeatedEvent evt)
+        {
+            if (string.IsNullOrWhiteSpace(evt.ArchetypeName))
+                return;
+
+            ApplySpeciesRelationshipDelta(evt.ArchetypeName, -0.75f);
+        }
+
+        private void TrackSpeciesRelationship(CreatureCombatFeedbackEvent evt)
+        {
+            if (!evt.IsPlayerSource || _encounterManager == null)
+                return;
+
+            float delta = ComputeSpeciesRelationshipDelta(evt.Type);
+            if (Mathf.Abs(delta) <= 0.001f)
+                return;
+
+            if (!TryResolveSpeciesLabel(evt, out string speciesLabel))
+                return;
+
+            ApplySpeciesRelationshipDelta(speciesLabel, delta);
+        }
+
+        private bool TryResolveSpeciesLabel(CreatureCombatFeedbackEvent evt, out string speciesLabel)
+        {
+            speciesLabel = string.Empty;
+            if (_encounterManager == null)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(evt.TargetCreatureId) &&
+                _encounterManager.TryGetTrackedRivalLabel(evt.TargetCreatureId, out speciesLabel))
+                return true;
+
+            Vector3 reference = _playerCreature != null ? _playerCreature.transform.position : evt.Position;
+            return _encounterManager.TryGetNearestTrackedRivalLabel(reference, out speciesLabel);
+        }
+
+        private void ApplySpeciesRelationshipDelta(string speciesLabel, float delta)
+        {
+            if (string.IsNullOrWhiteSpace(speciesLabel) || Mathf.Abs(delta) <= 0.001f)
+                return;
+
+            _speciesRelationshipScores.TryGetValue(speciesLabel, out float oldScore);
+            var oldDisposition = EvaluateSpeciesDisposition(oldScore);
+            float newScore = Mathf.Clamp(oldScore + delta, -4f, 4f);
+            _speciesRelationshipScores[speciesLabel] = newScore;
+            var newDisposition = EvaluateSpeciesDisposition(newScore);
+
+            if (newDisposition == oldDisposition)
+                return;
+
+            EventBus.Publish(new CreatureSpeciesRelationshipChangedEvent
+            {
+                SpeciesLabel = speciesLabel,
+                PreviousDisposition = oldDisposition,
+                NewDisposition = newDisposition,
+                Score = newScore,
+                Delta = delta
+            });
         }
     }
 }

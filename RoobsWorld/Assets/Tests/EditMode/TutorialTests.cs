@@ -173,6 +173,22 @@ namespace RoobsWorld.Tests
             Assert.IsFalse(string.IsNullOrWhiteSpace(holdReturn));
             Assert.AreNotEqual("creature.objective.hold_state.return", holdReturn);
 
+            string pacifyObjective = Localization.Get("creature.objective.pacify");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(pacifyObjective));
+            Assert.AreNotEqual("creature.objective.pacify", pacifyObjective);
+
+            string pacifyGuidance = Localization.Get("creature.objective.guidance.pacify");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(pacifyGuidance));
+            Assert.AreNotEqual("creature.objective.guidance.pacify", pacifyGuidance);
+
+            string relationshipShift = Localization.Get("creature.relationship.shift");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(relationshipShift));
+            Assert.AreNotEqual("creature.relationship.shift", relationshipShift);
+
+            string relationshipHostile = Localization.Get("creature.relationship.hostile");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(relationshipHostile));
+            Assert.AreNotEqual("creature.relationship.hostile", relationshipHostile);
+
             string encounterComplete = Localization.Get("creature.encounter.complete");
             Assert.IsFalse(string.IsNullOrWhiteSpace(encounterComplete));
             Assert.AreNotEqual("creature.encounter.complete", encounterComplete);

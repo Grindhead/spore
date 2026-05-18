@@ -1,4 +1,3 @@
-using System.Text;
 using UnityEngine;
 
 namespace RoobsWorld.Core
@@ -7,7 +6,7 @@ namespace RoobsWorld.Core
     /// Steamworks.NET-backed platform provider. It compiles as a safe no-op until
     /// Steamworks.NET is imported and the ROOBSWORLD_STEAM scripting define is enabled.
     /// </summary>
-    public class SteamPlatformProvider : IPlatformAchievementProvider, IPlatformUserProvider, IPlatformCloudSaveProvider, IPlatformRichPresenceProvider
+    public class SteamPlatformProvider : IPlatformAchievementProvider, IPlatformUserProvider, IPlatformRichPresenceProvider
     {
         public bool IsAvailable => SteamClientIntegration.IsInitialized;
         public string PlatformName => "Steam";
@@ -103,43 +102,6 @@ namespace RoobsWorld.Core
 #endif
         }
 
-        public bool TryWriteText(string remoteFileName, string contents)
-        {
-#if STEAMWORKS_NET && !UNITY_WEBGL
-            if (!IsCloudAvailable() || string.IsNullOrWhiteSpace(remoteFileName))
-                return false;
-
-            byte[] bytes = Encoding.UTF8.GetBytes(contents ?? string.Empty);
-            return Steamworks.SteamRemoteStorage.FileWrite(remoteFileName, bytes, bytes.Length);
-#else
-            return false;
-#endif
-        }
-
-        public bool TryReadText(string remoteFileName, out string contents)
-        {
-            contents = null;
-#if STEAMWORKS_NET && !UNITY_WEBGL
-            if (!IsCloudAvailable() || string.IsNullOrWhiteSpace(remoteFileName))
-                return false;
-            if (!Steamworks.SteamRemoteStorage.FileExists(remoteFileName))
-                return false;
-
-            int size = Steamworks.SteamRemoteStorage.GetFileSize(remoteFileName);
-            if (size <= 0)
-                return false;
-
-            byte[] bytes = new byte[size];
-            int read = Steamworks.SteamRemoteStorage.FileRead(remoteFileName, bytes, size);
-            if (read <= 0)
-                return false;
-
-            contents = Encoding.UTF8.GetString(bytes, 0, read);
-            return true;
-#else
-            return false;
-#endif
-        }
 
         public void SetRichPresence(GameStageType stage)
         {
@@ -183,16 +145,6 @@ namespace RoobsWorld.Core
             };
         }
 
-        private bool IsCloudAvailable()
-        {
-#if STEAMWORKS_NET && !UNITY_WEBGL
-            return IsAvailable
-                && Steamworks.SteamRemoteStorage.IsCloudEnabledForAccount()
-                && Steamworks.SteamRemoteStorage.IsCloudEnabledForApp();
-#else
-            return false;
-#endif
-        }
     }
 
     public sealed class SteamAchievementProvider : SteamPlatformProvider { }

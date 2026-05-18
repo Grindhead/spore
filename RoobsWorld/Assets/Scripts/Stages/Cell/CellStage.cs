@@ -1,5 +1,8 @@
 using RoobsWorld.Core;
+using RoobsWorld.Creature;
 using RoobsWorld.Multiplayer;
+using RoobsWorld.Stages.Creature;
+using RoobsWorld.Stages.Cell.Services;
 using RoobsWorld.UI;
 using RoobsWorld.Utils;
 using System.Collections.Generic;
@@ -40,6 +43,7 @@ namespace RoobsWorld.Stages.Cell
         private CellArenaDebris _arenaDebris;
         private Transform _arenaBackdropRoot;
         private CellBackgroundFish _backgroundFish;
+        private bool _cellStageCompleted;
         private int _timeScaleIndex;
         private CellGoal? _currentGoal;
         private int _completedGoalCount;
@@ -49,6 +53,12 @@ namespace RoobsWorld.Stages.Cell
         private bool _playerWasThreatenedByPredator;
         private HostAuthorityController _authority;
         private NetworkTickManager _networkTick;
+        private CellStageContext _context;
+        private readonly CellStageOrchestrator _orchestrator = new CellStageOrchestrator();
+        private readonly CellStageSpawnDirector _spawnDirector = new CellStageSpawnDirector();
+        private readonly CellGoalDirector _goalDirector = new CellGoalDirector();
+        private readonly CellBackdropPresenter _backdropPresenter = new CellBackdropPresenter();
+        private readonly CellThreatCache _threatCache = new CellThreatCache();
         private readonly List<ArenaCurrent> _arenaCurrentsCache = new List<ArenaCurrent>(8);
         private readonly List<PredatorCell> _predatorCache = new List<PredatorCell>(24);
         private readonly List<Organism> _organismCache = new List<Organism>(64);
@@ -141,45 +151,17 @@ namespace RoobsWorld.Stages.Cell
 
         public static int ComputeMultiplayerScaledCount(int baseCount, int playerCount, int perExtraPlayer, int maxBonus)
         {
-            int safeBase = Mathf.Max(0, baseCount);
-            int extraPlayers = Mathf.Max(0, playerCount - 1);
-            int bonus = extraPlayers * Mathf.Max(0, perExtraPlayer);
-            int cap = Mathf.Max(0, maxBonus);
-            if (cap == 0)
-                bonus = 0;
-            else
-                bonus = Mathf.Min(bonus, cap);
-
-            return safeBase + bonus;
+            return CellStageScaling.ComputeScaledCount(baseCount, playerCount, perExtraPlayer, maxBonus);
         }
 
         public static int ComputeMultiplayerPredatorCount(int baseCount, int playerCount, int extraPlayersPerBonus, int maxBonus)
         {
-            int safeBase = Mathf.Max(0, baseCount);
-            int extraPlayers = Mathf.Max(0, playerCount - 1);
-            int interval = Mathf.Max(1, extraPlayersPerBonus);
-            int bonus = extraPlayers / interval;
-            int cap = Mathf.Max(0, maxBonus);
-            if (cap == 0)
-                bonus = 0;
-            else
-                bonus = Mathf.Min(bonus, cap);
-
-            return safeBase + bonus;
+            return CellStageScaling.ComputePredatorCount(baseCount, playerCount, extraPlayersPerBonus, maxBonus);
         }
 
         public static float ComputeMultiplayerArenaRadius(float baseRadius, int playerCount, float perExtraPlayerFraction, float maxBonusFraction)
         {
-            float safeBase = Mathf.Max(0f, baseRadius);
-            int extraPlayers = Mathf.Max(0, playerCount - 1);
-            float bonusFraction = extraPlayers * Mathf.Max(0f, perExtraPlayerFraction);
-            float cap = Mathf.Max(0f, maxBonusFraction);
-            if (cap == 0f)
-                bonusFraction = 0f;
-            else
-                bonusFraction = Mathf.Min(bonusFraction, cap);
-
-            return safeBase * (1f + bonusFraction);
+            return CellStageScaling.ComputeArenaRadius(baseRadius, playerCount, perExtraPlayerFraction, maxBonusFraction);
         }
 
         /// <summary>If the player is inside an ArenaCurrent trigger, returns its direction and force; otherwise false.</summary>
@@ -219,6 +201,7 @@ namespace RoobsWorld.Stages.Cell
 
         private void Start()
         {
+            _context = CellStageContext.Create(this);
             StageManager.Instance.RegisterStage(this);
             _foodManager = GetComponent<FoodManager>();
             if (_foodManager == null)
@@ -242,6 +225,7 @@ namespace RoobsWorld.Stages.Cell
 
         public void OnEnter()
         {
+            _orchestrator.Enter(null);
             _isActive = true;
             CellFeelDirector.SetProfile(CellFeelProfile.Classic);
             ApplyCellOnlyPreset();
@@ -267,7 +251,7 @@ namespace RoobsWorld.Stages.Cell
             CameraManager.Instance.ActivateRig(CameraRigType.Orthographic2D);
             _envEventManager = gameObject.GetComponent<CellEnvironmentEventManager>()
                 ?? gameObject.AddComponent<CellEnvironmentEventManager>();
-            SpawnArena();
+            _backdropPresenter.BuildBackdrop(SpawnArena);
             _spatialGrid = new CellSpatialGrid(_arenaCenter, _arenaRadius, BalanceConstants.CellSpatialGridCellSize);
             _foodManager.SetSpatialGrid(_spatialGrid);
             int npcOrg = GameManager.HasInstance
@@ -278,12 +262,14 @@ namespace RoobsWorld.Stages.Cell
                 BalanceConstants.CellMultiplayerOrganismPerExtraPlayer,
                 BalanceConstants.CellMultiplayerOrganismMaxBonus);
             _organismPool = new OrganismPool(prewarm: npcOrg, maxPooled: npcOrg * 3);
-            SpawnPlayer();
-            SpawnFood();
-            SpawnNPCs();
-            SpawnOrganisms();
-            SpawnPartPickups();
-            SpawnHazards();
+            _spawnDirector.SpawnInitial(
+                spawnArena: null,
+                spawnPlayer: SpawnPlayer,
+                spawnFood: SpawnFood,
+                spawnNpcs: SpawnNPCs,
+                spawnOrganisms: SpawnOrganisms,
+                spawnPickups: SpawnPartPickups,
+                spawnHazards: SpawnHazards);
 
             _envEventManager.Activate(_foodManager, _arenaRadius, _player, _authority, _arenaCenter);
             _telemetryTracker = GameplayTelemetryTracker.Attach(
@@ -307,6 +293,7 @@ namespace RoobsWorld.Stages.Cell
             _completedGoalCount = 0;
             _goalVarietyChain = 0;
             _hasLastGoalCategory = false;
+            _cellStageCompleted = false;
             SetCurrentGoal(CellGoal.CreateEatFoodGoal(FoodType.Plant, 3));
             ShowGoalLinkedTutorialTip();
             EventBus.Subscribe<CellEvolutionTriggeredEvent>(OnEvolutionTriggered);
@@ -323,6 +310,7 @@ namespace RoobsWorld.Stages.Cell
             _leviathanActive = false;
             _nextArenaCurrentsRefreshTime = 0f;
             RefreshArenaCurrentsCache(force: true);
+            _threatCache.ClearAll();
         }
 
         /// <summary>
@@ -364,6 +352,7 @@ namespace RoobsWorld.Stages.Cell
 
         public void OnExit()
         {
+            _orchestrator.Exit(null);
             _isActive = false;
             _currentGoal = null;
             _completedGoalCount = 0;
@@ -398,7 +387,8 @@ namespace RoobsWorld.Stages.Cell
             _arenaCurrentsCache.Clear();
             _predatorCache.Clear();
             _organismCache.Clear();
-            CleanupArenaBackdrop();
+            _threatCache.ClearAll();
+            _backdropPresenter.Cleanup(CleanupArenaBackdrop);
             Debug.Log("[CellStage] Exiting Cell Stage");
         }
 
@@ -412,6 +402,7 @@ namespace RoobsWorld.Stages.Cell
 
         public void OnUpdate()
         {
+            _orchestrator.Tick(null);
             if (!_isActive) return;
             if (GameManager.HasInstance && GameManager.Instance.IsPaused) return;
 
@@ -442,12 +433,11 @@ namespace RoobsWorld.Stages.Cell
             }
 #endif
 
-            UpdateEscapePredatorGoal();
-            UpdateToxicSurvivalGoal();
+            _goalDirector.UpdateGoals(UpdateToxicSurvivalGoal, UpdateEscapePredatorGoal);
             UpdateNicheFill();
             UpdateEcosystemBalancing();
             UpdateLeviathan();
-            UpdateEndlessBackdropAnchor();
+            _backdropPresenter.TickBackdrop(UpdateEndlessBackdropAnchor);
         }
 
         private void UpdateToxicSurvivalGoal()
@@ -1706,6 +1696,7 @@ namespace RoobsWorld.Stages.Cell
             }
 
             _player = playerGo.AddComponent<PlayerCell>();
+            CellActorContextBinder.Bind(playerGo, this, _foodManager);
 
             CellEvolutionUI.CreateRuntime(_player);
             var threatIndicator = ThreatIndicator.CreateRuntime(_player);
@@ -1949,7 +1940,9 @@ namespace RoobsWorld.Stages.Cell
                     continue;
                 }
 
-                npc.AddComponent<CellAI>();
+                var ai = npc.AddComponent<CellAI>();
+                ai.BindCellStageContext(this, _foodManager);
+                CellActorContextBinder.Bind(npc, this, _foodManager);
             }
         }
 
@@ -2446,12 +2439,38 @@ namespace RoobsWorld.Stages.Cell
 
         private void OnEvolutionTriggered(CellEvolutionTriggeredEvent evt)
         {
-            // Cell stage no longer shows evolution overlays.
+            if (_player == null)
+                return;
+
+            if (UIManager.Instance.GetScreen<CellEvolutionUI>(CellEvolutionUI.ID) == null)
+                CellEvolutionUI.CreateRuntime(_player);
+            UIManager.Instance.ShowScreen(CellEvolutionUI.ID);
         }
 
         private void OnFinalEvolutionComplete(CellEvolutionCompleteEvent evt)
         {
-            // Cell stage now has no final-evolution transition and supports unlimited growth.
+            if (_cellStageCompleted || !_isActive)
+                return;
+
+            _cellStageCompleted = true;
+            PersistCreatureLegacyFromCell();
+            RoobsWorld.UI.TutorialOverlay.Instance?.ShowContextualTip("cell.stage.complete", 2.6f);
+            StageManager.Instance.TransitionTo(GameStageType.Creature);
+        }
+
+        private void PersistCreatureLegacyFromCell()
+        {
+            if (!GameManager.HasInstance || _player == null)
+                return;
+
+            Genome playerGenome = _player.PlayerGenome;
+            if (playerGenome == null)
+                return;
+
+            CreatureDNA starter = GameManager.Instance.GetPlayerCreatureDNAOrDefault();
+            CreatureDNA bridged = CellToCreatureDnaBridge.CreateFromCell(playerGenome, _player.PartLoadout, starter);
+            GameManager.Instance.SetPlayerCreatureDNA(bridged, persistToDisk: true);
+            GameManager.Instance.SaveGame();
         }
 
         private void OnCellOrganismDied(CellOrganismDiedEvent evt)

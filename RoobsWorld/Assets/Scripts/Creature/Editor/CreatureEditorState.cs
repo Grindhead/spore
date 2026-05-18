@@ -66,14 +66,15 @@ namespace RoobsWorld.Creature.Editor
             _selectedPartIndex = -1;
         }
 
-        public int AddPart(string partId, int attachBone, Vector3 offset, float scale = 1f)
+        public int AddPart(string partId, int attachBone, Vector3 offset, float scale = 1f, Vector3 rotation = default)
         {
             var placement = new PartPlacement
             {
                 PartId = partId,
                 AttachBone = attachBone,
                 Offset = offset,
-                Scale = scale
+                Scale = scale,
+                Rotation = rotation
             };
 
             _dna.Parts.Add(placement);
@@ -90,6 +91,7 @@ namespace RoobsWorld.Creature.Editor
             {
                 var mirrored = ClonePlacement(placement);
                 mirrored.Offset = new Vector3(-offset.x, offset.y, offset.z);
+                mirrored.Rotation = new Vector3(rotation.x, -rotation.y, -rotation.z);
                 _dna.Parts.Add(mirrored);
             }
 
@@ -159,6 +161,39 @@ namespace RoobsWorld.Creature.Editor
 
             if (mirrorIdx >= 0 && mirrorIdx != index)
                 _dna.Parts[mirrorIdx].Offset = new Vector3(-newOffset.x, newOffset.y, newOffset.z);
+
+            CreatureSkeletonConstraintSolver.Apply(_dna);
+            return true;
+        }
+
+        public bool MovePart(int index, int attachBone, Vector3 newOffset, Vector3 newRotation)
+        {
+            if (index < 0 || index >= _dna.Parts.Count) return false;
+
+            var part = _dna.Parts[index];
+            var oldPlacement = ClonePlacement(part);
+            int mirrorIdx = _symmetryEnabled ? FindMirrorPart(index) : -1;
+            int spineSegments = _dna?.Body != null ? Mathf.Clamp(_dna.Body.SpineSegments, 1, 8) : 1;
+            int safeAttachBone = Mathf.Clamp(attachBone, 0, spineSegments - 1);
+
+            part.AttachBone = safeAttachBone;
+            part.Offset = newOffset;
+            part.Rotation = newRotation;
+
+            PushUndo(new EditorAction
+            {
+                Type = EditorAction.ActionType.MovePart,
+                PartIndex = index,
+                OldPlacement = oldPlacement,
+                NewPlacement = ClonePlacement(part)
+            });
+
+            if (mirrorIdx >= 0 && mirrorIdx != index)
+            {
+                _dna.Parts[mirrorIdx].AttachBone = safeAttachBone;
+                _dna.Parts[mirrorIdx].Offset = new Vector3(-newOffset.x, newOffset.y, newOffset.z);
+                _dna.Parts[mirrorIdx].Rotation = new Vector3(newRotation.x, -newRotation.y, -newRotation.z);
+            }
 
             CreatureSkeletonConstraintSolver.Apply(_dna);
             return true;

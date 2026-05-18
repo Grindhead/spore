@@ -90,7 +90,9 @@ namespace RoobsWorld.Creature.Animation
                 var limb = _limbs[i];
                 Vector3 desiredFootPos = GetGroundPosition(
                     transform.TransformPoint(
-                        transform.InverseTransformPoint(limb.FootRestPosition)));
+                        transform.InverseTransformPoint(limb.FootRestPosition)),
+                    out Vector3 groundNormal);
+                limb.FloorNormal = groundNormal;
 
                 float distFromRest = Vector3.Distance(limb.FootTarget, desiredFootPos);
                 float phase = (_gaitClock + limb.PhaseOffset) % 1f;
@@ -118,7 +120,7 @@ namespace RoobsWorld.Creature.Animation
                         float smoothT = t * t * (3f - 2f * t);
                         Vector3 lerped = Vector3.Lerp(limb.StepOrigin, limb.StepDestination, smoothT);
                         float arc = Mathf.Sin(smoothT * Mathf.PI) * _gait.StepHeight;
-                        limb.FootTarget = lerped + Vector3.up * arc;
+                        limb.FootTarget = lerped + groundNormal * arc;
                     }
                 }
 
@@ -126,11 +128,15 @@ namespace RoobsWorld.Creature.Animation
             }
         }
 
-        private Vector3 GetGroundPosition(Vector3 worldPos)
+        private Vector3 GetGroundPosition(Vector3 worldPos, out Vector3 normal)
         {
             Vector3 rayOrigin = worldPos + Vector3.up * _raycastHeight;
             if (Physics.Raycast(rayOrigin, Vector3.down, out var hit, _raycastDistance, _groundLayer))
+            {
+                normal = hit.normal;
                 return hit.point;
+            }
+            normal = Vector3.up;
             return new Vector3(worldPos.x, transform.position.y, worldPos.z);
         }
 

@@ -114,6 +114,7 @@ namespace RoobsWorld.Stages.Creature
             EventBus.Subscribe<CreatureStaminaRestoredEvent>(OnStaminaRestored);
             EventBus.Subscribe<CreatureHealingZoneEvent>(OnHealingZone);
             EventBus.Subscribe<CreatureStreakBonusEvent>(OnStreakBonus);
+            EventBus.Subscribe<CreatureSpeciesRelationshipChangedEvent>(OnSpeciesRelationshipChanged);
         }
 
         private void OnDisable()
@@ -126,6 +127,7 @@ namespace RoobsWorld.Stages.Creature
             EventBus.Unsubscribe<CreatureStaminaRestoredEvent>(OnStaminaRestored);
             EventBus.Unsubscribe<CreatureHealingZoneEvent>(OnHealingZone);
             EventBus.Unsubscribe<CreatureStreakBonusEvent>(OnStreakBonus);
+            EventBus.Unsubscribe<CreatureSpeciesRelationshipChangedEvent>(OnSpeciesRelationshipChanged);
         }
 
         private void OnDestroy()
@@ -509,6 +511,14 @@ namespace RoobsWorld.Stages.Creature
             ShowFeedback(BuildStreakBonusLabel(evt.StreakCount, evt.DnaBonus), UIStyleGuide.Colors.FossilGoldBright, 1.1f);
         }
 
+        private void OnSpeciesRelationshipChanged(CreatureSpeciesRelationshipChangedEvent evt)
+        {
+            ShowFeedback(
+                BuildSpeciesRelationshipShiftLabel(evt.SpeciesLabel, evt.NewDisposition),
+                evt.Delta >= 0f ? UIStyleGuide.Colors.AlgaeLime : UIStyleGuide.Colors.CoralBright,
+                1.2f);
+        }
+
         private void ShowFeedback(string message, Color color, float duration)
         {
             if (_feedbackText == null)
@@ -576,6 +586,7 @@ namespace RoobsWorld.Stages.Creature
                 CreatureStageObjectiveType.HoldFeedingGround => isInsideHoldGround
                     ? "creature.objective.guidance.hold_ground.secure"
                     : "creature.objective.guidance.hold_ground.return",
+                CreatureStageObjectiveType.PacifyRivals => "creature.objective.guidance.pacify",
                 _ => "creature.objective.guidance.rival_cull"
             };
 
@@ -638,6 +649,21 @@ namespace RoobsWorld.Stages.Creature
                 Localization.Get("creature.streak.bonus"),
                 Mathf.Max(1, streakCount),
                 Mathf.Max(0, dnaBonus));
+        }
+
+        public static string BuildSpeciesRelationshipShiftLabel(string speciesLabel, CreatureSpeciesDisposition disposition)
+        {
+            string cleanSpecies = string.IsNullOrWhiteSpace(speciesLabel) ? "Species" : speciesLabel.Trim();
+            string dispositionLabel = disposition switch
+            {
+                CreatureSpeciesDisposition.Hostile => Localization.Get("creature.relationship.hostile"),
+                CreatureSpeciesDisposition.Annoyed => Localization.Get("creature.relationship.annoyed"),
+                CreatureSpeciesDisposition.Friendly => Localization.Get("creature.relationship.friendly"),
+                CreatureSpeciesDisposition.Allied => Localization.Get("creature.relationship.allied"),
+                _ => Localization.Get("creature.relationship.curious")
+            };
+
+            return string.Format(Localization.Get("creature.relationship.shift"), cleanSpecies, dispositionLabel);
         }
     }
 }

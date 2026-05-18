@@ -14,8 +14,16 @@ namespace RoobsWorld.Stages.Creature
         Skirmisher
     }
 
+    public enum CreatureRivalAmbientActivity
+    {
+        Roam,
+        Loiter,
+        Forage,
+        Investigate
+    }
+
     /// <summary>
-    /// Simple rival AI that wanders around its anchor point and chases/attacks the player in range.
+    /// Rival creature AI that blends animal-like ambient movement with threat/prey decisions.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(CreatureInstance))]
@@ -24,6 +32,7 @@ namespace RoobsWorld.Stages.Creature
         private const float MovementMemoryCellSize = 2.5f;
         private const int RecentLocationCapacity = 18;
         private const int WanderCandidateCount = 9;
+        private const int NearbyCreatureBufferSize = 16;
 
         [SerializeField] private float _wanderRadius = 10f;
         [SerializeField] private float _aggroRange = 14f;
@@ -36,6 +45,11 @@ namespace RoobsWorld.Stages.Creature
         [SerializeField] private float _attackRecoveryDuration = 0.42f;
         [SerializeField] private float _movementAcceleration = 10f;
         [SerializeField] private float _movementDeceleration = 14f;
+        [SerializeField] private float _personalSpaceRadius = 3.2f;
+        [SerializeField] private float _socialSpacingWeight = 0.55f;
+        [SerializeField] private float _ambientActivityMinSeconds = 1.4f;
+        [SerializeField] private float _ambientActivityMaxSeconds = 4.6f;
+        [SerializeField] private float _meanderStrength = 0.2f;
 
         private Rigidbody _rb;
         private CreatureInstance _self;
@@ -44,16 +58,23 @@ namespace RoobsWorld.Stages.Creature
         private Vector3 _anchorPosition;
         private Vector3 _wanderTarget;
         private readonly Queue<Vector2Int> _recentLocations = new Queue<Vector2Int>();
+        private readonly Collider[] _nearbyCreatureBuffer = new Collider[NearbyCreatureBufferSize];
         private CreatureRivalArchetype _archetype = CreatureRivalArchetype.Charger;
+        private CreatureRivalAmbientActivity _ambientActivity = CreatureRivalAmbientActivity.Roam;
         private bool _isAlpha;
+        private CreatureStage _stage;
         private float _wanderRetargetTimer;
+        private float _ambientActivityTimer;
         private float _attackCooldownTimer;
         private float _attackTelegraphTimer;
         private float _attackRecoveryTimer;
+        private float _meanderPhase;
         private Vector3 _planarVelocity;
+        private Vector3 _ambientInterestPoint;
 
         public CreatureRivalArchetype Archetype => _archetype;
         public bool IsAlpha => _isAlpha;
+        public CreatureRivalAmbientActivity AmbientActivity => _ambientActivity;
 
         private void Awake()
         {
@@ -63,6 +84,9 @@ namespace RoobsWorld.Stages.Creature
             _anchorPosition = transform.position;
             _wanderTarget = transform.position;
             PickWanderTarget();
+            _stage = FindAnyObjectByType<CreatureStage>();
+            _meanderPhase = Random.Range(0f, Mathf.PI * 2f);
+            _ambientInterestPoint = _wanderTarget;
         }
 
         public void SetPlayerTarget(Transform playerTarget)
@@ -149,20 +173,31 @@ namespace RoobsWorld.Stages.Creature
                 ? ChooseIntent(playerDistance)
                 : CreatureRivalIntent.Wander;
             Vector3 desired = ResolveDesiredDirection(intent);
+            bool ambientIntent = IsAmbientIntent(intent);
+            if (ambientIntent)
+                desired = ResolveAmbientDirection(desired);
+            else
+                ResetAmbientActivity();
 
-            if (intent == CreatureRivalIntent.ReturnToTerritory || !hasPlayer || playerDistance > _aggroRange)
+            bool stationaryAmbient = ambientIntent && IsStationaryAmbientActivity(_ambientActivity);
+            if ((intent == CreatureRivalIntent.ReturnToTerritory || ambientIntent) &&
+                !stationaryAmbient &&
+                (_wanderRetargetTimer <= 0f || Vector3.Distance(transform.position, _wanderTarget) < 1.5f))
             {
-                if (_wanderRetargetTimer <= 0f || Vector3.Distance(transform.position, _wanderTarget) < 1.5f)
-                    PickWanderTarget();
+                PickWanderTarget();
             }
-            if (desired.sqrMagnitude < 0.0001f)
+            if (desired.sqrMagnitude < 0.0001f && !stationaryAmbient)
             {
                 PickWanderTarget();
                 desired = SafeNormalize(_wanderTarget - transform.position);
             }
 
             float recoveryMultiplier = _attackRecoveryTimer > 0f ? 0.35f : 1f;
-            float speed = Mathf.Max(1f, _self.Stats.Speed) * Mathf.Max(0.1f, _speedMultiplier) * GetIntentSpeedMultiplier(intent) * recoveryMultiplier;
+            float speed = Mathf.Max(1f, _self.Stats.Speed)
+                * Mathf.Max(0.1f, _speedMultiplier)
+                * GetIntentSpeedMultiplier(intent)
+                * GetAmbientSpeedMultiplier(ambientIntent ? _ambientActivity : CreatureRivalAmbientActivity.Roam)
+                * recoveryMultiplier;
             Vector3 targetPlanarVelocity = desired * speed;
             float accel = targetPlanarVelocity.sqrMagnitude > _planarVelocity.sqrMagnitude
                 ? Mathf.Max(1f, _movementAcceleration)
@@ -179,13 +214,20 @@ namespace RoobsWorld.Stages.Creature
                     _turnSpeedDegrees * Time.deltaTime);
             }
 
-            TryAttackPlayer();
+            TryAttackPlayer(intent);
         }
 
         private CreatureRivalIntent ChooseIntent(float playerDistance)
         {
             if (_playerCreature == null)
                 return CreatureRivalIntent.Wander;
+
+            if (_stage != null &&
+                _stage.TryGetSpeciesDispositionForRival(_self?.DNA?.CreatureId, out var disposition) &&
+                TryResolveDispositionIntentOverride(disposition, playerDistance, _aggroRange, _attackRange, _self.WasDamagedWithin(2.5f), out var overrideIntent))
+            {
+                return overrideIntent;
+            }
 
             bool sizeThreat = CreatureSizeRules.ShouldFleeFromPlayer(_self, _playerCreature)
                 || CreatureSizeRules.IsMeaningfullySmaller(_self, _playerCreature, 0.12f);
@@ -203,6 +245,44 @@ namespace RoobsWorld.Stages.Creature
                 _wanderRadius,
                 _aggroRange,
                 recentlyDamaged: _self.WasDamagedWithin(2.5f));
+        }
+
+        public static bool TryResolveDispositionIntentOverride(
+            CreatureSpeciesDisposition disposition,
+            float playerDistance,
+            float aggroRange,
+            float attackRange,
+            bool recentlyDamaged,
+            out CreatureRivalIntent intent)
+        {
+            intent = CreatureRivalIntent.Wander;
+            if (recentlyDamaged)
+                return false;
+
+            float safeAggro = Mathf.Max(0.1f, aggroRange);
+            float safeAttack = Mathf.Max(0.1f, attackRange);
+            if (disposition == CreatureSpeciesDisposition.Friendly || disposition == CreatureSpeciesDisposition.Allied)
+            {
+                if (playerDistance <= safeAttack * 1.2f)
+                {
+                    intent = CreatureRivalIntent.KeepDistance;
+                    return true;
+                }
+
+                if (playerDistance <= safeAggro)
+                {
+                    intent = CreatureRivalIntent.Wander;
+                    return true;
+                }
+            }
+
+            if (disposition == CreatureSpeciesDisposition.Hostile && playerDistance <= safeAggro * 1.25f)
+            {
+                intent = CreatureRivalIntent.Chase;
+                return true;
+            }
+
+            return false;
         }
 
         private Vector3 ResolveDesiredDirection(CreatureRivalIntent intent)
@@ -224,6 +304,55 @@ namespace RoobsWorld.Stages.Creature
             }
         }
 
+        private Vector3 ResolveAmbientDirection(Vector3 desired)
+        {
+            UpdateAmbientActivity();
+
+            Vector3 socialSpacing = ComputeRuntimeSocialSpacingDirection();
+            if (IsStationaryAmbientActivity(_ambientActivity))
+                return BlendSocialSteering(Vector3.zero, socialSpacing, _socialSpacingWeight);
+
+            if (_ambientActivity == CreatureRivalAmbientActivity.Investigate)
+            {
+                Vector3 interestDelta = _ambientInterestPoint - transform.position;
+                interestDelta.y = 0f;
+                if (interestDelta.sqrMagnitude > 0.25f)
+                    desired = interestDelta.normalized;
+            }
+
+            desired = ApplyPlanarMeander(
+                desired,
+                Time.time * 0.85f + _meanderPhase,
+                _meanderStrength);
+            return BlendSocialSteering(desired, socialSpacing, _socialSpacingWeight);
+        }
+
+        private void UpdateAmbientActivity()
+        {
+            _ambientActivityTimer -= Time.deltaTime;
+            if (_ambientActivityTimer > 0f)
+                return;
+
+            _ambientActivity = ChooseAmbientActivity(
+                Random.value,
+                CreatureAIJudgement.HealthRatio(_self),
+                _self != null && _self.WasDamagedWithin(2.5f),
+                _archetype);
+            _ambientActivityTimer = Random.Range(
+                Mathf.Max(0.2f, _ambientActivityMinSeconds),
+                Mathf.Max(_ambientActivityMinSeconds + 0.1f, _ambientActivityMaxSeconds));
+            _ambientInterestPoint = _anchorPosition + CreateRandomPlanarOffset(Mathf.Max(2f, _wanderRadius * 0.8f));
+
+            if (!IsStationaryAmbientActivity(_ambientActivity))
+                PickWanderTarget();
+        }
+
+        private void ResetAmbientActivity()
+        {
+            _ambientActivity = CreatureRivalAmbientActivity.Roam;
+            _ambientActivityTimer = 0f;
+        }
+
         private static float GetIntentSpeedMultiplier(CreatureRivalIntent intent)
         {
             switch (intent)
@@ -237,8 +366,10 @@ namespace RoobsWorld.Stages.Creature
             }
         }
 
-        private void TryAttackPlayer()
+        private void TryAttackPlayer(CreatureRivalIntent intent)
         {
+            if (intent != CreatureRivalIntent.Chase)
+                return;
             if (_playerCreature == null || !_playerCreature.IsAlive)
                 return;
             if (!CreatureAIJudgement.ShouldCommitToAttack(
@@ -336,6 +467,93 @@ namespace RoobsWorld.Stages.Creature
             _wanderRetargetTimer = Random.Range(1.8f, 4.2f);
         }
 
+        public static CreatureRivalAmbientActivity ChooseAmbientActivity(
+            float random01,
+            float healthRatio,
+            bool recentlyDamaged,
+            CreatureRivalArchetype archetype)
+        {
+            if (recentlyDamaged || healthRatio < 0.35f)
+                return CreatureRivalAmbientActivity.Roam;
+
+            float forageChance = archetype == CreatureRivalArchetype.Tank ? 0.34f :
+                archetype == CreatureRivalArchetype.Stalker ? 0.12f : 0.24f;
+            float loiterChance = archetype == CreatureRivalArchetype.Charger ? 0.14f : 0.2f;
+            float investigateChance = archetype == CreatureRivalArchetype.Stalker ? 0.38f :
+                archetype == CreatureRivalArchetype.Skirmisher ? 0.28f : 0.18f;
+
+            float roll = Mathf.Clamp01(random01);
+            if (roll < forageChance)
+                return CreatureRivalAmbientActivity.Forage;
+            if (roll < forageChance + loiterChance)
+                return CreatureRivalAmbientActivity.Loiter;
+            if (roll < forageChance + loiterChance + investigateChance)
+                return CreatureRivalAmbientActivity.Investigate;
+            return CreatureRivalAmbientActivity.Roam;
+        }
+
+        public static float GetAmbientSpeedMultiplier(CreatureRivalAmbientActivity activity)
+        {
+            switch (activity)
+            {
+                case CreatureRivalAmbientActivity.Forage: return 0.18f;
+                case CreatureRivalAmbientActivity.Loiter: return 0.12f;
+                case CreatureRivalAmbientActivity.Investigate: return 0.72f;
+                default: return 1f;
+            }
+        }
+
+        public static bool IsStationaryAmbientActivity(CreatureRivalAmbientActivity activity)
+        {
+            return activity == CreatureRivalAmbientActivity.Forage
+                || activity == CreatureRivalAmbientActivity.Loiter;
+        }
+
+        public static Vector3 ComputeSocialSpacingDirection(
+            Vector3 selfPosition,
+            IReadOnlyList<Vector3> neighborPositions,
+            float personalSpaceRadius)
+        {
+            if (neighborPositions == null || neighborPositions.Count == 0)
+                return Vector3.zero;
+
+            float safeRadius = Mathf.Max(0.1f, personalSpaceRadius);
+            Vector3 sum = Vector3.zero;
+            for (int i = 0; i < neighborPositions.Count; i++)
+                sum += ComputeSocialSpacingContribution(selfPosition, neighborPositions[i], safeRadius);
+
+            return SafeNormalize(sum);
+        }
+
+        public static Vector3 BlendSocialSteering(
+            Vector3 desiredDirection,
+            Vector3 socialSpacingDirection,
+            float socialSpacingWeight)
+        {
+            desiredDirection.y = 0f;
+            socialSpacingDirection.y = 0f;
+
+            Vector3 desired = SafeNormalize(desiredDirection);
+            Vector3 spacing = SafeNormalize(socialSpacingDirection);
+            if (desired.sqrMagnitude < 0.0001f)
+                return spacing;
+            if (spacing.sqrMagnitude < 0.0001f)
+                return desired;
+
+            float weight = Mathf.Clamp01(socialSpacingWeight);
+            return SafeNormalize(desired * (1f - weight) + spacing * weight);
+        }
+
+        public static Vector3 ApplyPlanarMeander(Vector3 desiredDirection, float phase, float strength)
+        {
+            Vector3 desired = SafeNormalize(new Vector3(desiredDirection.x, 0f, desiredDirection.z));
+            if (desired.sqrMagnitude < 0.0001f)
+                return Vector3.zero;
+
+            Vector3 tangent = new Vector3(-desired.z, 0f, desired.x);
+            return SafeNormalize(desired + tangent * Mathf.Sin(phase) * Mathf.Max(0f, strength));
+        }
+
         /// <summary>
         /// Chooses chase direction when target is within aggro range; otherwise heads to wander target.
         /// </summary>
@@ -382,6 +600,66 @@ namespace RoobsWorld.Stages.Creature
         private static Vector3 SafeNormalize(Vector3 vector)
         {
             return vector.sqrMagnitude < 0.0001f ? Vector3.zero : vector.normalized;
+        }
+
+        private Vector3 ComputeRuntimeSocialSpacingDirection()
+        {
+            float safeRadius = Mathf.Max(0.1f, _personalSpaceRadius);
+            int count = Physics.OverlapSphereNonAlloc(transform.position, safeRadius, _nearbyCreatureBuffer);
+            if (count <= 0)
+                return Vector3.zero;
+
+            Vector3 sum = Vector3.zero;
+            for (int i = 0; i < count; i++)
+            {
+                var other = FindCreatureOnCollider(_nearbyCreatureBuffer[i]);
+                if (other == null || other == _self || !other.IsAlive)
+                    continue;
+
+                sum += ComputeSocialSpacingContribution(transform.position, other.transform.position, safeRadius);
+            }
+
+            return SafeNormalize(sum);
+        }
+
+        private static Vector3 ComputeSocialSpacingContribution(
+            Vector3 selfPosition,
+            Vector3 neighborPosition,
+            float personalSpaceRadius)
+        {
+            Vector3 away = selfPosition - neighborPosition;
+            away.y = 0f;
+            float distance = away.magnitude;
+            if (distance <= 0.001f || distance >= personalSpaceRadius)
+                return Vector3.zero;
+
+            float closeness = 1f - (distance / Mathf.Max(0.1f, personalSpaceRadius));
+            return away.normalized * closeness;
+        }
+
+        private static CreatureInstance FindCreatureOnCollider(Collider hit)
+        {
+            if (hit == null)
+                return null;
+
+            var direct = hit.GetComponent<CreatureInstance>();
+            if (direct != null)
+                return direct;
+
+            if (hit.attachedRigidbody != null)
+            {
+                var body = hit.attachedRigidbody.GetComponent<CreatureInstance>();
+                if (body != null)
+                    return body;
+            }
+
+            var parent = hit.GetComponentInParent<CreatureInstance>();
+            return parent != null ? parent : hit.GetComponentInChildren<CreatureInstance>();
+        }
+
+        private static bool IsAmbientIntent(CreatureRivalIntent intent)
+        {
+            return intent == CreatureRivalIntent.Wander;
         }
 
         public static bool CanResolveTelegraphedAttack(float distance, float effectiveReach)

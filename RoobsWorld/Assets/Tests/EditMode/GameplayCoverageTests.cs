@@ -191,6 +191,7 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual(CreatureStageObjectiveType.RivalCull, CreatureStageObjectivePlanner.CreateObjectiveForSlot(0).Type);
             Assert.AreEqual(CreatureStageObjectiveType.AlphaHunt, CreatureStageObjectivePlanner.CreateObjectiveForSlot(1).Type);
             Assert.AreEqual(CreatureStageObjectiveType.HoldFeedingGround, CreatureStageObjectivePlanner.CreateObjectiveForSlot(2).Type);
+            Assert.AreEqual(CreatureStageObjectiveType.PacifyRivals, CreatureStageObjectivePlanner.CreateObjectiveForSlot(3).Type);
             Assert.AreEqual(CreatureStageObjectiveType.AlphaHunt, CreatureStageObjectivePlanner.CreateObjectiveForSlot(-1).Type);
         }
 
@@ -199,6 +200,46 @@ namespace RoobsWorld.Tests.EditMode
         {
             Assert.IsTrue(CreatureStageObjectivePlanner.IsInsideFeedingGround(new Vector3(CreatureStageObjectivePlanner.FeedingGroundRadius, 99f, 0f)));
             Assert.IsFalse(CreatureStageObjectivePlanner.IsInsideFeedingGround(new Vector3(CreatureStageObjectivePlanner.FeedingGroundRadius + 0.2f, -99f, 0f)));
+        }
+
+        [Test]
+        public void ComputeObjectiveSlotForCreature_LeavesFirstObjectiveUnbiased()
+        {
+            var dna = CreatureDNA.CreateDefault();
+            dna.Parts.Add(new PartPlacement { PartId = "horn_basic", AttachBone = 0, Offset = Vector3.forward * 0.25f });
+            dna.Parts.Add(new PartPlacement { PartId = "spike_basic", AttachBone = 1, Offset = Vector3.forward * 0.1f });
+
+            int baseSlot = CreatureStageObjectivePlanner.ComputeObjectiveSlot(
+                CreatureUpgradeCatalog.GetEvolutionLevel(dna),
+                dna.Parts.Count,
+                completedObjectives: 0);
+            int routedSlot = CreatureStageObjectivePlanner.ComputeObjectiveSlotForCreature(dna, completedObjectives: 0);
+
+            Assert.AreEqual(baseSlot, routedSlot);
+        }
+
+        [Test]
+        public void ComputeBuildBiasOffset_ReturnsExpectedRouteBiases()
+        {
+            var aggressive = CreatureDNA.CreateDefault();
+            aggressive.Parts.Add(new PartPlacement { PartId = "horn_basic", AttachBone = 0, Offset = Vector3.forward * 0.25f });
+            aggressive.Parts.Add(new PartPlacement { PartId = "spike_basic", AttachBone = 1, Offset = Vector3.forward * 0.1f });
+            aggressive.Parts.Add(new PartPlacement { PartId = "spike_basic", AttachBone = 1, Offset = Vector3.back * 0.1f });
+            int aggressiveBias = CreatureStageObjectivePlanner.ComputeBuildBiasOffset(
+                aggressive,
+                CreatureUpgradeCatalog.GetEvolutionLevel(aggressive),
+                aggressive.Parts.Count);
+            Assert.AreEqual(1, aggressiveBias);
+
+            var socialDefensive = CreatureDNA.CreateDefault();
+            socialDefensive.Parts.Add(new PartPlacement { PartId = "eye_basic", AttachBone = 0, Offset = new Vector3(0f, 0.28f, 0.3f) });
+            socialDefensive.Parts.Add(new PartPlacement { PartId = "arm_basic", AttachBone = 1, Offset = new Vector3(0.45f, 0f, 0.2f) });
+            socialDefensive.Parts.Add(new PartPlacement { PartId = "shell_basic", AttachBone = 1, Offset = new Vector3(0f, 0.18f, -0.1f) });
+            int socialBias = CreatureStageObjectivePlanner.ComputeBuildBiasOffset(
+                socialDefensive,
+                CreatureUpgradeCatalog.GetEvolutionLevel(socialDefensive),
+                socialDefensive.Parts.Count);
+            Assert.AreEqual(3, socialBias);
         }
     }
 
@@ -226,6 +267,29 @@ namespace RoobsWorld.Tests.EditMode
             float distantBehind = CreatureTargetAssist.ComputeTargetScore(distance: 12f, forwardDot: -1f, overlapsAttackZone: false);
 
             Assert.Greater(assisted, distantBehind);
+        }
+    }
+
+    public class CreatureRelationshipUtilityTests
+    {
+        [Test]
+        public void EvaluateSpeciesDisposition_MapsScoreBands()
+        {
+            Assert.AreEqual(CreatureSpeciesDisposition.Hostile, CreatureStage.EvaluateSpeciesDisposition(-3f));
+            Assert.AreEqual(CreatureSpeciesDisposition.Annoyed, CreatureStage.EvaluateSpeciesDisposition(-0.5f));
+            Assert.AreEqual(CreatureSpeciesDisposition.Curious, CreatureStage.EvaluateSpeciesDisposition(0.6f));
+            Assert.AreEqual(CreatureSpeciesDisposition.Friendly, CreatureStage.EvaluateSpeciesDisposition(2f));
+            Assert.AreEqual(CreatureSpeciesDisposition.Allied, CreatureStage.EvaluateSpeciesDisposition(3.5f));
+        }
+
+        [Test]
+        public void ComputeSpeciesRelationshipDelta_ReflectsCombatIntent()
+        {
+            Assert.Less(CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Kill), 0f);
+            Assert.Less(CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Hit), 0f);
+            Assert.Greater(CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Guard), 0f);
+            Assert.Greater(CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Counter), 0f);
+            Assert.AreEqual(0f, CreatureStage.ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType.Telegraph));
         }
     }
 }

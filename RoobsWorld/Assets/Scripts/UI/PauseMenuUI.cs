@@ -1,4 +1,3 @@
-using System.Collections;
 using RoobsWorld.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -8,19 +7,14 @@ using UnityEngine.UI;
 namespace RoobsWorld.UI
 {
     /// <summary>
-    /// Pause overlay with resume, settings, save, new-run, and quit options driven by <see cref="PauseEvent"/>.
-    /// Shows "Saved!" feedback on <see cref="GameSavedEvent"/> and respects <see cref="GameSettings.UITextScale"/>.
+    /// Pause overlay with resume, settings, new-run, and quit options driven by <see cref="PauseEvent"/>.
     /// </summary>
     public class PauseMenuUI : MonoBehaviour
     {
-        private const float SaveToastDuration = 2f;
-
         private Canvas _canvas;
         private SettingsUI _settingsUI;
         private AchievementsUI _achievementsUI;
         private Font _font;
-        private GameObject _savedToast;
-        private Coroutine _saveToastRoutine;
 
         private bool _isShowing;
 
@@ -29,14 +23,11 @@ namespace RoobsWorld.UI
         private void Start()
         {
             EventBus.Subscribe<PauseEvent>(OnPauseEvent);
-            EventBus.Subscribe<GameSavedEvent>(OnGameSaved);
         }
 
         private void OnDestroy()
         {
             EventBus.Unsubscribe<PauseEvent>(OnPauseEvent);
-            EventBus.Unsubscribe<GameSavedEvent>(OnGameSaved);
-            if (_saveToastRoutine != null) StopCoroutine(_saveToastRoutine);
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
@@ -82,21 +73,6 @@ namespace RoobsWorld.UI
                 _settingsUI.Hide();
             if (_achievementsUI != null)
                 _achievementsUI.Hide();
-        }
-
-        private void OnGameSaved(GameSavedEvent evt)
-        {
-            if (_savedToast == null) return;
-            _savedToast.SetActive(true);
-            if (_saveToastRoutine != null) StopCoroutine(_saveToastRoutine);
-            _saveToastRoutine = StartCoroutine(HideSavedToastAfter(SaveToastDuration));
-        }
-
-        private IEnumerator HideSavedToastAfter(float seconds)
-        {
-            yield return new WaitForSecondsRealtime(seconds);
-            if (_savedToast != null) _savedToast.SetActive(false);
-            _saveToastRoutine = null;
         }
 
         private void BuildUI()
@@ -171,42 +147,13 @@ namespace RoobsWorld.UI
             titleShadow.effectDistance = new Vector2(0f, -1.4f);
 
             float startY = 0.69f;
-            float spacing = 0.105f;
+            float spacing = 0.13f;
 
             CreatePauseButton(panel.transform, Localization.Get("pause.resume"), startY, OnResume, textScale, isPrimary: true);
             CreatePauseButton(panel.transform, Localization.Get("menu.settings"), startY - spacing, OnSettings, textScale);
             CreatePauseButton(panel.transform, Localization.Get("menu.achievements"), startY - spacing * 2, OnAchievements, textScale);
-            CreatePauseButton(panel.transform, Localization.Get("pause.save_game"), startY - spacing * 3, OnSave, textScale);
-            CreatePauseButton(panel.transform, Localization.Get("pause.main_menu"), startY - spacing * 4, OnNewRun, textScale);
-            CreatePauseButton(panel.transform, Localization.Get("menu.quit"), startY - spacing * 5, OnQuit, textScale);
-
-            _savedToast = new GameObject("SavedToast");
-            _savedToast.transform.SetParent(panel.transform, false);
-            var toastRect = _savedToast.AddComponent<RectTransform>();
-            toastRect.anchorMin = new Vector2(0.5f, 0.04f);
-            toastRect.anchorMax = new Vector2(0.5f, 0.105f);
-            toastRect.sizeDelta = new Vector2(230, 34);
-            var toastBg = _savedToast.AddComponent<Image>();
-            toastBg.sprite = UIStyleGuide.GetPaintedFieldSprite();
-            toastBg.type = Image.Type.Sliced;
-            toastBg.color = UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.DeepNavy, 0.86f);
-
-            var toastTextObj = new GameObject("Text");
-            toastTextObj.transform.SetParent(_savedToast.transform, false);
-            var toastTextRect = toastTextObj.AddComponent<RectTransform>();
-            toastTextRect.anchorMin = Vector2.zero;
-            toastTextRect.anchorMax = Vector2.one;
-            toastTextRect.offsetMin = Vector2.zero;
-            toastTextRect.offsetMax = Vector2.zero;
-            var toastText = toastTextObj.AddComponent<Text>();
-            toastText.font = _font;
-            toastText.text = Localization.Get("pause.saved");
-            toastText.fontSize = Mathf.RoundToInt(19 * textScale);
-            toastText.color = UIStyleGuide.Colors.Success;
-            toastText.alignment = TextAnchor.MiddleCenter;
-            toastText.fontStyle = FontStyle.Bold;
-            UIStyleGuide.ApplyTextShadow(toastTextObj, 0.32f);
-            _savedToast.SetActive(false);
+            CreatePauseButton(panel.transform, Localization.Get("pause.main_menu"), startY - spacing * 3, OnNewRun, textScale);
+            CreatePauseButton(panel.transform, Localization.Get("menu.quit"), startY - spacing * 4, OnQuit, textScale);
         }
 
         private void CreatePauseButton(Transform parent, string label, float yAnchor, System.Action onClick,
@@ -324,13 +271,6 @@ namespace RoobsWorld.UI
                 _achievementsUI.OnClosed = () => _achievementsUI.Hide();
             }
             _achievementsUI.Show();
-        }
-
-        private void OnSave()
-        {
-            if (GameManager.HasInstance)
-                GameManager.Instance.SaveGame();
-            Debug.Log("[PauseMenu] Game saved");
         }
 
         private void OnNewRun()

@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -79,7 +80,8 @@ namespace RoobsWorld.Editor
 
             int synced = 0;
             synced += SyncCategory(CellModelDir, ResourceCellDir, CellModelNames);
-            synced += SyncCategory(CreatureModelDir, ResourceCreatureDir, CreatureModelNames);
+            synced += SyncGeneratedCreatureParts(CreatureModelDir, ResourceCreatureDir);
+            RemoveLegacyCreaturePrefabs(ResourceCreatureDir);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -188,6 +190,54 @@ namespace RoobsWorld.Editor
             }
 
             return errors;
+        }
+
+        private static int SyncGeneratedCreatureParts(string modelDir, string resourceDir)
+        {
+            int synced = 0;
+            string[] guids = AssetDatabase.FindAssets("t:Model animal_", new[] { modelDir });
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string modelPath = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (!modelPath.EndsWith(".fbx"))
+                    continue;
+
+                var modelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+                if (modelAsset == null)
+                    continue;
+
+                string modelName = Path.GetFileNameWithoutExtension(modelPath);
+                string prefabPath = $"{resourceDir}/{modelName}.prefab";
+
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(modelAsset);
+                if (instance == null)
+                    continue;
+
+                try
+                {
+                    instance.name = modelName;
+                    PrefabUtility.SaveAsPrefabAsset(instance, prefabPath);
+                    synced++;
+                }
+                finally
+                {
+                    Object.DestroyImmediate(instance);
+                }
+            }
+
+            return synced;
+        }
+
+        private static void RemoveLegacyCreaturePrefabs(string resourceDir)
+        {
+            for (int i = 0; i < CreatureModelNames.Length; i++)
+            {
+                string legacyPrefabPath = $"{resourceDir}/{CreatureModelNames[i]}.prefab";
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(legacyPrefabPath) != null)
+                {
+                    AssetDatabase.DeleteAsset(legacyPrefabPath);
+                }
+            }
         }
 
         private static int ValidateTextureCategory(string textureDir, IReadOnlyList<string> textureNames)

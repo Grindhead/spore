@@ -94,6 +94,7 @@ namespace RoobsWorld.Core
                 : RoobsWorld.Creature.CreatureDNA.CreateDefault().ToJson();
             _achievementTracker = new AchievementTracker();
             StageManager.Instance.TransitionTo(GameStageType.Cell);
+            SaveGame();
         }
 
         /// <summary>
@@ -167,7 +168,10 @@ namespace RoobsWorld.Core
         public void RecordTraitDiscovery(RoobsWorld.Stages.Cell.GeneticTraits traits)
         {
             if (_currentSave == null || traits == RoobsWorld.Stages.Cell.GeneticTraits.None) return;
+            int before = _currentSave.DiscoveredTraitFlags;
             _currentSave.DiscoveredTraitFlags |= (int)traits;
+            if (_currentSave.DiscoveredTraitFlags != before)
+                SaveGame();
         }
 
         /// <summary>
@@ -185,6 +189,7 @@ namespace RoobsWorld.Core
                 OldAmount = old,
                 NewAmount = _currentSave.DNAPoints
             });
+            SaveGame();
         }
 
         /// <summary>
@@ -220,7 +225,10 @@ namespace RoobsWorld.Core
         /// <param name="id">Achievement identifier defined by <see cref="AchievementService"/>.</param>
         public void UnlockAchievement(string id)
         {
+            bool hadBefore = Achievements.IsUnlocked(id);
             UnlockAchievementCore(Achievements, _platformAchievementProvider, id);
+            if (!hadBefore && Achievements.IsUnlocked(id))
+                SaveGame();
         }
 
         /// <summary>
@@ -422,6 +430,8 @@ namespace RoobsWorld.Core
 
             if (persistToDisk)
                 SaveManager.Instance.Save(_currentSave);
+            else
+                SaveGame();
         }
 
         // ---- Run Records (meta-progression) ----
@@ -462,6 +472,7 @@ namespace RoobsWorld.Core
             var record = RunRecord.FromJson(_currentSave.RunRecordJson);
             record.TotalLeviathansSurvived++;
             _currentSave.RunRecordJson = record.ToJson();
+            SaveGame();
         }
 
         /// <summary>
@@ -473,6 +484,7 @@ namespace RoobsWorld.Core
             var record = RunRecord.FromJson(_currentSave.RunRecordJson);
             record.TotalLeviathanDefeated++;
             _currentSave.RunRecordJson = record.ToJson();
+            SaveGame();
         }
 
         /// <summary>

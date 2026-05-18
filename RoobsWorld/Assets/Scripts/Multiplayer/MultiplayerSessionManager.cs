@@ -118,6 +118,7 @@ namespace RoobsWorld.Multiplayer
         private bool   _localReady;
         private string _sessionCode;
         private string _localLobbyId = DefaultLobbyId;
+        private SessionMapDefinition? _sessionMap;
         private readonly Dictionary<int, string> _playerLobbyIds = new Dictionary<int, string>();
 
         // ---- public read properties ----
@@ -133,6 +134,8 @@ namespace RoobsWorld.Multiplayer
         public MultiplayerClan LocalClan  => _clans.Find(c => c.ClanId == _localClanId);
         public int          LocalPartyId  => _localClanId;
         public MultiplayerClan LocalParty => LocalClan;
+        public bool         HasSessionMap => _sessionMap.HasValue;
+        public SessionMapDefinition SessionMap => _sessionMap.GetValueOrDefault();
         public bool         CanStartGame  => State != SessionState.Offline
             && IsHost
             && AllPlayersReady();
@@ -165,6 +168,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>The host started the shared game.</summary>
         public event Action OnGameStarted;
 
+        /// <summary>The relay sent or refreshed the server-owned session map.</summary>
+        public event Action<SessionMapDefinition> OnSessionMapChanged;
+
         /// <summary>A player moved between relay bandwidth lobbies.</summary>
         public event Action<int, string> OnPlayerLobbyChanged;
 
@@ -191,6 +197,7 @@ namespace RoobsWorld.Multiplayer
             _localReady    = true;
             _remotePlayers.Clear();
             _clans.Clear();
+            _sessionMap = null;
             ResetLobbyState();
             State          = SessionState.Hosting;
 
@@ -217,6 +224,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = localPlayerId;
             _localClanId   = -1;
             _localReady    = true;
+            _sessionMap = null;
             ResetLobbyState();
             State          = SessionState.Hosting;
 
@@ -242,6 +250,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = hostPlayerId;
             _localClanId   = -1;
             _localReady    = false;
+            _sessionMap = null;
             ResetLobbyState();
             State          = localPlayerId == hostPlayerId ? SessionState.Hosting : SessionState.Connected;
 
@@ -269,11 +278,35 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = 0; // host is always player 0
             _localClanId   = -1;
             _localReady    = false;
+            _sessionMap = null;
             _remotePlayers.Clear();
             _clans.Clear();
             ResetLobbyState();
             State          = SessionState.Connected;
             return true;
+        }
+
+        /// <summary>Applies the relay-owned map definition for the current shared session.</summary>
+        public bool ApplySessionMap(SessionMapDefinition map)
+        {
+            if (!map.IsValid)
+                return false;
+
+            _sessionMap = map;
+            OnSessionMapChanged?.Invoke(map);
+            return true;
+        }
+
+        public bool TryGetSessionMap(out SessionMapDefinition map)
+        {
+            if (_sessionMap.HasValue)
+            {
+                map = _sessionMap.Value;
+                return true;
+            }
+
+            map = default;
+            return false;
         }
 
         /// <summary>Moves the local player into a relay lobby used to limit high-rate packet fan-out.</summary>
@@ -466,6 +499,7 @@ namespace RoobsWorld.Multiplayer
             _hostPlayerId  = -1;
             _localClanId   = -1;
             _localReady    = false;
+            _sessionMap    = null;
             ResetLobbyState();
             State          = SessionState.Offline;
         }

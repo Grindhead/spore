@@ -33,42 +33,28 @@ namespace RoobsWorld.Core
     }
 
     /// <summary>
-    /// Handles creation, persistence, and loading of <see cref="SaveData"/> JSON files in <see cref="Application.persistentDataPath"/>.
+    /// Handles creation, persistence, and loading of <see cref="SaveData"/> through server autosave.
     /// </summary>
     public class SaveManager : Singleton<SaveManager>
     {
-        private const string SAVE_DIR = "Saves";
         private const string AUTO_SAVE_NAME = "autosave";
-        private const string FILE_EXTENSION = ".json";
-
-        public string SaveDirectory => Path.Combine(Application.persistentDataPath, SAVE_DIR);
-
-        /// <summary>
-        /// Ensures the save directory exists at startup.
-        /// </summary>
-        protected override void OnInitialize()
-        {
-            Directory.CreateDirectory(SaveDirectory);
-        }
+        private const string LocalSaveDirectoryName = "saves";
+        private const string SaveFileExtension = ".json";
+        protected override void OnInitialize() { }
 
         /// <summary>
-        /// Writes the given <paramref name="data"/> to a JSON file for the specified slot and publishes <see cref="GameSavedEvent"/> on success.
+        /// Sends the given <paramref name="data"/> to server autosave for the specified slot.
         /// </summary>
         public void Save(SaveData data, string slotName = null)
         {
             slotName ??= AUTO_SAVE_NAME;
             data.Timestamp = DateTime.UtcNow.ToString("o");
 
-            string json = JsonUtility.ToJson(data, true);
-            string path = GetSavePath(slotName);
-
             try
             {
-                Directory.CreateDirectory(SaveDirectory);
-                File.WriteAllText(path, json);
-                Debug.Log($"[SaveManager] Game saved to {path}");
-                EventBus.Publish(new GameSavedEvent { SavePath = path });
-                PlatformCloudSaveSync.TryUploadJson(slotName, json);
+                ServerProgressAutosaveClient.TryUpload(data, slotName);
+                string localPath = SaveLocal(data, slotName);
+                EventBus.Publish(new GameSavedEvent { SavePath = localPath });
             }
             catch (Exception ex)
             {
@@ -77,34 +63,28 @@ namespace RoobsWorld.Core
         }
 
         /// <summary>
-        /// Loads save data for the specified slot if it exists and publishes <see cref="GameLoadedEvent"/> on success.
-        /// Returns null and logs on missing file or read/parse failure.
+        /// Loads save data for the specified slot from the server autosave endpoint.
         /// </summary>
         public SaveData Load(string slotName = null)
         {
             slotName ??= AUTO_SAVE_NAME;
-            string path = GetSavePath(slotName);
-
-            if (!File.Exists(path))
-            {
-                if (!PlatformCloudSaveSync.TryRestoreSlotToLocalFile(slotName, path))
-                {
-                    Debug.LogWarning($"[SaveManager] No save found at {path}");
-                    return null;
-                }
-            }
 
             try
             {
-                string json = File.ReadAllText(path);
-                var data = JsonUtility.FromJson<SaveData>(json);
+                var data = ServerProgressAutosaveClient.TryLoad(slotName);
+                if (data == null)
+                    data = LoadLocal(slotName);
+
+                if (data == null)
+                    return null;
+
                 if (!TryValidateLoadedData(data, out string validationError))
                 {
                     Debug.LogError($"[SaveManager] Invalid save data: {validationError}");
                     return null;
                 }
-                Debug.Log($"[SaveManager] Game loaded from {path}");
-                EventBus.Publish(new GameLoadedEvent { SavePath = path });
+
+                EventBus.Publish(new GameLoadedEvent { SavePath = GetLocalSavePath(slotName) });
                 return data;
             }
             catch (Exception ex)
@@ -207,7 +187,7 @@ namespace RoobsWorld.Core
         public bool SaveExists(string slotName = null)
         {
             slotName ??= AUTO_SAVE_NAME;
-            return File.Exists(GetSavePath(slotName));
+            return File.Exists(GetLocalSavePath(slotName));
         }
 
         /// <summary>
@@ -215,7 +195,10 @@ namespace RoobsWorld.Core
         /// </summary>
         public void DeleteSave(string slotName)
         {
-            string path = GetSavePath(slotName);
+            if (string.IsNullOrWhiteSpace(slotName))
+                return;
+
+            string path = GetLocalSavePath(slotName);
             if (File.Exists(path))
                 File.Delete(path);
         }
@@ -227,18 +210,17 @@ namespace RoobsWorld.Core
         {
             try
             {
-                if (!Directory.Exists(SaveDirectory))
+                string directory = GetLocalSaveDirectory();
+                if (!Directory.Exists(directory))
                     return Array.Empty<string>();
 
-                string[] files = Directory.GetFiles(SaveDirectory, $"*{FILE_EXTENSION}");
-                string[] names = new string[files.Length];
+                string[] files = Directory.GetFiles(directory, "*" + SaveFileExtension);
                 for (int i = 0; i < files.Length; i++)
-                    names[i] = Path.GetFileNameWithoutExtension(files[i]);
-                return names;
+                    files[i] = Path.GetFileNameWithoutExtension(files[i]);
+                return files;
             }
-            catch (Exception ex)
+            catch
             {
-                Debug.LogWarning($"[SaveManager] GetAllSaveSlots failed: {ex.Message}");
                 return Array.Empty<string>();
             }
         }
@@ -256,9 +238,47 @@ namespace RoobsWorld.Core
             };
         }
 
-        private string GetSavePath(string slotName)
+        private static string SaveLocal(SaveData data, string slotName)
         {
-            return Path.Combine(SaveDirectory, slotName + FILE_EXTENSION);
+            string path = GetLocalSavePath(slotName);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, JsonUtility.ToJson(data, true));
+            return path;
         }
+
+        private static SaveData LoadLocal(string slotName)
+        {
+            string path = GetLocalSavePath(slotName);
+            if (!File.Exists(path))
+                return null;
+
+            string json = File.ReadAllText(path);
+            return JsonUtility.FromJson<SaveData>(json);
+        }
+
+        private static string GetLocalSavePath(string slotName)
+        {
+            string safeSlot = SanitizeSlotName(string.IsNullOrWhiteSpace(slotName) ? AUTO_SAVE_NAME : slotName);
+            return Path.Combine(GetLocalSaveDirectory(), safeSlot + SaveFileExtension);
+        }
+
+        private static string GetLocalSaveDirectory()
+        {
+            return Path.Combine(Application.persistentDataPath, LocalSaveDirectoryName);
+        }
+
+        private static string SanitizeSlotName(string slotName)
+        {
+            char[] invalid = Path.GetInvalidFileNameChars();
+            var chars = slotName.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                if (Array.IndexOf(invalid, chars[i]) >= 0)
+                    chars[i] = '_';
+            }
+
+            return new string(chars);
+        }
+
     }
 }

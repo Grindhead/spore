@@ -2,6 +2,7 @@
   "name": "RoobsWorld",
   "rootNamespace": "RoobsWorld",
   "references": [
+    "RoobsWorld.Cell.Services",
     "com.rlabrecque.steamworks.net",
     "Unity.InputSystem",
     "Unity.TextMeshPro"

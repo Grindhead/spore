@@ -41,16 +41,18 @@ namespace RoobsWorld.Creature
     {
         public const string BodyRootName = "Body";
         public const string PartsRootName = "Parts";
+        public const string SkeletonRootName = "Skeleton";
         public const string SpineAnchorPrefix = "SpineAnchor_";
 
-        private const int DefaultSpineSegments = 3;
+        private const int DefaultSpineSegments = 1;
         private const int MaxSpineSegments = 8;
         private const float SpineSpacing = 0.42f;
 
         public static CreatureModelBuildResult Build(
             GameObject root,
             CreatureDNA dna,
-            IReadOnlyDictionary<string, CreaturePartDef> partCatalog = null)
+            IReadOnlyDictionary<string, CreaturePartDef> partCatalog = null,
+            bool renderSegmentGeometry = true)
         {
             if (root == null)
                 throw new System.ArgumentNullException(nameof(root));
@@ -71,7 +73,8 @@ namespace RoobsWorld.Creature
             var accentMaterial = TempAssetBuilder.CreateTempMaterial(
                 Color.Lerp(accent, Color.white, 0.18f),
                 "CreatureAccentMat");
-            var anchors = BuildSpine(bodyRoot, segmentCount, bodyScale, frontPull, skinTexture, primary, secondary, accentMaterial);
+            var anchors = BuildSpine(bodyRoot, segmentCount, bodyScale, frontPull, skinTexture, primary, secondary, accentMaterial, renderSegmentGeometry);
+            BuildSkeleton(bodyRoot, safeDna, anchors, colors);
 
             var partsRoot = new GameObject(PartsRootName).transform;
             partsRoot.SetParent(root.transform, false);
@@ -118,8 +121,11 @@ namespace RoobsWorld.Creature
             Texture2D skinTexture,
             Color primary,
             Color secondary,
-            Material accentMaterial)
+            Material accentMaterial,
+            bool renderSegmentGeometry)
         {
+            CreateUnifiedBodyCore(bodyRoot, segmentCount, bodyScale, frontPull, skinTexture, primary, secondary);
+
             var anchors = new Transform[segmentCount];
             for (int i = 0; i < segmentCount; i++)
             {
@@ -131,21 +137,54 @@ namespace RoobsWorld.Creature
                     anchor.localPosition += Vector3.forward * frontPull;
                 anchors[i] = anchor;
 
-                var segment = new GameObject($"Spine_{i}");
-                segment.transform.SetParent(anchor, false);
-                segment.transform.localScale = GetSegmentScale(t, i, segmentCount, bodyScale, frontPull);
+                if (renderSegmentGeometry)
+                {
+                    var segment = new GameObject($"Spine_{i}");
+                    segment.transform.SetParent(anchor, false);
+                    segment.transform.localScale = GetSegmentScale(t, i, segmentCount, bodyScale, frontPull);
 
-                var mf = segment.AddComponent<MeshFilter>();
-                mf.mesh = CreaturePartMeshFactory.CreateSpineSegment(0.5f);
+                    var mf = segment.AddComponent<MeshFilter>();
+                    mf.mesh = CreaturePartMeshFactory.CreateSpineSegment(0.5f);
 
-                var mr = segment.AddComponent<MeshRenderer>();
-                Color segmentColor = ProceduralTextureFactory.Opaque(Color.Lerp(primary, secondary, t * 0.75f));
-                mr.sharedMaterial = ProceduralTextureFactory.CreateMaterialWithTexture(skinTexture, segmentColor);
+                    var mr = segment.AddComponent<MeshRenderer>();
+                    Color segmentColor = ProceduralTextureFactory.Opaque(Color.Lerp(primary, secondary, 0.25f + t * 0.25f));
+                    mr.sharedMaterial = ProceduralTextureFactory.CreateMaterialWithTexture(skinTexture, segmentColor);
 
-                AddBodyRidge(anchor, i, segmentCount, accentMaterial);
+                    AddBodyRidge(anchor, i, segmentCount, accentMaterial);
+                }
             }
 
             return anchors;
+        }
+
+        private static void CreateUnifiedBodyCore(
+            Transform bodyRoot,
+            int segmentCount,
+            Vector3 bodyScale,
+            float frontPull,
+            Texture2D skinTexture,
+            Color primary,
+            Color secondary)
+        {
+            var core = new GameObject("BodyCore");
+            core.transform.SetParent(bodyRoot, false);
+            core.transform.localPosition = new Vector3(
+                0f,
+                0.55f,
+                segmentCount <= 1 ? frontPull : frontPull * 0.25f);
+
+            float spineLength = Mathf.Max(0.6f, (segmentCount - 1) * SpineSpacing + 0.72f);
+            core.transform.localScale = new Vector3(
+                0.78f * bodyScale.x,
+                0.6f * bodyScale.y,
+                spineLength * bodyScale.z);
+
+            var mf = core.AddComponent<MeshFilter>();
+            mf.mesh = CreaturePartMeshFactory.CreateSpineSegment(0.5f);
+
+            var mr = core.AddComponent<MeshRenderer>();
+            Color coreColor = ProceduralTextureFactory.Opaque(Color.Lerp(primary, secondary, 0.35f));
+            mr.sharedMaterial = ProceduralTextureFactory.CreateMaterialWithTexture(skinTexture, coreColor);
         }
 
         private static Vector3 GetSegmentScale(float t, int index, int count, Vector3 bodyScale, float frontPull)
@@ -192,6 +231,90 @@ namespace RoobsWorld.Creature
             ridge.transform.SetParent(anchor, false);
             ridge.transform.localPosition = new Vector3(0f, 0.34f, -0.03f);
             ridge.transform.localScale = Vector3.one * ridgeScale / 0.05f;
+        }
+
+        private static void BuildSkeleton(
+            Transform bodyRoot,
+            CreatureDNA dna,
+            Transform[] anchors,
+            CreatureColors colors)
+        {
+            if (bodyRoot == null || anchors == null || anchors.Length == 0)
+                return;
+
+            var skeletonRoot = new GameObject(SkeletonRootName).transform;
+            skeletonRoot.SetParent(bodyRoot, false);
+
+            var boneMaterial = TempAssetBuilder.CreateTempMaterial(
+                Color.Lerp(new Color(0.9f, 0.84f, 0.72f), ProceduralTextureFactory.Opaque(colors.AccentColor), 0.08f),
+                "CreatureInternalBoneMat");
+            if (boneMaterial.HasProperty("_Smoothness"))
+                boneMaterial.SetFloat("_Smoothness", 0.65f);
+            if (boneMaterial.HasProperty("_ZTest"))
+                boneMaterial.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.Always);
+
+            for (int i = 0; i < anchors.Length; i++)
+            {
+                var vertebra = CreateMeshObject(
+                    $"Vertebra_{i}",
+                    CreaturePartMeshFactory.CreateShell(0.035f),
+                    boneMaterial);
+                vertebra.transform.SetParent(skeletonRoot, false);
+                vertebra.transform.position = anchors[i].position;
+                vertebra.transform.localScale = new Vector3(0.85f, 0.6f, 1f);
+
+                if (i + 1 < anchors.Length)
+                    CreateBoneLink(skeletonRoot, anchors[i].position, anchors[i + 1].position, 0.014f, boneMaterial, $"SpineLink_{i}");
+            }
+
+            if (dna?.Parts == null)
+                return;
+
+            int limbBoneIndex = 0;
+            for (int i = 0; i < dna.Parts.Count; i++)
+            {
+                var placement = dna.Parts[i];
+                if (placement == null || string.IsNullOrWhiteSpace(placement.PartId))
+                    continue;
+                if (!IsArmOrLegPart(placement.PartId))
+                    continue;
+
+                var anchor = GetAnchor(anchors, placement.AttachBone);
+                if (anchor == null)
+                    continue;
+
+                Vector3 limbOffset = placement.Offset;
+                if (limbOffset.sqrMagnitude < 0.0001f)
+                    continue;
+
+                Vector3 anchorPos = anchor.position;
+                Vector3 jointPos = anchor.TransformPoint(limbOffset * 0.45f);
+                Vector3 tipPos = anchor.TransformPoint(limbOffset * 0.82f);
+
+                CreateBoneLink(skeletonRoot, anchorPos, jointPos, 0.012f, boneMaterial, $"LimbUpper_{limbBoneIndex:00}");
+                CreateBoneLink(skeletonRoot, jointPos, tipPos, 0.01f, boneMaterial, $"LimbLower_{limbBoneIndex:00}");
+                limbBoneIndex++;
+            }
+        }
+
+        private static void CreateBoneLink(
+            Transform parent,
+            Vector3 start,
+            Vector3 end,
+            float radius,
+            Material boneMaterial,
+            string name)
+        {
+            Vector3 delta = end - start;
+            float length = delta.magnitude;
+            if (length <= 0.0001f)
+                return;
+
+            var link = CreateMeshObject(name, CreaturePartMeshFactory.CreateSpineSegment(0.5f), boneMaterial);
+            link.transform.SetParent(parent, false);
+            link.transform.position = (start + end) * 0.5f;
+            link.transform.up = delta.normalized;
+            link.transform.localScale = new Vector3(radius, length * 0.5f, radius);
         }
 
         private static Transform[] BuildParts(
@@ -332,6 +455,17 @@ namespace RoobsWorld.Creature
                 return Quaternion.Euler(0f, 0f, leftSide ? -18f : 18f);
 
             return Quaternion.identity;
+        }
+
+        private static bool IsArmOrLegPart(string partId)
+        {
+            if (string.IsNullOrWhiteSpace(partId))
+                return false;
+
+            return partId.StartsWith("arm", System.StringComparison.OrdinalIgnoreCase) ||
+                   partId.StartsWith("leg", System.StringComparison.OrdinalIgnoreCase) ||
+                   partId.StartsWith("animal_arm_", System.StringComparison.OrdinalIgnoreCase) ||
+                   partId.StartsWith("animal_leg_", System.StringComparison.OrdinalIgnoreCase);
         }
 
         private static void DecoratePart(GameObject partObj, string partId, PartCategory category, CreatureColors colors)

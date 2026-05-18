@@ -3,6 +3,7 @@
   "rootNamespace": "RoobsWorld.Tests",
   "references": [
     "RoobsWorld",
+    "RoobsWorld.Cell.Services",
     "RoobsWorld.Editor",
     "Unity.InputSystem",
     "UnityEngine.TestRunner",

@@ -34,6 +34,11 @@ namespace RoobsWorld.Tests
                 .GetMethod("ParsePublicLobbies", BindingFlags.NonPublic | BindingFlags.Static)
                 .Invoke(null, new object[] { encoded });
 
+        private static void HandleServerMessage(WebSocketNetworkTransport transport, string json) =>
+            typeof(WebSocketNetworkTransport)
+                .GetMethod("HandleServerMessage", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(transport, new object[] { json });
+
         // ---- ParseStringField ----
 
         [Test]
@@ -112,6 +117,36 @@ namespace RoobsWorld.Tests
         public void ParsePublicLobbies_Empty_Returns_Empty_List()
         {
             Assert.AreEqual(0, ParsePublicLobbies("").Count);
+        }
+
+        [Test]
+        public void SessionMapDefinition_Decodes_Creature_Map()
+        {
+            string encoded = "creature,1,12345,48,72,8,0.055;Cover,10,-4,4.5,1.5,3.2;HealingZone,-6,2,5,0.12,5";
+
+            Assert.IsTrue(SessionMapDefinition.TryDecode(encoded, out var map));
+            Assert.IsTrue(map.IsCreatureMap);
+            Assert.AreEqual(12345, map.Seed);
+            Assert.AreEqual(48f, map.ArenaRadius, 0.0001f);
+            Assert.AreEqual(2, map.Landmarks.Length);
+            Assert.AreEqual("HealingZone", map.Landmarks[1].Type);
+        }
+
+        [Test]
+        public void HandleServerMessage_CreatureMap_Fires_Event()
+        {
+            var t = new WebSocketNetworkTransport("ws://localhost:7788");
+            SessionMapDefinition? received = null;
+            t.OnSessionMapReceived += map => received = map;
+            string mapPayload = System.Uri.EscapeDataString("creature,1,6789,52,80,9,0.05;HighGround,3,4,7,1,6");
+
+            HandleServerMessage(t, "{\"type\":\"creature_map\",\"map\":\"" + mapPayload + "\"}");
+            t.PumpEvents();
+
+            Assert.IsTrue(received.HasValue);
+            Assert.AreEqual(6789, received.Value.Seed);
+            Assert.AreEqual(1, received.Value.Landmarks.Length);
+            t.Dispose();
         }
 
         // ---- ParseBoolField ----

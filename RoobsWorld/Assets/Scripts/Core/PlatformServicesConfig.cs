@@ -4,7 +4,6 @@ namespace RoobsWorld.Core
     {
         public const uint SteamDevelopmentAppId = 480;
         public const uint SteamAppId = SteamDevelopmentAppId;
-        public const string SteamCloudSaveDirectory = "saves";
         public const string SteamRichPresenceDisplayToken = "#Status";
 
         public const string PlayStationTitleServiceId = "REPLACE_WITH_PLAYSTATION_TITLE_SERVICE_ID";

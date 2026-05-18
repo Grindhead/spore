@@ -21,6 +21,7 @@ namespace RoobsWorld.UI
         private SettingsUI _settingsUI;
         private AchievementsUI _achievementsUI;
         private MultiplayerLobbyUI _multiplayerLobbyUI;
+        private MainMenuController _controller;
         private Sprite _panelSprite;
         private Sprite _buttonSprite;
         private Texture2D _waterTexture;
@@ -44,6 +45,7 @@ namespace RoobsWorld.UI
 
         private void Start()
         {
+            _controller = new MainMenuController(new GameSessionAdapter());
             BuildUI();
         }
 
@@ -361,8 +363,7 @@ namespace RoobsWorld.UI
                     _multiplayerLobbyUI = null;
             }
 
-            GameManager.Instance.SetPaused(false);
-            GameManager.Instance.StartNewGame();
+            _controller.StartSinglePlayer();
             Destroy(gameObject);
         }
 
@@ -392,17 +393,16 @@ namespace RoobsWorld.UI
 
         private void OnQuit()
         {
-            if (GameManager.HasInstance)
-                GameManager.Instance.QuitGame();
+            _controller?.Quit();
         }
 
         private void EnsureArt()
         {
-            _waterTexture = _waterTexture ?? Track(WaterTexture(1920, 1080));
-            _doodleTexture = _doodleTexture ?? Track(DoodleTexture(1920, 1080, 140));
-            _glowTexture = _glowTexture ?? Track(GlowTexture(512));
-            _panelSprite = _panelSprite ?? Track(Sprite.Create(Track(RoundedTexture(224, 224, 60, UIStyleGuide.Colors.TextOnCool, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.82f), 10)), new Rect(0f, 0f, 224f, 224f), new Vector2(0.5f, 0.5f), 200f, 0, SpriteMeshType.FullRect, new Vector4(60f, 60f, 60f, 60f)));
-            _buttonSprite = _buttonSprite ?? Track(Sprite.Create(Track(RoundedTexture(224, 104, 46, UIStyleGuide.Colors.TextOnCool, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.78f), 8)), new Rect(0f, 0f, 224f, 104f), new Vector2(0.5f, 0.5f), 200f, 0, SpriteMeshType.FullRect, new Vector4(46f, 46f, 46f, 46f)));
+            _waterTexture = _waterTexture ?? Track(MainMenuArtFactory.CreateWaterTexture(1920, 1080));
+            _doodleTexture = _doodleTexture ?? Track(MainMenuArtFactory.CreateDoodleTexture(1920, 1080));
+            _glowTexture = _glowTexture ?? Track(MainMenuArtFactory.CreateGlowTexture(512));
+            _panelSprite = _panelSprite ?? Track(Sprite.Create(Track(MainMenuArtFactory.CreateRoundedTexture(224, 224, 60, UIStyleGuide.Colors.TextOnCool, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.82f), 10)), new Rect(0f, 0f, 224f, 224f), new Vector2(0.5f, 0.5f), 200f, 0, SpriteMeshType.FullRect, new Vector4(60f, 60f, 60f, 60f)));
+            _buttonSprite = _buttonSprite ?? Track(Sprite.Create(Track(MainMenuArtFactory.CreateRoundedTexture(224, 104, 46, UIStyleGuide.Colors.TextOnCool, UIStyleGuide.Colors.WithAlpha(UIStyleGuide.Colors.FossilGoldBright, 0.78f), 8)), new Rect(0f, 0f, 224f, 104f), new Vector2(0.5f, 0.5f), 200f, 0, SpriteMeshType.FullRect, new Vector4(46f, 46f, 46f, 46f)));
         }
 
         private Texture2D Track(Texture2D texture)

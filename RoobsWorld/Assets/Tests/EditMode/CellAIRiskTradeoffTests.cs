@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using RoobsWorld.Stages.Cell;
+using UnityEngine;
 
 namespace RoobsWorld.Tests
 {
@@ -141,6 +143,42 @@ namespace RoobsWorld.Tests
                 isPlayerEntity: true);
 
             Assert.IsTrue(result);
+        }
+
+        [Test]
+        public void CellRouteMemory_SelectsWanderDirectionAwayFromRecentRoute()
+        {
+            var recent = new Queue<Vector2Int>();
+            CellRouteMemory.RecordRecentLocation(recent, Vector3.zero, 2f, 8);
+            CellRouteMemory.RecordRecentLocation(recent, new Vector3(2f, 0f, 0f), 2f, 8);
+            CellRouteMemory.RecordRecentLocation(recent, new Vector3(4f, 0f, 0f), 2f, 8);
+
+            Vector3 direction = CellAI.SelectNovelWanderDirection(
+                currentPosition: Vector3.zero,
+                candidateDirections: new[]
+                {
+                    Vector3.right,
+                    Vector3.left,
+                    Vector3.forward
+                },
+                recentCells: recent,
+                memoryCellSize: 2f,
+                projectionDistance: 4f,
+                previousDirection: Vector3.right);
+
+            Assert.That(direction.z, Is.GreaterThan(0.7f));
+            Assert.That(Mathf.Abs(direction.x), Is.LessThan(0.01f));
+        }
+
+        [Test]
+        public void CellRouteMemory_CapsRecentCells()
+        {
+            var recent = new Queue<Vector2Int>();
+            for (int i = 0; i < 12; i++)
+                CellRouteMemory.RecordRecentLocation(recent, new Vector3(i, 0f, 0f), 1f, 5);
+
+            Assert.That(recent.Count, Is.LessThanOrEqualTo(5));
+            Assert.IsFalse(recent.Contains(new Vector2Int(0, 0)));
         }
     }
 }

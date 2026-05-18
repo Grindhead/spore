@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 namespace RoobsWorld.Core
@@ -392,6 +393,9 @@ namespace RoobsWorld.Core
     public class ThirdPersonCameraRig : CameraRigBase
     {
         [SerializeField] private float _distance = 8f;
+        [SerializeField] private float _minDistance = 4f;
+        [SerializeField] private float _maxDistance = 14f;
+        [SerializeField] private float _wheelZoomSpeed = 0.025f;
         [SerializeField] private float _height = 4f;
         [SerializeField] private float _followSpeed = 8f;
         [SerializeField] private float _rotationSpeed = 120f;
@@ -438,6 +442,7 @@ namespace RoobsWorld.Core
                 _rotationSpeed,
                 _pitchSpeed,
                 deltaTime);
+            _distance = ApplyMouseWheelZoom(_distance, _wheelZoomSpeed, _minDistance, _maxDistance);
 
             float middleMousePitchDelta = 0f;
             if (Mouse.current != null && Mouse.current.middleButton.isPressed)
@@ -497,6 +502,20 @@ namespace RoobsWorld.Core
             return new Vector2(
                 lookInput.x * yawSpeed * safeSensitivity * safeDelta,
                 lookInput.y * pitchSpeed * safeSensitivity * pitchSign * safeDelta);
+        }
+
+        private static float ApplyMouseWheelZoom(float currentDistance, float wheelZoomSpeed, float minDistance, float maxDistance)
+        {
+            if (Mouse.current == null)
+                return currentDistance;
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+                return currentDistance;
+
+            float wheelY = Mouse.current.scroll.ReadValue().y;
+            if (Mathf.Abs(wheelY) <= 0.001f)
+                return currentDistance;
+
+            return Mathf.Clamp(currentDistance - wheelY * wheelZoomSpeed, minDistance, maxDistance);
         }
     }
 }

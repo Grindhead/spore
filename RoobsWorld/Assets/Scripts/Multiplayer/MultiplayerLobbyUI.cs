@@ -157,36 +157,22 @@ namespace RoobsWorld.Multiplayer
 
         private void ApplyRelayConfigFromResources()
         {
-            var asset = Resources.Load<TextAsset>("multiplayer-relay");
-            if (asset == null || string.IsNullOrWhiteSpace(asset.text))
-                return;
-
-            try
-            {
-                var config = JsonUtility.FromJson<RelayConfig>(asset.text);
-                ApplyRelayConfig(config);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("[MultiplayerLobbyUI] Invalid multiplayer-relay config: " + ex.Message);
-            }
+            ApplyRelayConfig(RelayConfigService.LoadFromResources());
         }
 
         private void ApplyRelayConfigFromCommandLine()
         {
             string[] args = Environment.GetCommandLineArgs();
-            for (int i = 0; i < args.Length - 1; i++)
-            {
-                if (args[i] == "-relayUrl")
-                    SelectRelayEndpoint("Custom Server", args[i + 1], _gameToken, disconnectExisting: false);
-                else if (args[i] == "-gameToken")
-                    _gameToken = args[i + 1];
-                else if (args[i] == "-relayName")
-                    _selectedRelayName = args[i + 1];
-            }
+            var overrides = RelayConfigService.ParseCommandLineOverrides(args);
+            if (!string.IsNullOrWhiteSpace(overrides.gameToken))
+                _gameToken = overrides.gameToken;
+            if (!string.IsNullOrWhiteSpace(overrides.relayName))
+                _selectedRelayName = overrides.relayName;
+            if (!string.IsNullOrWhiteSpace(overrides.relayUrl))
+                SelectRelayEndpoint("Custom Server", overrides.relayUrl, _gameToken, disconnectExisting: false);
         }
 
-        private void ApplyRelayConfig(RelayConfig config)
+        private void ApplyRelayConfig(RelayConfigService.RelayConfig config)
         {
             if (config == null) return;
             if (config.officialServers != null && config.officialServers.Length > 0)
@@ -215,38 +201,6 @@ namespace RoobsWorld.Multiplayer
                     disconnectExisting: false);
             else if (_officialServers.Count > 0)
                 SelectRelayEndpoint(_officialServers[0], disconnectExisting: false);
-        }
-
-        [Serializable]
-        private sealed class RelayConfig
-        {
-            public string name = "";
-            public string relayUrl = "";
-            public string gameToken = "";
-            public RelayServerConfig[] officialServers = Array.Empty<RelayServerConfig>();
-        }
-
-        [Serializable]
-        private sealed class RelayServerConfig
-        {
-            public string name = "";
-            public string region = "";
-            public string relayUrl = "";
-            public string[] relayUrls = Array.Empty<string>();
-            public string gameToken = "";
-
-            public string[] GetRelayUrls()
-            {
-                var urls = new List<string>();
-                AddRelayUrl(urls, relayUrl);
-                if (relayUrls != null)
-                {
-                    foreach (var url in relayUrls)
-                        AddRelayUrl(urls, url);
-                }
-
-                return urls.ToArray();
-            }
         }
 
         private readonly struct RelayEndpoint
@@ -808,6 +762,12 @@ namespace RoobsWorld.Multiplayer
             {
                 EnsureSession();
                 _session.ApplyPlayerLobby(playerId, lobbyId);
+            };
+
+            transport.OnSessionMapReceived += map =>
+            {
+                EnsureSession();
+                _session.ApplySessionMap(map);
             };
 
             transport.OnGameStarted += () =>

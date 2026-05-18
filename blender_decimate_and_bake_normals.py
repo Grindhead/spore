@@ -16,11 +16,17 @@ Config (edit in script or via Blender text editor):
 import bpy
 
 # --- Config (adjust as needed) ---
-DECIMATE_RATIO = 0.1  # 0.1 = 10% of original poly count
-NORMAL_MAP_SIZE = 2048
+# Better default quality for character/animal parts.
+DECIMATE_RATIO = 0.35  # 0.35 = 35% of original poly count
+NORMAL_MAP_SIZE = 4096
 OUTPUT_SUFFIX = "_low"
 BAKE_MARGIN = 16
 CAGE_EXTRUSION = 0.05  # Push ray origin out so it hits high-poly (tune if bake is wrong)
+USE_AUTO_SMOOTH = True
+AUTO_SMOOTH_ANGLE_DEGREES = 60
+WEIGHTED_NORMAL_STRENGTH = 50
+APPLY_WEIGHTED_NORMAL = True
+KEEP_SHARP_EDGES = True
 
 
 def clear_scene_selection():
@@ -43,7 +49,8 @@ def decimate_mesh(obj, ratio):
     mod = obj.modifiers.new(name="Decimate", type="DECIMATE")
     mod.decimate_type = "COLLAPSE"
     mod.ratio = max(0.01, min(1.0, ratio))
-    mod.use_collapse_triangulate = True
+    # Keep quads where possible; triangulation during decimation can make shading noisier.
+    mod.use_collapse_triangulate = False
     # Apply in edit mode would be cleaner; for script we use context override if needed
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_apply(modifier=mod.name)
@@ -61,6 +68,20 @@ def duplicate_as_low_poly(high_poly_obj, suffix):
     low_poly_obj.data = low_poly_obj.data.copy()  # Single-user copy of mesh data
     decimate_mesh(low_poly_obj, DECIMATE_RATIO)
     return high_poly_obj, low_poly_obj
+
+
+def improve_low_poly_shading(obj):
+    """Set shading flags and optionally add weighted normals for cleaner surface response."""
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.shade_smooth()
+    if USE_AUTO_SMOOTH and hasattr(obj.data, "use_auto_smooth"):
+        obj.data.use_auto_smooth = True
+        obj.data.auto_smooth_angle = AUTO_SMOOTH_ANGLE_DEGREES * (3.141592653589793 / 180.0)
+    if APPLY_WEIGHTED_NORMAL:
+        wn = obj.modifiers.new(name="WeightedNormal", type="WEIGHTED_NORMAL")
+        wn.weight = WEIGHTED_NORMAL_STRENGTH
+        wn.keep_sharp = KEEP_SHARP_EDGES
+        bpy.ops.object.modifier_apply(modifier=wn.name)
 
 
 def prepare_materials_for_bake(low_poly_obj, image):
@@ -109,6 +130,7 @@ def bake_normals_to_low_poly(high_poly_obj, low_poly_obj, image):
     mat.node_tree.nodes.active = tex_node
     # Bake settings
     scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
     scene.cycles.bake_type = "NORMAL"
     scene.render.bake.use_pass_direct = False
     scene.render.bake.use_pass_indirect = False
@@ -134,6 +156,7 @@ def process_selected():
         if high.data.users > 1:
             high.data = high.data.copy()
         high_poly, low_poly = duplicate_as_low_poly(high, OUTPUT_SUFFIX)
+        improve_low_poly_shading(low_poly)
         ensure_uv_for_bake(low_poly)
         img_name = low_poly.name + "_Normal"
         image = bpy.data.images.get(img_name)
