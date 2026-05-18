@@ -24,6 +24,7 @@ namespace RoobsWorld.Multiplayer
         private float _stamina;
         private bool _isAlive = true;
         private string _sourceDnaJson;
+        private CreatureInputActionFlags _actionFlags;
         private CreatureInstance _creature;
         private Transform _nameLabelRoot;
         private TextMeshPro _nameLabel;
@@ -35,6 +36,7 @@ namespace RoobsWorld.Multiplayer
         public float MaxHealth => Mathf.Max(1f, _maxHealth);
         public float Stamina => Mathf.Max(0f, _stamina);
         public string SourceDnaJson => _sourceDnaJson;
+        public CreatureInputActionFlags ActionFlags => _actionFlags;
 
         public static RemotePlayerCreature Create(in CreaturePlayerNetState state, string displayName = null)
         {
@@ -99,6 +101,12 @@ namespace RoobsWorld.Multiplayer
             RefreshNameLabel();
         }
 
+        public void ApplyActionFlags(CreatureInputActionFlags actionFlags)
+        {
+            _actionFlags = actionFlags;
+            RefreshNameLabel();
+        }
+
         public void MoveAuthoritative(Vector3 delta, float rotationY)
         {
             transform.position += delta;
@@ -126,11 +134,40 @@ namespace RoobsWorld.Multiplayer
 
         public static string BuildStatusLabel(string displayName, float health, float maxHealth, float stamina, bool isAlive)
         {
+            return BuildStatusLabel(displayName, health, maxHealth, stamina, isAlive, CreatureInputActionFlags.None);
+        }
+
+        public static string BuildStatusLabel(
+            string displayName,
+            float health,
+            float maxHealth,
+            float stamina,
+            bool isAlive,
+            CreatureInputActionFlags actionFlags)
+        {
             string name = RemotePlayerCell.NormalizeDisplayName(0, displayName);
             if (!isAlive)
                 return $"{name}\nDown";
 
-            return $"{name}\nHP {Mathf.Max(0f, health):0}/{Mathf.Max(1f, maxHealth):0} - STA {Mathf.Max(0f, stamina):0}";
+            string vitals = $"HP {Mathf.Max(0f, health):0}/{Mathf.Max(1f, maxHealth):0} - STA {Mathf.Max(0f, stamina):0}";
+            string action = BuildActionStatusLine(actionFlags);
+            return string.IsNullOrWhiteSpace(action)
+                ? $"{name}\n{vitals}"
+                : $"{name}\n{vitals}\n{action}";
+        }
+
+        public static string BuildActionStatusLine(CreatureInputActionFlags actionFlags)
+        {
+            if (actionFlags == CreatureInputActionFlags.None)
+                return string.Empty;
+
+            if ((actionFlags & CreatureInputActionFlags.Attack) != 0)
+                return "Attacking";
+            if ((actionFlags & CreatureInputActionFlags.Guard) != 0)
+                return "Guarding";
+            if ((actionFlags & CreatureInputActionFlags.Ability) != 0)
+                return "Ability";
+            return string.Empty;
         }
 
         private static CreatureDNA ResolveSnapshotDna(in CreaturePlayerNetState state, string displayName)
@@ -209,7 +246,7 @@ namespace RoobsWorld.Multiplayer
             _nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
             _nameLabel.raycastTarget = false;
             _nameLabel.sortingOrder = 22;
-            _nameLabel.rectTransform.sizeDelta = new Vector2(9f, 1.8f);
+            _nameLabel.rectTransform.sizeDelta = new Vector2(9f, 2.6f);
             PositionNameLabel();
             RefreshNameLabel();
         }
@@ -219,7 +256,7 @@ namespace RoobsWorld.Multiplayer
             if (_nameLabel == null)
                 return;
 
-            _nameLabel.text = BuildStatusLabel(_displayName, _health, _maxHealth, _stamina, _isAlive);
+            _nameLabel.text = BuildStatusLabel(_displayName, _health, _maxHealth, _stamina, _isAlive, _actionFlags);
         }
 
         private void PositionNameLabel()

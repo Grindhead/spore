@@ -151,7 +151,7 @@ namespace RoobsWorld.Core
                 { "creature.relationship.curious", "Curious" },
                 { "creature.relationship.friendly", "Friendly" },
                 { "creature.relationship.allied", "Allied" },
-                { "creature.world.status", "World: Meals {0}  Allies {1}  Victories {2}  Discoveries {3}  Migrations {4}{5}{6}" },
+                { "creature.world.status", "World: Meals {0}  Allies {1}  Victories {2}  Discoveries {3}  Pack {4}  Migrations {5}{6}{7}" },
                 { "creature.world.status.nest_ready", "  Nest editor ready" },
                 { "creature.world.status.migrate_ready", "  Migration gate ready" },
                 { "creature.world.status.at_nest", "  At nest" },

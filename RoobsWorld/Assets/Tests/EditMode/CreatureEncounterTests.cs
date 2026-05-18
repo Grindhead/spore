@@ -254,6 +254,20 @@ namespace RoobsWorld.Tests.EditMode
         }
 
         [Test]
+        public void PackMateAssistedObjectiveTarget_ReducesCombatAndSocialTargetsOnly()
+        {
+            var rivalCull = new CreatureStageObjective(CreatureStageObjectiveType.RivalCull, 5, 1f, "creature.objective.rival_cull");
+            var pacify = new CreatureStageObjective(CreatureStageObjectiveType.PacifyRivals, 4, 1f, "creature.objective.pacify");
+            var holdGround = new CreatureStageObjective(CreatureStageObjectiveType.HoldFeedingGround, 5, 45f, "creature.objective.hold_ground");
+
+            Assert.AreEqual(4, CreatureStage.ComputePackMateAssistedObjectiveTarget(rivalCull, 5, hasPackMate: true));
+            Assert.AreEqual(3, CreatureStage.ComputePackMateAssistedObjectiveTarget(pacify, 4, hasPackMate: true));
+            Assert.AreEqual(5, CreatureStage.ComputePackMateAssistedObjectiveTarget(holdGround, 5, hasPackMate: true));
+            Assert.AreEqual(1, CreatureStage.ComputePackMateAssistedObjectiveTarget(rivalCull, 1, hasPackMate: true));
+            Assert.AreEqual(5, CreatureStage.ComputePackMateAssistedObjectiveTarget(rivalCull, 5, hasPackMate: false));
+        }
+
+        [Test]
         public void ComputeNextUpgradeMilestone_ScalesFromCompletedUpgrades()
         {
             Assert.AreEqual(2, CreatureStage.ComputeNextUpgradeMilestone(0, 2));

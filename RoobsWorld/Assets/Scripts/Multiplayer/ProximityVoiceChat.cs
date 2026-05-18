@@ -62,6 +62,12 @@ namespace RoobsWorld.Multiplayer
             _remoteTransformProvider = null;
         }
 
+        public void SetLocalPlayerTransform(Transform localPlayer)
+        {
+            if (localPlayer != null)
+                _localPlayer = localPlayer;
+        }
+
         public void Receive(in VoiceChatPacket packet)
         {
             if (_session == null || packet.PlayerId == _session.LocalPlayerId)

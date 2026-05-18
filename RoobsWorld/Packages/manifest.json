@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.rlabrecque.steamworks.net": "https://github.com/rlabrecque/Steamworks.NET.git?path=/com.rlabrecque.steamworks.net#2025.162.1",
+    "io.sentry.unity": "https://github.com/getsentry/unity.git#4.3.1",
     "com.unity.2d.animation": "14.0.4",
     "com.unity.2d.aseprite": "4.0.2",
     "com.unity.2d.psdimporter": "13.0.3",

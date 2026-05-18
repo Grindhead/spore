@@ -5,6 +5,7 @@ using RoobsWorld.Core;
 using RoobsWorld.Creature;
 using RoobsWorld.Multiplayer;
 using RoobsWorld.Stages.Cell;
+using RoobsWorld.Stages.Creature;
 using UnityEngine;
 
 namespace RoobsWorld.Tests
@@ -196,6 +197,45 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(
                 "Bob\nDown",
                 RemotePlayerCreature.BuildStatusLabel("Bob", 0f, 20f, 0f, false));
+            Assert.AreEqual(
+                "Alice\nHP 12/20 - STA 7\nAttacking",
+                RemotePlayerCreature.BuildStatusLabel(
+                    "Alice",
+                    12f,
+                    20f,
+                    7f,
+                    true,
+                    CreatureInputActionFlags.Attack | CreatureInputActionFlags.Ability));
+        }
+
+        [Test]
+        public void BuildCreatureActionFlags_CombinesCreatureVerbInputs()
+        {
+            Assert.AreEqual(
+                CreatureInputActionFlags.Attack | CreatureInputActionFlags.Guard,
+                NetworkTickManager.BuildCreatureActionFlags(
+                    attackPressed: true,
+                    guardPressed: true,
+                    abilityPressed: false));
+            Assert.AreEqual(
+                CreatureInputActionFlags.None,
+                NetworkTickManager.BuildCreatureActionFlags(false, false, false));
+        }
+
+        [Test]
+        public void GetDominantCreatureAction_PrioritizesAuthoritativeVerbResolution()
+        {
+            Assert.AreEqual(
+                CreatureInputActionFlags.Attack,
+                NetworkTickManager.GetDominantCreatureAction(
+                    CreatureInputActionFlags.Attack | CreatureInputActionFlags.Ability));
+            Assert.AreEqual(
+                CreatureInputActionFlags.Ability,
+                NetworkTickManager.GetDominantCreatureAction(
+                    CreatureInputActionFlags.Ability | CreatureInputActionFlags.Guard));
+            Assert.AreEqual(
+                CreatureInputActionFlags.Guard,
+                NetworkTickManager.GetDominantCreatureAction(CreatureInputActionFlags.Guard));
         }
 
         // ---- packet tag constants are distinct ----
@@ -232,6 +272,61 @@ namespace RoobsWorld.Tests
         public void ShouldAcceptRemoteInputTick_RejectsOlderTicks()
         {
             Assert.IsFalse(NetworkTickManager.ShouldAcceptRemoteInputTick(true, 8u, 7u));
+        }
+
+        [Test]
+        public void IsRemoteCreatureInputStale_UsesHostTickTimeout()
+        {
+            Assert.IsFalse(NetworkTickManager.IsRemoteCreatureInputStale(10u, 10u, 4u));
+            Assert.IsFalse(NetworkTickManager.IsRemoteCreatureInputStale(13u, 10u, 4u));
+            Assert.IsTrue(NetworkTickManager.IsRemoteCreatureInputStale(14u, 10u, 4u));
+            Assert.IsFalse(NetworkTickManager.IsRemoteCreatureInputStale(9u, 10u, 4u));
+        }
+
+        [Test]
+        public void IsCreatureActionIntentExpired_UsesShortHostTickTtl()
+        {
+            Assert.IsFalse(NetworkTickManager.IsCreatureActionIntentExpired(10u, 10u, 3u));
+            Assert.IsFalse(NetworkTickManager.IsCreatureActionIntentExpired(12u, 10u, 3u));
+            Assert.IsTrue(NetworkTickManager.IsCreatureActionIntentExpired(13u, 10u, 3u));
+            Assert.IsFalse(NetworkTickManager.IsCreatureActionIntentExpired(9u, 10u, 3u));
+        }
+
+        [Test]
+        public void ShouldResolveRemoteCreatureAction_RejectsDuplicateSourceTicksAndHonorsCooldown()
+        {
+            Assert.IsTrue(NetworkTickManager.ShouldResolveRemoteCreatureAction(
+                hasLastResolvedSourceTick: false,
+                lastResolvedSourceTick: 0u,
+                hasLastResolvedHostTick: false,
+                lastResolvedHostTick: 0u,
+                incomingSourceTick: 4u,
+                hostTick: 10u,
+                cooldownTicks: 3u));
+            Assert.IsFalse(NetworkTickManager.ShouldResolveRemoteCreatureAction(
+                hasLastResolvedSourceTick: true,
+                lastResolvedSourceTick: 4u,
+                hasLastResolvedHostTick: true,
+                lastResolvedHostTick: 10u,
+                incomingSourceTick: 4u,
+                hostTick: 13u,
+                cooldownTicks: 3u));
+            Assert.IsFalse(NetworkTickManager.ShouldResolveRemoteCreatureAction(
+                hasLastResolvedSourceTick: true,
+                lastResolvedSourceTick: 4u,
+                hasLastResolvedHostTick: true,
+                lastResolvedHostTick: 10u,
+                incomingSourceTick: 5u,
+                hostTick: 12u,
+                cooldownTicks: 3u));
+            Assert.IsTrue(NetworkTickManager.ShouldResolveRemoteCreatureAction(
+                hasLastResolvedSourceTick: true,
+                lastResolvedSourceTick: 4u,
+                hasLastResolvedHostTick: true,
+                lastResolvedHostTick: 10u,
+                incomingSourceTick: 5u,
+                hostTick: 13u,
+                cooldownTicks: 3u));
         }
 
         [Test]
@@ -555,7 +650,11 @@ namespace RoobsWorld.Tests
                 var applyCreaturePlayers = typeof(NetworkTickManager).GetMethod(
                     "ApplyCreaturePlayerState",
                     BindingFlags.Instance | BindingFlags.NonPublic);
+                var applyCreatureActions = typeof(NetworkTickManager).GetMethod(
+                    "ApplyCreaturePlayerActionState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.NotNull(applyCreaturePlayers);
+                Assert.NotNull(applyCreatureActions);
                 var dna = CreatureDNA.CreateDefault();
                 dna.CreatureId = "remote-creature-8";
                 dna.CreatureName = "Painted Runner";
@@ -593,6 +692,21 @@ namespace RoobsWorld.Tests
                 Assert.AreEqual("Painted Runner", instance.DNA.CreatureName);
                 Assert.AreEqual(1.4f, instance.DNA.Body.BodyScale.x, 0.0001f);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(remote.SourceDnaJson));
+
+                applyCreatureActions.Invoke(tickManager, new object[]
+                {
+                    new[]
+                    {
+                        new CreaturePlayerActionNetState
+                        {
+                            PlayerId = 8,
+                            ActionFlags = CreatureInputActionFlags.Guard,
+                            SourceTick = 12u
+                        }
+                    }
+                });
+
+                Assert.AreEqual(CreatureInputActionFlags.Guard, remote.ActionFlags);
             }
             finally
             {
@@ -632,7 +746,8 @@ namespace RoobsWorld.Tests
                     CreatureHealth = 18f,
                     CreatureMaxHealth = 24f,
                     CreatureStamina = 9f,
-                    CreatureIsAlive = true
+                    CreatureIsAlive = true,
+                    CreatureActionFlags = CreatureInputActionFlags.Attack | CreatureInputActionFlags.Ability
                 };
 
                 var applyRemoteInput = typeof(NetworkTickManager).GetMethod(
@@ -645,18 +760,279 @@ namespace RoobsWorld.Tests
                 Assert.NotNull(buildSessionState);
 
                 applyRemoteInput.Invoke(tickManager, new object[] { 7, input });
-                var state = (SessionNetState)buildSessionState.Invoke(tickManager, new object[] { 9u });
+                var state = (SessionNetState)buildSessionState.Invoke(tickManager, new object[] { 1u });
 
                 Assert.IsTrue(Array.Exists(
                     state.CreaturePlayers,
                     p => p.PlayerId == 7 &&
                         p.CreatureId == "client-creature-7" &&
                         p.CreatureDNAJson.Contains("Client Runner")));
+                Assert.IsTrue(Array.Exists(
+                    state.CreaturePlayerActions,
+                    p => p.PlayerId == 7 &&
+                        p.ActionFlags == (CreatureInputActionFlags.Attack | CreatureInputActionFlags.Ability) &&
+                        p.SourceTick == 4u));
+
+                var expired = (SessionNetState)buildSessionState.Invoke(
+                    tickManager,
+                    new object[] { NetworkTickManager.CreatureActionIntentTtlTicks });
+                Assert.IsTrue(Array.Exists(
+                    expired.CreaturePlayerActions,
+                    p => p.PlayerId == 7 && p.ActionFlags == CreatureInputActionFlags.None));
+                var remote = FindRemoteCreatureByPlayerId(7);
+                Assert.NotNull(remote);
+                Assert.AreEqual(CreatureInputActionFlags.None, remote.ActionFlags);
             }
             finally
             {
                 tickManager?.Deactivate();
                 UnityEngine.Object.DestroyImmediate(mgrGo);
+                DestroyAllRemoteCreatures();
+            }
+        }
+
+        [Test]
+        public void HostRemoteCreatureGuardIntent_PublishesAuthoritativeFeedbackOncePerSourceTick()
+        {
+            var mgrGo = new GameObject("RemoteGuardHostTick");
+            NetworkTickManager tickManager = null;
+            int guardEvents = 0;
+            Action<CreatureCombatFeedbackEvent> handler = evt =>
+            {
+                if (evt.IsPlayerSource &&
+                    evt.Type == CreatureCombatFeedbackType.Guard &&
+                    evt.SourceCreatureId == "client-guard-7")
+                {
+                    guardEvents++;
+                }
+            };
+
+            try
+            {
+                EventBus.Subscribe(handler);
+                tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var session = new MultiplayerSessionManager();
+                session.CreateSession();
+                session.AddRemotePlayer(7, "Guard Client");
+                tickManager.Activate(session, new NullNetworkTransport(), null);
+
+                var dna = CreatureDNA.CreateDefault();
+                dna.CreatureId = "client-guard-7";
+                var input = new RemoteInputPacket
+                {
+                    PlayerId = 7,
+                    Tick = 4u,
+                    HasCreatureInput = true,
+                    CreatureId = dna.CreatureId,
+                    CreatureDNAJson = dna.ToJson(),
+                    CreatureHealth = 20f,
+                    CreatureMaxHealth = 20f,
+                    CreatureStamina = 80f,
+                    CreatureIsAlive = true,
+                    CreatureActionFlags = CreatureInputActionFlags.Guard
+                };
+
+                var applyRemoteInput = typeof(NetworkTickManager).GetMethod(
+                    "ApplyRemoteInput",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyRemoteInput);
+
+                applyRemoteInput.Invoke(tickManager, new object[] { 7, input });
+                applyRemoteInput.Invoke(tickManager, new object[] { 7, input });
+
+                Assert.AreEqual(1, guardEvents);
+            }
+            finally
+            {
+                EventBus.Unsubscribe(handler);
+                tickManager?.Deactivate();
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                DestroyAllRemoteCreatures();
+            }
+        }
+
+        [Test]
+        public void HostRemoteCreatureAttackIntent_DamagesSharedCreatureTarget()
+        {
+            var mgrGo = new GameObject("RemoteAttackHostTick");
+            var targetGo = new GameObject("SharedRivalTarget");
+            NetworkTickManager tickManager = null;
+            int playerHitEvents = 0;
+            Action<CreatureCombatFeedbackEvent> handler = evt =>
+            {
+                if (evt.IsPlayerSource &&
+                    evt.Type == CreatureCombatFeedbackType.Hit &&
+                    evt.SourceCreatureId == "client-attacker-7" &&
+                    evt.TargetCreatureId == "shared-rival-target")
+                {
+                    playerHitEvents++;
+                }
+            };
+
+            try
+            {
+                EventBus.Subscribe(handler);
+                var targetDna = CreatureDNA.CreateDefault();
+                targetDna.CreatureId = "shared-rival-target";
+                var targetStats = CreatureStats.BaseStats;
+                targetStats.Health = 40f;
+                targetStats.Defense = 0f;
+                var target = targetGo.AddComponent<CreatureInstance>();
+                target.Initialize(targetDna, targetStats, isPlayer: false);
+                targetGo.transform.position = new Vector3(0f, 0f, 2f);
+
+                tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var session = new MultiplayerSessionManager();
+                session.CreateSession();
+                session.AddRemotePlayer(7, "Attack Client");
+                tickManager.Activate(session, new NullNetworkTransport(), null);
+
+                var dna = CreatureDNA.CreateDefault();
+                dna.CreatureId = "client-attacker-7";
+                var input = new RemoteInputPacket
+                {
+                    PlayerId = 7,
+                    Tick = 4u,
+                    HasCreatureInput = true,
+                    CreatureId = dna.CreatureId,
+                    CreatureDNAJson = dna.ToJson(),
+                    CreaturePosX = 0f,
+                    CreaturePosY = 0f,
+                    CreatureRotY = 0f,
+                    CreatureHealth = 20f,
+                    CreatureMaxHealth = 20f,
+                    CreatureStamina = 80f,
+                    CreatureIsAlive = true,
+                    CreatureActionFlags = CreatureInputActionFlags.Attack
+                };
+
+                var applyRemoteInput = typeof(NetworkTickManager).GetMethod(
+                    "ApplyRemoteInput",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyRemoteInput);
+
+                applyRemoteInput.Invoke(tickManager, new object[] { 7, input });
+
+                Assert.Less(target.CurrentHealth, 40f);
+                Assert.AreEqual(1, playerHitEvents);
+            }
+            finally
+            {
+                EventBus.Unsubscribe(handler);
+                tickManager?.Deactivate();
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                UnityEngine.Object.DestroyImmediate(targetGo);
+                DestroyAllRemoteCreatures();
+            }
+        }
+
+        [Test]
+        public void HostRemoteCreatureInput_RemovesStaleProxyFromAuthoritativeSnapshots()
+        {
+            var mgrGo = new GameObject("StaleHostCreatureTick");
+            NetworkTickManager tickManager = null;
+            try
+            {
+                tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var session = new MultiplayerSessionManager();
+                session.CreateSession();
+                session.AddRemotePlayer(11, "Lagged Creature");
+                tickManager.Activate(session, new NullNetworkTransport(), null);
+
+                var dna = CreatureDNA.CreateDefault();
+                dna.CreatureId = "lagged-creature-11";
+                dna.CreatureName = "Lagged Runner";
+                var input = new RemoteInputPacket
+                {
+                    PlayerId = 11,
+                    Tick = 1u,
+                    HasCreatureInput = true,
+                    CreatureId = dna.CreatureId,
+                    CreatureDNAJson = dna.ToJson(),
+                    CreaturePosX = 1f,
+                    CreaturePosY = 2f,
+                    CreatureRotY = 15f,
+                    CreatureHealth = 12f,
+                    CreatureMaxHealth = 20f,
+                    CreatureStamina = 8f,
+                    CreatureIsAlive = true
+                };
+
+                var applyRemoteInput = typeof(NetworkTickManager).GetMethod(
+                    "ApplyRemoteInput",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var buildSessionState = typeof(NetworkTickManager).GetMethod(
+                    "BuildSessionState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyRemoteInput);
+                Assert.NotNull(buildSessionState);
+
+                applyRemoteInput.Invoke(tickManager, new object[] { 11, input });
+                var fresh = (SessionNetState)buildSessionState.Invoke(tickManager, new object[] { 1u });
+                Assert.IsTrue(Array.Exists(fresh.CreaturePlayers, p => p.PlayerId == 11));
+
+                uint staleTick = NetworkTickManager.RemoteCreatureInputStaleTicks + 1u;
+                var stale = (SessionNetState)buildSessionState.Invoke(tickManager, new object[] { staleTick });
+
+                Assert.IsFalse(Array.Exists(stale.CreaturePlayers, p => p.PlayerId == 11));
+                Assert.IsNull(FindRemoteCreatureByPlayerId(11));
+            }
+            finally
+            {
+                tickManager?.Deactivate();
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                DestroyAllRemoteCreatures();
+            }
+        }
+
+        [Test]
+        public void SendLocalInput_DiscoversCreatureSpawnedAfterActivation()
+        {
+            var mgrGo = new GameObject("ClientCreatureTick");
+            var creatureGo = new GameObject("LateLocalCreature");
+            NetworkTickManager tickManager = null;
+            try
+            {
+                tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var session = new MultiplayerSessionManager();
+                session.ApplyJoinedSession("ABCDEF", localPlayerId: 2, hostPlayerId: 0);
+                var transport = new RecordingTransport();
+                tickManager.Activate(session, transport, null, null);
+
+                var dna = CreatureDNA.CreateDefault();
+                dna.CreatureId = "late-local-creature";
+                dna.CreatureName = "Late Local";
+                var stats = StatCalculator.Calculate(dna, CreaturePartCatalog.GetDefaultCatalog());
+                creatureGo.transform.position = new Vector3(6f, 0f, -4f);
+                var instance = creatureGo.AddComponent<CreatureInstance>();
+                instance.Initialize(dna, stats, isPlayer: true);
+                creatureGo.AddComponent<CreaturePlayerController>();
+
+                var sendLocalInput = typeof(NetworkTickManager).GetMethod(
+                    "SendLocalInput",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(sendLocalInput);
+
+                sendLocalInput.Invoke(tickManager, new object[] { NetworkTickManager.BroadcastInterval });
+
+                Assert.AreEqual(1, transport.SendCount);
+                Assert.AreEqual(0, transport.LastTargetPlayerId);
+                Assert.AreEqual(NetworkTickManager.TagInput, NetworkTickManager.GetTag(transport.LastSent));
+
+                var packet = NetworkSerializer.DeserializeInput(NetworkTickManager.StripTag(transport.LastSent));
+                Assert.AreEqual(2, packet.PlayerId);
+                Assert.IsTrue(packet.HasCreatureInput);
+                Assert.AreEqual("late-local-creature", packet.CreatureId);
+                Assert.That(packet.CreatureDNAJson, Does.Contain("Late Local"));
+                Assert.AreEqual(6f, packet.CreaturePosX, 0.0001f);
+                Assert.AreEqual(-4f, packet.CreaturePosY, 0.0001f);
+                Assert.IsTrue(packet.CreatureIsAlive);
+            }
+            finally
+            {
+                tickManager?.Deactivate();
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                UnityEngine.Object.DestroyImmediate(creatureGo);
                 DestroyAllRemoteCreatures();
             }
         }
@@ -703,6 +1079,25 @@ namespace RoobsWorld.Tests
                 if (pickups[i] != null)
                     UnityEngine.Object.DestroyImmediate(pickups[i].gameObject);
             }
+        }
+
+        private sealed class RecordingTransport : INetworkTransport
+        {
+            public bool IsConnected => true;
+            public int SendCount { get; private set; }
+            public int LastTargetPlayerId { get; private set; } = -1;
+            public byte[] LastSent { get; private set; }
+
+            public void Send(int targetPlayerId, byte[] data)
+            {
+                SendCount++;
+                LastTargetPlayerId = targetPlayerId;
+                LastSent = data;
+            }
+
+            public void Broadcast(byte[] data) { }
+            public byte[] TryReceive(out int fromPlayerId) { fromPlayerId = -1; return null; }
+            public void Disconnect() { }
         }
 
         // ---- NullNetworkTransport: Activate with null session is safe ----

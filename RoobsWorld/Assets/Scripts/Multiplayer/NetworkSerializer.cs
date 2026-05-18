@@ -60,6 +60,10 @@ namespace RoobsWorld.Multiplayer
             WriteCreatureObjective(w, state.CreatureObjective);
             WriteCreatureWorldProgression(w, state.CreatureWorldProgression);
 
+            int creatureActionCount = state.CreaturePlayerActions?.Length ?? 0;
+            w.Write(creatureActionCount);
+            for (int i = 0; i < creatureActionCount; i++) WriteCreaturePlayerAction(w, state.CreaturePlayerActions[i]);
+
             return ms.ToArray();
         }
 
@@ -137,6 +141,17 @@ namespace RoobsWorld.Multiplayer
                 ? ReadCreatureWorldProgression(r)
                 : default;
 
+            if (ms.Position < ms.Length)
+            {
+                int creatureActionCount = r.ReadInt32();
+                state.CreaturePlayerActions = new CreaturePlayerActionNetState[creatureActionCount];
+                for (int i = 0; i < creatureActionCount; i++) state.CreaturePlayerActions[i] = ReadCreaturePlayerAction(r);
+            }
+            else
+            {
+                state.CreaturePlayerActions = Array.Empty<CreaturePlayerActionNetState>();
+            }
+
             return state;
         }
 
@@ -164,6 +179,7 @@ namespace RoobsWorld.Multiplayer
             w.Write(pkt.CreatureMaxHealth);
             w.Write(pkt.CreatureStamina);
             w.Write(pkt.CreatureIsAlive);
+            w.Write((int)pkt.CreatureActionFlags);
 
             return ms.ToArray();
         }
@@ -209,6 +225,8 @@ namespace RoobsWorld.Multiplayer
                 pkt.CreatureMaxHealth = r.ReadSingle();
                 pkt.CreatureStamina = r.ReadSingle();
                 pkt.CreatureIsAlive = r.ReadBoolean();
+                if (ms.Position < ms.Length)
+                    pkt.CreatureActionFlags = (CreatureInputActionFlags)r.ReadInt32();
             }
 
             return pkt;
@@ -493,6 +511,20 @@ namespace RoobsWorld.Multiplayer
             MaxHealth = r.ReadSingle(),
             Stamina = r.ReadSingle(),
             IsAlive = r.ReadBoolean()
+        };
+
+        private static void WriteCreaturePlayerAction(BinaryWriter w, in CreaturePlayerActionNetState action)
+        {
+            w.Write(action.PlayerId);
+            w.Write((int)action.ActionFlags);
+            w.Write(action.SourceTick);
+        }
+
+        private static CreaturePlayerActionNetState ReadCreaturePlayerAction(BinaryReader r) => new CreaturePlayerActionNetState
+        {
+            PlayerId = r.ReadInt32(),
+            ActionFlags = (CreatureInputActionFlags)r.ReadInt32(),
+            SourceTick = r.ReadUInt32()
         };
 
         private static void WriteCreatureRival(BinaryWriter w, in CreatureRivalNetState r)

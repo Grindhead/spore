@@ -365,6 +365,24 @@ namespace RoobsWorld.Stages.Creature
                 && state.Discoveries > 0;
         }
 
+        public static bool ShouldRecruitPackMate(
+            CreatureProgressionState state,
+            CreatureVerbRating[] ratings,
+            float minimumRating = 0.5f)
+        {
+            if (state.HasPackMate || state.Allies <= 0)
+                return false;
+
+            if (HasUsableVerb(ratings, CreatureVerb.CallPack, minimumRating))
+                return true;
+
+            int socialVerbCount = 0;
+            if (HasUsableVerb(ratings, CreatureVerb.Sing, minimumRating)) socialVerbCount++;
+            if (HasUsableVerb(ratings, CreatureVerb.Charm, minimumRating)) socialVerbCount++;
+            if (HasUsableVerb(ratings, CreatureVerb.Pose, minimumRating)) socialVerbCount++;
+            return socialVerbCount >= 2;
+        }
+
         public static bool HasUsableVerb(CreatureVerbRating[] ratings, CreatureVerb verb, float minimumRating = 0.5f)
         {
             if (ratings == null)

@@ -93,6 +93,24 @@ namespace RoobsWorld.Multiplayer
         public bool IsAlive;
     }
 
+    [Flags]
+    public enum CreatureInputActionFlags
+    {
+        None = 0,
+        Attack = 1 << 0,
+        Guard = 1 << 1,
+        Ability = 1 << 2
+    }
+
+    /// <summary>Authoritative one-tick Creature-stage action intent for remote player presentation.</summary>
+    [Serializable]
+    public struct CreaturePlayerActionNetState
+    {
+        public int PlayerId;
+        public CreatureInputActionFlags ActionFlags;
+        public uint SourceTick;
+    }
+
     /// <summary>Authoritative rival creature snapshot for Creature stage sessions.</summary>
     [Serializable]
     public struct CreatureRivalNetState
@@ -158,6 +176,7 @@ namespace RoobsWorld.Multiplayer
         public CreatureRivalNetState[] CreatureRivals;
         public CreatureObjectiveNetState CreatureObjective;
         public CreatureWorldProgressionNetState CreatureWorldProgression;
+        public CreaturePlayerActionNetState[] CreaturePlayerActions;
     }
 
     /// <summary>Host-authoritative command to move every client into the same game stage.</summary>
@@ -326,6 +345,7 @@ namespace RoobsWorld.Multiplayer
         public float CreatureMaxHealth;
         public float CreatureStamina;
         public bool CreatureIsAlive;
+        public CreatureInputActionFlags CreatureActionFlags;
     }
 
     /// <summary>Small microphone audio chunk broadcast between nearby players.</summary>

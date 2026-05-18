@@ -949,6 +949,18 @@ namespace RoobsWorld.Stages.Creature
             return count + bonus;
         }
 
+        public static int ComputePackMateAssistedObjectiveTarget(
+            CreatureStageObjective objective,
+            int scaledTarget,
+            bool hasPackMate)
+        {
+            int target = Mathf.Max(1, scaledTarget);
+            if (!hasPackMate || objective.UsesHoldTimer)
+                return target;
+
+            return Mathf.Max(1, target - 1);
+        }
+
         public static int ComputeNextUpgradeMilestone(int completedUpgradeCount, int defeatsPerUpgrade)
         {
             int completed = Mathf.Max(0, completedUpgradeCount);
@@ -1135,11 +1147,16 @@ namespace RoobsWorld.Stages.Creature
 
         private int GetObjectiveDefeatTarget()
         {
-            return Mathf.Max(1, ComputeMultiplayerScaledCount(
+            int scaledTarget = ComputeMultiplayerScaledCount(
                 _currentObjective.RivalDefeatTarget,
                 GetActiveCreaturePlayerCount(GameManager.HasInstance ? GameManager.Instance.Session : null),
                 MultiplayerObjectiveDefeatsPerExtraPlayer,
-                MultiplayerObjectiveDefeatsMaxBonus));
+                MultiplayerObjectiveDefeatsMaxBonus);
+
+            return ComputePackMateAssistedObjectiveTarget(
+                _currentObjective,
+                scaledTarget,
+                _worldProgressionInitialized && _worldProgression.HasPackMate);
         }
 
         private int GetObjectivePopulationProgress()
@@ -1471,7 +1488,19 @@ namespace RoobsWorld.Stages.Creature
             if (!_completedSpeciesProgressionEvents.Add(key))
                 return;
 
-            TryAwardWorldProgression(eventType, $"species:{cleanSpecies}");
+            if (!TryAwardWorldProgression(eventType, $"species:{cleanSpecies}"))
+                return;
+
+            if (eventType == CreatureProgressionEventType.AllySpecies)
+                TryRecruitPackMateFromAlliance(cleanSpecies);
+        }
+
+        private void TryRecruitPackMateFromAlliance(string speciesLabel)
+        {
+            if (!CreatureWorldPlanner.ShouldRecruitPackMate(_worldProgression, _worldPlan.VerbRatings))
+                return;
+
+            TryAwardWorldProgression(CreatureProgressionEventType.RecruitPackMate, $"pack:{speciesLabel}");
         }
     }
 }

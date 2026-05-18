@@ -90,6 +90,32 @@ namespace RoobsWorld.Tests.EditMode
         }
 
         [Test]
+        public void PackMateRecruitment_RequiresAllianceAndSocialTools()
+        {
+            var alliedState = new CreatureProgressionState { Allies = 1 };
+            var alreadyPacked = new CreatureProgressionState { Allies = 1, HasPackMate = true };
+            var socialRatings = new[]
+            {
+                new CreatureVerbRating(CreatureVerb.Sing, 0.8f),
+                new CreatureVerbRating(CreatureVerb.Charm, 0.8f)
+            };
+            var callPackRatings = new[]
+            {
+                new CreatureVerbRating(CreatureVerb.CallPack, 0.8f)
+            };
+            var weakSocialRatings = new[]
+            {
+                new CreatureVerbRating(CreatureVerb.Pose, 0.2f)
+            };
+
+            Assert.IsTrue(CreatureWorldPlanner.ShouldRecruitPackMate(alliedState, socialRatings));
+            Assert.IsTrue(CreatureWorldPlanner.ShouldRecruitPackMate(alliedState, callPackRatings));
+            Assert.IsFalse(CreatureWorldPlanner.ShouldRecruitPackMate(new CreatureProgressionState(), socialRatings));
+            Assert.IsFalse(CreatureWorldPlanner.ShouldRecruitPackMate(alreadyPacked, callPackRatings));
+            Assert.IsFalse(CreatureWorldPlanner.ShouldRecruitPackMate(alliedState, weakSocialRatings));
+        }
+
+        [Test]
         public void WorldPointHelpers_MapVisitsToProgressionEvents()
         {
             var food = new CreatureWorldPoint(CreatureWorldPointType.FoodSource, "fruit", Vector3.zero, 3f);
@@ -136,8 +162,28 @@ namespace RoobsWorld.Tests.EditMode
 
             Assert.That(nestStatus, Does.Contain("Nest editor ready"));
             Assert.That(nestStatus, Does.Contain("Gate 11m"));
+            Assert.That(nestStatus, Does.Contain("Pack 0"));
             Assert.That(gateStatus, Does.Contain("Migration gate ready"));
             Assert.That(CreatureStageHUD.BuildWorldProgressionLabel(CreatureProgressionEventType.Eat, 4), Does.Contain("+4 DNA"));
+        }
+
+        [Test]
+        public void WorldStatusText_ShowsPackMateProgress()
+        {
+            var state = new CreatureProgressionState
+            {
+                Meals = 2,
+                Allies = 1,
+                HasPackMate = true
+            };
+
+            string status = CreatureStageHUD.BuildWorldStatusText(
+                state,
+                canEditAtNest: false,
+                canMigrate: false);
+
+            Assert.That(status, Does.Contain("Pack 1"));
+            Assert.That(CreatureStageHUD.BuildWorldProgressionLabel(CreatureProgressionEventType.RecruitPackMate, 12), Does.Contain("Packmate recruited"));
         }
 
         [Test]

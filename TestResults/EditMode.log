@@ -1,11 +1,11 @@
 [Licensing::Module] Trying to connect to existing licensing client channel...
 Built from '6000.4/staging' branch; Version is '6000.4.7f1 (f3c3c4248748) revision 15975364'; Using compiler version '194234433'; Build Type 'Release'
 OS: 'Windows 11  (10.0.26200) Core' Language: 'en' Physical Memory: 31859 MB
-[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig" at "2026-05-18T02:31:31.7574951Z"
 BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
 System  architecture: x64
 Process architecture: x64
-Date: 2026-05-18T02:31:31Z
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig" at "2026-05-18T03:27:38.2704189Z"
+Date: 2026-05-18T03:27:38Z
 
 COMMAND LINE ARGUMENTS:
 C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Unity.exe
@@ -57,16 +57,16 @@ C:/Users/craig/work/spores/RoobsWorld
     "memorysetup-job-temp-allocator-block-size=2097152"
     "memorysetup-job-temp-allocator-block-size-background=1048576"
     "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
-Player connection [21564]  Target information:
+Player connection [34852]  Target information:
 
-Player connection [21564]  * "[IP] 192.168.1.234 [Port] 55504 [Flags] 2 [Guid] 507181022 [EditorId] 507181022 [Version] 1048832 [Id] WindowsEditor(7,Roobs-World) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+Player connection [34852]  * "[IP] 192.168.1.234 [Port] 55504 [Flags] 2 [Guid] 1185033125 [EditorId] 1185033125 [Version] 1048832 [Id] WindowsEditor(7,Roobs-World) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
 
-Player connection [21564] Host joined multi-casting on [225.0.0.222:54997]...
-Player connection [21564] Host joined alternative multi-casting on [225.0.0.222:34997]...
+Player connection [34852] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [34852] Host joined alternative multi-casting on [225.0.0.222:34997]...
 Input System module state changed to: Initialized.
 [Physics::Module] Initialized fallback backend.
 [Physics::Module] Id: 0xdecafbad
-[Package Manager] Connected to IPC stream "Upm-9552" after 0.2 seconds.
+[Package Manager] Connected to IPC stream "Upm-29000" after 0.3 seconds.
 [Licensing::Module] Licensing is not yet initialized.
 [Licensing::Client] Error: HandshakeResponse reported an error:
 	ResponseCode: 505
@@ -74,19 +74,19 @@ Input System module state changed to: Initialized.
 [Licensing::Module] Error: Failed to handshake to channel: "LicenseClient-craig"
 [Licensing::IpcConnector] LicenseClient-craig channel disconnected successfully.
 [Licensing::IpcConnector] Channel LicenseClient-craig-6000.4.7 doesn't exist
-[Licensing::Module] Successfully launched the LicensingClient (PId: 32388)
-[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig-6000.4.7" at "2026-05-18T02:31:32.5782991Z"
-[Licensing::Client] Code 10 while verifying Licensing Client signature (process Id: 32388, path: "C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client.exe")
+[Licensing::Module] Successfully launched the LicensingClient (PId: 37996)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig-6000.4.7" at "2026-05-18T03:27:39.2437172Z"
+[Licensing::Client] Code 10 while verifying Licensing Client signature (process Id: 37996, path: "C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client.exe")
 [Licensing::Module] LicensingClient has failed validation; ignoring
 [Licensing::Client] Handshaking with LicensingClient:
   Version:                 1.18.1+9fbee8e
-  Session Id:              d231b34670e047e2b341590f38426393
-  Correlation Id:          77a34220448dfcceffa2f80c491fe11a
-  External correlation Id: 4818966188769367119
+  Session Id:              2cae9ad298a8403991cab5d30b52e018
+  Correlation Id:          840aadf72aa9b40073376be553f58f57
+  External correlation Id: 8626773327085283811
   Machine Id:              4SVtvJkvWjihW7O3WzA2U0bMD4A=
-[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-craig-6000.4.7" (connect: 0.16s, validation: 0.13s, handshake: 0.00s)
-[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig-6000.4.7-notifications" at "2026-05-18T02:31:32.7167104Z"
-[Licensing::Module] Connected to LicensingClient (PId: 32388, launch time: 0.00, total connection time: 0.30s)
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-craig-6000.4.7" (connect: 0.25s, validation: 0.17s, handshake: 0.00s)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-craig-6000.4.7-notifications" at "2026-05-18T03:27:39.4152345Z"
+[Licensing::Module] Connected to LicensingClient (PId: 37996, launch time: 0.00, total connection time: 0.42s)
 [Licensing::Module] Error: Access token is unavailable; failed to update
 [Licensing::Client] Successfully resolved entitlement details
 [Licensing::Module] License group:
@@ -94,8 +94,8 @@ Input System module state changed to: Initialized.
   Product: Unity Personal
   Type: Assigned
   Expiration: Unlimited
-[Licensing::Client] Successfully updated license, isAsync: True, time: 0.01
-[Licensing::Module] Licensing Background thread has ended after 0.98s
+[Licensing::Client] Successfully updated license, isAsync: True, time: 0.02
+[Licensing::Module] Licensing Background thread has ended after 1.19s
 [Licensing::Module] Licensing is initialized (took 0.71s).
 [Licensing::Client] Successfully resolved entitlement details
 Library Redirect Path: Library/
@@ -119,7 +119,7 @@ Initialize mono
 Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/Managed'
 Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
 Mono config path = 'C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/MonoBleedingEdge/etc'
-Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56552
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56000
 CodeReloadManager initialized
 Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
 Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
@@ -133,7 +133,7 @@ Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.4.7f1/E
 Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/PlaybackEngines/MetroSupport/UnityEditor.UWP.Extensions.dll
 [Licensing::Client] Successfully resolved entitlement details
 Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
-Registered in 0.004488 seconds.
+Registered in 0.005354 seconds.
 Native extension for Android target not found
 Native extension for UWP target not found
 Native extension for WindowsStandalone target not found
@@ -141,29 +141,29 @@ Native extension for WebGL target not found
 Package Manager log level set to [2]
 ScheduleIndexationOnStartup MainProcess:False IndexOnStartup:True
 Mono: successfully reloaded assembly
-- Finished resetting the current domain, in  0.231 seconds
-Domain Reload Profiling: 508ms
-	BeginReloadAssembly (83ms)
-		CreateAndSetChildDomain (15ms)
-	RebuildCommonClasses (23ms)
+- Finished resetting the current domain, in  0.250 seconds
+Domain Reload Profiling: 548ms
+	BeginReloadAssembly (80ms)
+		CreateAndSetChildDomain (3ms)
+	RebuildCommonClasses (24ms)
 	RebuildNativeTypeToScriptingClass (8ms)
-	initialDomainReloadingComplete (41ms)
-	LoadAllAssembliesAndSetupDomain (122ms)
-		LoadAssemblies (67ms)
-		AnalyzeDomain (116ms)
-			TypeCache.Refresh (115ms)
-				TypeCache.ScanAssembly (107ms)
-	FinalizeReload (232ms)
+	initialDomainReloadingComplete (45ms)
+	LoadAllAssembliesAndSetupDomain (139ms)
+		LoadAssemblies (76ms)
+		AnalyzeDomain (132ms)
+			TypeCache.Refresh (131ms)
+				TypeCache.ScanAssembly (122ms)
+	FinalizeReload (251ms)
 		SetupLoadedEditorAssemblies (0ms)
-			InitializePlatformSupportModulesInManaged (52ms)
-			BeforeProcessingInitializeOnLoad (48ms)
-			ProcessInitializeOnLoadAttributes (61ms)
-			ProcessInitializeOnLoadMethodAttributes (33ms)
+			InitializePlatformSupportModulesInManaged (55ms)
+			BeforeProcessingInitializeOnLoad (52ms)
+			ProcessInitializeOnLoadAttributes (67ms)
+			ProcessInitializeOnLoadMethodAttributes (36ms)
 [Licensing::Client] Successfully resolved entitlement details
 Application.AssetDatabase Initial Refresh Start
 [Package Manager] Restoring resolved packages state from cache
 [Licensing::Client] Successfully resolved entitlement details
-[Package Manager] Registered 68 packages:
+[Package Manager] Registered 69 packages:
   Packages from [https://packages.unity.com]:
     com.unity.2d.animation@14.0.4 (location: C:\Users\craig\work\spores\RoobsWorld\Library\PackageCache\com.unity.2d.animation@011d329ac58b)
     com.unity.2d.aseprite@4.0.2 (location: C:\Users\craig\work\spores\RoobsWorld\Library\PackageCache\com.unity.2d.aseprite@ccedfadacc51)
@@ -235,83 +235,28 @@ Application.AssetDatabase Initial Refresh Start
     com.unity.collections@6.4.0 (location: C:\Users\craig\work\spores\RoobsWorld\Library\PackageCache\com.unity.collections@5b6ebd78ccc0)
   Git packages:
     com.rlabrecque.steamworks.net@https://github.com/rlabrecque/Steamworks.NET.git?path=/com.rlabrecque.steamworks.net#2025.162.1 (location: C:\Users\craig\work\spores\RoobsWorld\Library\PackageCache\com.rlabrecque.steamworks.net@3d42650afca9)
+    io.sentry.unity@https://github.com/getsentry/unity.git#4.3.1 (location: C:\Users\craig\work\spores\RoobsWorld\Library\PackageCache\io.sentry.unity@da7a7655a562)
 [Subsystems] No new subsystems found in resolved package list.
 [Package Manager] Done registering packages in 0.01 seconds
 [ScriptCompilation] Requested script compilation because: AssetDatabase observed changes in script compilation related files
 Starting: C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Data\Tools\BuildPipeline\bee_backend.exe --ipc --defer-dag-verification --dagfile="Library/Bee/1900b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
 WorkingDir: C:/Users/craig/work/spores/RoobsWorld
 DisplayProgressbar: Compiling Scripts
-ExitCode: 0 Duration: 2s714ms
-[ 893/1167  0s] ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput
-[1155/1167  1s] Csc Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.dll (+2 others)
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(429,90): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(429,26): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(1209,104): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(1209,31): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-[1156/1167  0s] Csc Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.Editor.dll (+2 others)
-[1157/1167  0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/RoobsWorld.dll (+pdb)
-Processing assembly Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.dll, with 140 defines and 288 references
+ExitCode: 0 Duration: 0s338ms
+[ 916/1197  0s] ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput
+[1193/1197  0s] Csc Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.Sentry.dll (+2 others)
+[1194/1197  0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/RoobsWorld.Sentry.dll (+pdb)
+Processing assembly Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.Sentry.dll, with 140 defines and 305 references
 
 processors: Unity.Jobs.CodeGen.JobsILPostProcessor, zzzUnity.Burst.CodeGen.BurstILPostProcessor
 
 running Unity.Jobs.CodeGen.JobsILPostProcessor
 
 running zzzUnity.Burst.CodeGen.BurstILPostProcessor
-[1158/1167  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.pdb
-[1159/1167  0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/RoobsWorld.Editor.dll (+pdb)
-Processing assembly Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.Editor.dll, with 138 defines and 278 references
-
-processors: Unity.Jobs.CodeGen.JobsILPostProcessor, zzzUnity.Burst.CodeGen.BurstILPostProcessor
-
-running Unity.Jobs.CodeGen.JobsILPostProcessor
-
-running zzzUnity.Burst.CodeGen.BurstILPostProcessor
-[1160/1167  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.Editor.pdb
-[1161/1167  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.dll
-[1162/1167  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.Editor.dll
-[1163/1167  0s] Csc Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.Tests.EditMode.dll (+2 others)
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(666,117): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(666,29): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(678,117): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(678,29): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(688,109): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(688,27): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(700,109): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(700,27): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-[1164/1167  0s] ILPostProcess Library/Bee/artifacts/1900b0aE.dag/post-processed/RoobsWorld.Tests.EditMode.dll (+pdb)
-Processing assembly Library/Bee/artifacts/1900b0aE.dag/RoobsWorld.Tests.EditMode.dll, with 138 defines and 297 references
-
-processors: Unity.Jobs.CodeGen.JobsILPostProcessor, zzzUnity.Burst.CodeGen.BurstILPostProcessor
-
-running Unity.Jobs.CodeGen.JobsILPostProcessor
-
-running zzzUnity.Burst.CodeGen.BurstILPostProcessor
-[1165/1167  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.Tests.EditMode.pdb
-[1166/1167  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.Tests.EditMode.dll
-*** Tundra build success (2.69 seconds), 13 items updated, 1167 evaluated
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(429,90): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(429,26): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(1209,104): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-Assets\Scripts\Multiplayer\NetworkTickManager.cs(1209,31): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(666,117): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(666,29): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(678,117): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(678,29): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(688,109): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(688,27): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(700,109): warning CS0618: 'FindObjectsSortMode' is obsolete: 'FindObjectsSortMode has been deprecated. Use the FindObjectsByType overloads that do not take a FindObjectsSortMode parameter.'
-Assets\Tests\EditMode\NetworkTickManagerTests.cs(700,27): warning CS0618: 'Object.FindObjectsByType<T>(FindObjectsInactive, FindObjectsSortMode)' is obsolete: 'FindObjectsByType with FindObjectsSortMode parameter has been deprecated. Use FindObjectsByType<T>() or FindObjectsByType<T>(FindObjectsInactive) instead. InstanceID will be replaced in the future with EntityId and previous sort order cannot be maintained.'
-AssetDatabase: script compilation time: 2.995938s
+[1195/1197  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.Sentry.dll
+[1196/1197  0s] CopyFiles Library/ScriptAssemblies/RoobsWorld.Sentry.pdb
+*** Tundra build success (0.32 seconds), 5 items updated, 1197 evaluated
+AssetDatabase: script compilation time: 2.118616s
 Begin MonoManager ReloadAssembly
 Assembly Assembly-CSharp-Editor-firstpass.dll at Library/ScriptAssemblies/Assembly-CSharp-Editor-firstpass.dll not valid. Loading of assembly skipped.
 Assembly Assembly-CSharp-Editor.dll at Library/ScriptAssemblies/Assembly-CSharp-Editor.dll not valid. Loading of assembly skipped.
@@ -353,130 +298,180 @@ Assembly Unity.UnifiedRayTracing.Editor.Tests.dll at Library/ScriptAssemblies/Un
 Assembly UnityEditor.UI.Common.Tests.dll at Library/ScriptAssemblies/UnityEditor.UI.Common.Tests.dll not valid. Loading of assembly skipped.
 Assembly UnityEditor.UI.EditorTests.dll at Library/ScriptAssemblies/UnityEditor.UI.EditorTests.dll not valid. Loading of assembly skipped.
 Assembly UnityEngine.UI.Tests.dll at Library/ScriptAssemblies/UnityEngine.UI.Tests.dll not valid. Loading of assembly skipped.
-Refreshing native plugins compatible for Editor in 3.73 ms, found 6 plugins.
+Start importing Packages/io.sentry.unity using Guid(3e86a71af3725752caeea6066c3847cc) (DefaultImporter) -> (Import Result ID: 'e22c977b85a4f1fc9e7b5c6f9e822cce') in 0.0077713 seconds [static dependencies only]. Details - ImportResultOutputID=58a3dc706f677795b1d02d692c5e9461 DependenciesID=1cdc2ec481493d2b97bc5412d404f3c2 StaticDependenciesID=a2c93f940f5ead25e81d7008bb2ed708 
+Start importing Assets/Scripts/Integrations using Guid(34309e2215e24aff942a5928d4f71c7e) (DefaultImporter) -> (Import Result ID: '09576ce9a8dd169ef2c4416b86c934f6') in 0.0005088 seconds [static dependencies only]. Details - ImportResultOutputID=575c45d0616a4c693c64342a1192fc97 DependenciesID=710d474bb04b773cc8b05f9149b829cc StaticDependenciesID=e62188ee57d96f6b17226ddbaea45eb3 
+Start importing Packages/io.sentry.unity/Editor using Guid(f616e8f3b17591d9d95299bc4e4bbc44) (DefaultImporter) -> (Import Result ID: 'f139ef2fbeb7a2d92157f2225e30089d') in 0.0003973 seconds [static dependencies only]. Details - ImportResultOutputID=7eb2cc843115e3bf34e13beee7e40e9c DependenciesID=7aceb8e63b0ebf215745fd742a4b3a93 StaticDependenciesID=a549ea2378d5682c0d79c3c717ed810b 
+Start importing Packages/io.sentry.unity/Plugins using Guid(09730e1f1a79282939158892b4e89773) (DefaultImporter) -> (Import Result ID: '130278c884583d81d7357d901482ea38') in 0.0003809 seconds [static dependencies only]. Details - ImportResultOutputID=38b6f69b59b314a14a70b7009fd55ab9 DependenciesID=66475201f90bd0221bb305e285b29072 StaticDependenciesID=ab78305efebbfa21fb97cf5684f671dc 
+Start importing Packages/io.sentry.unity/Prefabs using Guid(e954c644c777f6818b26c4f886dd690d) (DefaultImporter) -> (Import Result ID: '9a3c350ca6e3886793dab17ca71f72b3') in 0.0003696 seconds [static dependencies only]. Details - ImportResultOutputID=a42741b763cf7d10ba88187661c54506 DependenciesID=045a2465569133a7b7b6d9a150caad6d StaticDependenciesID=ea7d4c24fa2d8f188808b737d28dfbaa 
+Start importing Packages/io.sentry.unity/Textures using Guid(6c6bd09c1f3dd763e8e11964b7fe3b8a) (DefaultImporter) -> (Import Result ID: '0b30d32957060dd51b4cc2a7d403983b') in 0.0003738 seconds [static dependencies only]. Details - ImportResultOutputID=14128c9e9e9e28d715d2d54416f9d119 DependenciesID=da1066dc4487fbf80f94b0f7a37a80ad StaticDependenciesID=fff73775679834c280906df9937525fb 
+Start importing Packages/io.sentry.unity/Runtime using Guid(bc4baf86ffac866c496114b162304bf7) (DefaultImporter) -> (Import Result ID: '709481cc7efb4ead0627f8fc946d53eb') in 0.0003603 seconds [static dependencies only]. Details - ImportResultOutputID=26b84111e17aa536b575d9d4eefeca8b DependenciesID=7a76fd343611b6afa105f4dc074034a1 StaticDependenciesID=5ad5ee6d42263a789645ded667347eb7 
+Start importing Packages/io.sentry.unity/Plugins/Switch using Guid(20e28c45189b408718e8f509d3239de6) (DefaultImporter) -> (Import Result ID: 'e76d65d894a93bd500133c79fa7d49a9') in 0.0003629 seconds [static dependencies only]. Details - ImportResultOutputID=3e15717b67e6c87d44495767c71776d2 DependenciesID=80299c5a488ff730872f31108d0604d0 StaticDependenciesID=a031d0f07595ce4f179b2f39cccf700c 
+Start importing Packages/io.sentry.unity/Editor/iOS using Guid(b0022080f9f04ff51bc734d59ef86344) (DefaultImporter) -> (Import Result ID: '5e3965d1e110e5d8f6b38eeaebded87b') in 0.0003595 seconds [static dependencies only]. Details - ImportResultOutputID=2d7f38dfd1ef125aaca81ba1a6268e10 DependenciesID=170b22a9b5f31327ac1959cb3c118087 StaticDependenciesID=a7621e1c7d630fdaf06d3deaec9cea95 
+Start importing Packages/io.sentry.unity/Editor/sentry-cli using Guid(c1dfd2d51d98a52af9bceb4e6e957041) (DefaultImporter) -> (Import Result ID: 'ead9150c769bd0ae20261481c60f4529') in 0.000361 seconds [static dependencies only]. Details - ImportResultOutputID=0f61551695fcbd38b7493fa7554c1c11 DependenciesID=453ada425b8d008666b33b7df5ac4f5d StaticDependenciesID=b000451d9ba2af5d33c04a56b7da50cb 
+Start importing Packages/io.sentry.unity/Plugins/Linux using Guid(96efbae930866b0dd9d12b65df8f5d42) (DefaultImporter) -> (Import Result ID: 'a2fd03e9f90e19a335c89e300ccd39cb') in 0.0003623 seconds [static dependencies only]. Details - ImportResultOutputID=71787e040e51c2fc15fc0f0b32490edc DependenciesID=59547c3a98f52364bed7bca383a8534a StaticDependenciesID=9174b7c3efcaec46534afda30d864278 
+Start importing Packages/io.sentry.unity/Plugins/iOS using Guid(c7125a9e96e90aa45a5cba8dc0a95ce5) (DefaultImporter) -> (Import Result ID: '0f02cc5db40fc278a3a27f188f6b06d4') in 0.0003599 seconds [static dependencies only]. Details - ImportResultOutputID=8b582e0d465afa2b32be97ace68d9989 DependenciesID=948292f96bc63fbabbaf7381e4f302b5 StaticDependenciesID=952316dd8356674f971360fb70d8997c 
+Start importing Packages/io.sentry.unity/Plugins/Android using Guid(38365d7c74bdc6140be130a2de6c3f1d) (DefaultImporter) -> (Import Result ID: 'cb4b1849f134eb403a3fdf36b4f8eb51') in 0.0003607 seconds [static dependencies only]. Details - ImportResultOutputID=99924c7a3d39c2481e2661b996d42de5 DependenciesID=a9f84e014e13b0f2b0d64f7f043a040b StaticDependenciesID=01fc4d5b6131aaef56cd5f5747a393e1 
+Start importing Packages/io.sentry.unity/Plugins/macOS using Guid(8b21c45e26889d681913340447b3adbc) (DefaultImporter) -> (Import Result ID: '4f096e4b5baf8ad702ad832d54ac5662') in 0.0003582 seconds [static dependencies only]. Details - ImportResultOutputID=4112c65168764aee67f4652b07125742 DependenciesID=a0afad001c1ac473f5ec6e4ac433a27e StaticDependenciesID=188183121cbf66923f08048a4d77592b 
+Start importing Packages/io.sentry.unity/Plugins/PS5 using Guid(1dbefdb37654bc67b83d926a1aedd809) (DefaultImporter) -> (Import Result ID: '7c043c5bc3cc62449a7d57383cc16a88') in 0.0004012 seconds [static dependencies only]. Details - ImportResultOutputID=b04b41f3ab32077bc3548e6e2e66f168 DependenciesID=bf26cb25eec76a002d2cd58560bff68a StaticDependenciesID=07fe45ebe9b1dee9204255456c9f2f7b 
+Start importing Packages/io.sentry.unity/Plugins/Windows using Guid(ad9b47b748fc1e62f9060aa4c2bff4de) (DefaultImporter) -> (Import Result ID: 'ad889a16781033ca3d2d657f9322c2ae') in 0.0004302 seconds [static dependencies only]. Details - ImportResultOutputID=986e4a2ca8351f4ed3026264bf2ada12 DependenciesID=81dd5d3e3e040b571c9cf923c2c794f1 StaticDependenciesID=9c775d91147181a84f66ffd096a34624 
+Start importing Assets/Scripts/Integrations/Sentry using Guid(8f31674188d74bcf9d3477e775977331) (DefaultImporter) -> (Import Result ID: '1ac874a48c73bdd522defb99d2d5d702') in 0.0003774 seconds [static dependencies only]. Details - ImportResultOutputID=6cb40ac9d1183041d753eeefc28f6ac6 DependenciesID=f9d5fb3b5144ba902bf2cfc6a273ee3c StaticDependenciesID=a3c14594411e47de0670cae28eab2794 
+Start importing Packages/io.sentry.unity/Plugins/Windows/Sentry using Guid(6353b2338314e9b1c8e737255b97770c) (DefaultImporter) -> (Import Result ID: '2299ff24cb245faf207b5e07496a8127') in 0.000379 seconds [static dependencies only]. Details - ImportResultOutputID=d514ada28bccaac058fcfb26980e5f7a DependenciesID=76c1606911b79c4e97eaf7bba104f826 StaticDependenciesID=3b4f1917f99d61212220b68fa1d9e518 
+Start importing Packages/io.sentry.unity/Plugins/macOS/Sentry using Guid(569268e4f4226540da450cd5ab5cbd74) (DefaultImporter) -> (Import Result ID: '8978e7d2bb3c0222bf5f5b5f5088a03b') in 0.0004181 seconds [static dependencies only]. Details - ImportResultOutputID=c455a34135ceb8200a28f9999b087a51 DependenciesID=bf14b12bd90655ce63fed23e4c86ecb9 StaticDependenciesID=c0342f8895c275206e6f285cafd22b42 
+Start importing Packages/io.sentry.unity/Plugins/Linux/Sentry using Guid(f967294226874f3439ffb388b1b4c870) (DefaultImporter) -> (Import Result ID: '9c0a247a15485106ded50fcffce0ff29') in 0.0003659 seconds [static dependencies only]. Details - ImportResultOutputID=e6b2915611dfb5ddd1da437a78007b48 DependenciesID=16bbc08054a9af02279306c42b308f22 StaticDependenciesID=a719ba9955789bb52687a1464c38ae34 
+Start importing Packages/io.sentry.unity/Runtime/io.sentry.unity.runtime.asmdef using Guid(c18c74693c5844315b1f3cd5ae87afb4) (AssemblyDefinitionImporter) -> (Import Result ID: 'dae7aa9f95e47f12105f4d3fdd4027fe') in 0.0013791 seconds [static dependencies only]. Details - ImportResultOutputID=b27be3fe09ec8a7f0887d00742dcb593 DependenciesID=8189d028d1c3994b2f9dbbac8e2def06 StaticDependenciesID=4ca53dbfbd50a1fe3eeafbadad6d83ef 
+Start importing Packages/io.sentry.unity/Editor/io.sentry.unity.editor.asmdef using Guid(44d1302543d7846bfb5a312d6ccf57d8) (AssemblyDefinitionImporter) -> (Import Result ID: '57233936825424c44516fd7c8a6e59d2') in 0.0011392 seconds [static dependencies only]. Details - ImportResultOutputID=92893a54b0498b8de7453c833405b3e3 DependenciesID=58ddc680bc1822f6b5450e4fa835dc53 StaticDependenciesID=92d07a12be50402a0818e455d86c1ca2 
+Start importing Assets/Scripts/Integrations/Sentry/RoobsWorld.Sentry.asmdef using Guid(5a428f52f0494efeb51f0fe075e1fd06) (AssemblyDefinitionImporter) -> (Import Result ID: '4a63cab69867038edfe4657c4fac20a5') in 0.0017668 seconds [static dependencies only]. Details - ImportResultOutputID=c83801960b28eefed5536665456078c0 DependenciesID=38b2f5cc87a4877fdd52d91aba149b23 StaticDependenciesID=36e5a703591af508ba1e44491d8df6a2 
+Refreshing native plugins compatible for Editor in 3.61 ms, found 7 plugins.
 Native extension for Android target not found
 Native extension for UWP target not found
 Native extension for WindowsStandalone target not found
 Native extension for WebGL target not found
-Refreshing native plugins compatible for Editor in 2.07 ms, found 6 plugins.
+Refreshing native plugins compatible for Editor in 2.97 ms, found 7 plugins.
 ScheduleIndexationOnStartup MainProcess:True IndexOnStartup:True
 Mono: successfully reloaded assembly
-- Finished resetting the current domain, in  1.784 seconds
-Domain Reload Profiling: 3037ms
-	BeginReloadAssembly (280ms)
-		DisableScriptedObjects (53ms)
-		CreateAndSetChildDomain (145ms)
-	RebuildCommonClasses (22ms)
-	RebuildNativeTypeToScriptingClass (8ms)
-	initialDomainReloadingComplete (428ms)
-	LoadAllAssembliesAndSetupDomain (515ms)
-		LoadAssemblies (235ms)
-		AnalyzeDomain (332ms)
-			TypeCache.Refresh (225ms)
-				TypeCache.ScanAssembly (211ms)
-			BuildScriptInfoCaches (92ms)
-			ResolveRequiredComponents (13ms)
-	FinalizeReload (1784ms)
+- Finished resetting the current domain, in  1.821 seconds
+Domain Reload Profiling: 7656ms
+	BeginReloadAssembly (261ms)
+		DisableScriptedObjects (18ms)
+		CreateAndSetChildDomain (155ms)
+	RebuildCommonClasses (24ms)
+	RebuildNativeTypeToScriptingClass (9ms)
+	initialDomainReloadingComplete (4884ms)
+	LoadAllAssembliesAndSetupDomain (658ms)
+		LoadAssemblies (498ms)
+		AnalyzeDomain (217ms)
+			TypeCache.Refresh (160ms)
+				TypeCache.ScanAssembly (151ms)
+			BuildScriptInfoCaches (49ms)
+			ResolveRequiredComponents (8ms)
+	FinalizeReload (1821ms)
 		SetupLoadedEditorAssemblies (0ms)
-			InitializePlatformSupportModulesInManaged (27ms)
-			BeforeProcessingInitializeOnLoad (107ms)
-			ProcessInitializeOnLoadAttributes (1395ms)
-			ProcessInitializeOnLoadMethodAttributes (111ms)
-			AfterProcessingInitializeOnLoad (5ms)
-		AwakeInstancesAfterBackupRestoration (11ms)
+			InitializePlatformSupportModulesInManaged (26ms)
+			BeforeProcessingInitializeOnLoad (105ms)
+			ProcessInitializeOnLoadAttributes (1356ms)
+			ProcessInitializeOnLoadMethodAttributes (192ms)
+			AfterProcessingInitializeOnLoad (8ms)
+		AwakeInstancesAfterBackupRestoration (24ms)
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.Native.Switch.pdb using Guid(620ef732775daaca9886fab583b8fa76) (DefaultImporter) -> (Import Result ID: '26eba5b69183d7841150e4fbb0d6ce7c') in 0.037797 seconds [static dependencies only]. Details - ImportResultOutputID=8d790aa5065dec6f9d8e60609fbef68b DependenciesID=3d312d389f862b96c169802fc0511ac1 StaticDependenciesID=9c13044bcd68c08139a3e0b5cb4aa9b6 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.Native.Xbox.pdb using Guid(b392d0bb04256f147959931630424da7) (DefaultImporter) -> (Import Result ID: '5adce27b9b20a1f8cc029244b614ec94') in 0.0007202 seconds [static dependencies only]. Details - ImportResultOutputID=15467a6223925ee8549c69fbba01b114 DependenciesID=7c105d92d6363ef141bf264f14032fa3 StaticDependenciesID=c668fc4aa7061d4eec474554478aefb3 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.iOS.pdb using Guid(f7c7834cfa628b5a88d678022306b59e) (DefaultImporter) -> (Import Result ID: '5bfe5d739c88c21694ee167367700489') in 0.0007507 seconds [static dependencies only]. Details - ImportResultOutputID=2635601635b7d3b1822de5a7cc697bec DependenciesID=83449737eb4c806d2f141af2ad7a439c StaticDependenciesID=861960552ed8005a540f719cad5ab185 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.pdb using Guid(785d7a1eae14116f9bdfb30ef24a98db) (DefaultImporter) -> (Import Result ID: '30f09839eb0bcc77b396d3a0e90a8e23') in 0.0004545 seconds [static dependencies only]. Details - ImportResultOutputID=ebda48891fc5cab873e4857778e012ab DependenciesID=9dd9cd9f66536aadb961f4f67643e566 StaticDependenciesID=7ae565302ee0966b2e18a1d7d7566447 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.pdb using Guid(39e9248a98db5db59880be6fb6ed4cd2) (DefaultImporter) -> (Import Result ID: '38ccfbfcd82868f829a5e258ecfcfe90') in 0.0004364 seconds [static dependencies only]. Details - ImportResultOutputID=f284e21b0d1ce4676e6799e783b31abe DependenciesID=116e6da76ea09bf1094c6c95bb9e5f76 StaticDependenciesID=fed9ededbb7c2b201fcedabbc2813e49 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.Native.pdb using Guid(2e2278ee3ccee6a8baf3a919a5782f3a) (DefaultImporter) -> (Import Result ID: '245f1ccf53c1143ffc91b7a1ef4f7a3f') in 0.0004322 seconds [static dependencies only]. Details - ImportResultOutputID=f6780f467d1857f753b7d6792d15b1de DependenciesID=16b3fb2b7d5b3f7ae36d9516b1231a7d StaticDependenciesID=24978a36906b5beca22321fd7e138847 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.Native.PlayStation.pdb using Guid(4f135b47553c04981b2d769c094589ef) (DefaultImporter) -> (Import Result ID: '992414932aa9afb7335b8d98c1484aca') in 0.0004536 seconds [static dependencies only]. Details - ImportResultOutputID=1bb6460f817fd8cb0920e08886a562b6 DependenciesID=7b24dcb111134bd4600293d4db04a49a StaticDependenciesID=8fa64d6a991ffef1c13e958d19d2d690 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.Unity.Android.pdb using Guid(ef9cba6f4f30ef195bd45df263ca47c6) (DefaultImporter) -> (Import Result ID: '21188674dcbf8f0ecc8d66f9528c204f') in 0.0004322 seconds [static dependencies only]. Details - ImportResultOutputID=94e12fe9a9080cdddacb8be42525ff1c DependenciesID=e21a9921e148abe361b75174280a41f7 StaticDependenciesID=ad53d265f15cf1bdd242923caa536f28 
+Start importing Packages/io.sentry.unity/Plugins/Android/proguard-sentry-unity.pro using Guid(b2e665db52c27ca93935708a09c2c87e) (DefaultImporter) -> (Import Result ID: 'bb47d3f0a7527dcdf9050c2998f3b103') in 0.0033129 seconds [static dependencies only]. Details - ImportResultOutputID=a59c01149ba32488ff01bde79a10fae0 DependenciesID=2f12c92d879f61499e52bbd8c678513e StaticDependenciesID=5945f360a065e91b8bbc6001e20bcaa8 
+Start importing Packages/io.sentry.unity/Editor/sentry-cli/sentry-cli-Windows-x86_64.exe using Guid(b520932870a318bffa6c795060b04bff) (DefaultImporter) -> (Import Result ID: 'd833bf52a1bbacd38066fded3f938e27') in 0.0030356 seconds [static dependencies only]. Details - ImportResultOutputID=1e035ca5f6ef47f54aadbdf71f6dc83b DependenciesID=2c6d081eb93edab2a8592a02bd8cbea4 StaticDependenciesID=843928986b13fbe8c383b11fea3f2333 
+Start importing Packages/io.sentry.unity/Editor/sentry-cli/sentry-cli-Darwin-universal using Guid(76380f629629290579f446244d6e28c6) (DefaultImporter) -> (Import Result ID: '77cf96f11a02e8ffbb634a3232978ba5') in 0.0004155 seconds [static dependencies only]. Details - ImportResultOutputID=425e8eeee028d985e0e20e34a399326b DependenciesID=8d991a480e52ffe8d63cd68681f3def4 StaticDependenciesID=a3887c64748d37dbb9e804861c5fad76 
+Start importing Packages/io.sentry.unity/Editor/sentry-cli/sentry-cli-Linux-x86_64 using Guid(89bbbcec2f97e0a0393927a6f8c6db11) (DefaultImporter) -> (Import Result ID: '733c435348d20cce082951d75b50d301') in 0.0004204 seconds [static dependencies only]. Details - ImportResultOutputID=f7886da5cb83d6c56ba2aba363c11984 DependenciesID=07582d49bae6b5b2254e395725eea10f StaticDependenciesID=a36ff323aa967f2c037141a1e2107f77 
+Start importing Packages/io.sentry.unity/Plugins/Windows/Sentry/crashpad_handler.exe using Guid(8066f9aa2e561e34c82f9aa8df88861f) (DefaultImporter) -> (Import Result ID: 'f8b06eb1ac1efc4d025c99c51eb771a9') in 0.0004137 seconds [static dependencies only]. Details - ImportResultOutputID=f928aca7799e4d38afd478603613d1e4 DependenciesID=c96571785ffb87814f587d0f9a9588a3 StaticDependenciesID=e5bd165b848811c29c99beacc9a2b7e2 
+Start importing Packages/io.sentry.unity/Plugins/Windows/Sentry/sentry.pdb using Guid(81fd9088a0537f5ebaaf16892dbbb528) (DefaultImporter) -> (Import Result ID: 'f594f0e6d8ff47e55afce44e6dc544a4') in 0.0004313 seconds [static dependencies only]. Details - ImportResultOutputID=73763943bdeab4b75469213212270d34 DependenciesID=9ee65c3836f1bc58077b5e167bf0da9f StaticDependenciesID=c0bf3d77461b3f1f06f9debd8f99e99a 
+Start importing Packages/io.sentry.unity/Plugins/macOS/Sentry/Sentry.dylib.dSYM using Guid(52109683d38189d8f9250a2d4abafcb4) (DefaultImporter) -> (Import Result ID: 'aef942b39c3ff5cc2ba2c91fca2d9150') in 0.0016804 seconds [static dependencies only]. Details - ImportResultOutputID=ab5c7581fc7505733325b9b1af853ac3 DependenciesID=025c74a9d7a7761f47c09b363a2b6376 StaticDependenciesID=d941b3932cca5edd64fe36024489a78e 
+Start importing Packages/io.sentry.unity/Textures/Logo.png using Guid(d0c73c7edf6ed43b698bca840264c8a4) (TextureImporter) -> (Import Result ID: '0d3e806943d0d9fc4cc32ee01091dead') in 0.0245862 seconds [static and dynamic dependencies]. Details - ImportResultOutputID=e66701a5202cc82a0794500ed15c51c0 DependenciesID=7ebb9e087cb387fc086cb8fbb232830a StaticDependenciesID=6515ae03bcc5b157dbdf0be127469713 
+Start importing Packages/io.sentry.unity/Textures/Megaphone.png using Guid(c68f744cc289b4ab1823c5e1159527ec) (TextureImporter) -> (Import Result ID: '6519f57d7cb6b4e03c65218770ff014b') in 0.003568 seconds [static and dynamic dependencies]. Details - ImportResultOutputID=6315d47025387ef3197ea7819a43f8a5 DependenciesID=2745cbb915099d5ef06343c07720800c StaticDependenciesID=c9769a6860c02ebba0e29e21b43b39ca 
+Start importing Packages/io.sentry.unity/Runtime/Sentry.xml using Guid(64b6ec19305b1076aa65009c7eefc32c) (TextScriptImporter) -> (Import Result ID: '12ee3301d086b85443a634d47d212815') in 0.0017598 seconds [static dependencies only]. Details - ImportResultOutputID=4f4f5a420c3f2036f6fafe0f9ee58f01 DependenciesID=908822cdda81107e30d6a55f892b39e9 StaticDependenciesID=4dc68df5255f3b141c3ee8af0728aa81 
+Start importing Packages/io.sentry.unity/README.md using Guid(15230f6f46f6745969084f97ddf6fef1) (TextScriptImporter) -> (Import Result ID: 'f7c6cd28a2d48b19ca39bd8b1ec705c3') in 0.0011093 seconds [static dependencies only]. Details - ImportResultOutputID=914f3f1a2c19be75a51df0112dadae63 DependenciesID=347affc1871e2bd56863d958907eb00f StaticDependenciesID=6136b64db023036454ce6ceb18be77b5 
+Start importing Packages/io.sentry.unity/LICENSE.md using Guid(4adb3edb303941c0881bb6c28b005a07) (TextScriptImporter) -> (Import Result ID: '98a726f659ebd3d81505eef1eadc348a') in 0.0011146 seconds [static dependencies only]. Details - ImportResultOutputID=499535ed99bc42b9dc86fca27a5ae24e DependenciesID=f9a16cae82cde15c743265d42ecc701f StaticDependenciesID=fea2562ebd4323f8ac4280835f154417 
+Start importing Packages/io.sentry.unity/CHANGELOG.md using Guid(abe52f7254eb429ba00a02e7e937ad7a) (TextScriptImporter) -> (Import Result ID: 'b43fbb6bebafb1d6303a445b8cbfc64e') in 0.0018006 seconds [static dependencies only]. Details - ImportResultOutputID=7ff05ad045e309d1f7d2192d801a8e0f DependenciesID=749017209c0957c3b06b23f256dd0585 StaticDependenciesID=11766245ad31e1a09ea2daa110dc7502 
+Start importing Packages/io.sentry.unity/package.json using Guid(4e0874dd2bf2c72878d59517cd5d1401) (PackageManifestImporter) -> (Import Result ID: 'f22dd344a1f1570be2dc253600c1741a') in 0.0013426 seconds [static dependencies only]. Details - ImportResultOutputID=06fb920f42494473962a214fe53c98d9 DependenciesID=63de12ae3915f6021fe602ca834ff3b0 StaticDependenciesID=2df1d89605e9df4bcdae1cb638cfc475 
+Start importing Packages/io.sentry.unity/Prefabs/SentryUserFeedback.prefab using Guid(fc6aa2b03d79e456baf50accbd54b55e) (PrefabImporter) -> (Import Result ID: 'c9caf549891ccbe603ab1c553d5932a3') in 0.013 seconds [static and dynamic dependencies]. Details - ImportResultOutputID=b626b27f24b0e937f63edd1d4aebc890 DependenciesID=3e3d15701f694794581d024bd38cc44a StaticDependenciesID=ce9763a03cb38f20f6b9cdb142c80d01 
+Refreshing native plugins compatible for Editor in 2.79 ms, found 7 plugins.
 (Values over 0.050ms)
-Asset Pipeline Refresh (id=3bf7dc6ed2fa1ee4a8d8a03e20714da8): Total: 6.665 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+Asset Pipeline Refresh (id=debb08d57289b3e4298e941d666e8b1e): Total: 10.528 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
 	Summary:
-		Imports: total=0 (actual=0, local cache=0, cache server=0)
-		Asset DB Process Time: managed=0 ms, native=2203 ms
-		Asset DB Callback time: managed=145 ms, native=19 ms
-		Scripting: domain reloads=1, domain reload time=1257 ms, compile time=2998 ms, other=40 ms
-		Project Asset Count: scripts=1669, non-scripts=3599
-		Asset File Changes: new=0, changed=6, moved=0, deleted=0
+		Imports: total=46 (actual=46, local cache=0, cache server=0)
+		Asset DB Process Time: managed=20 ms, native=2321 ms
+		Asset DB Callback time: managed=162 ms, native=21 ms
+		Scripting: domain reloads=1, domain reload time=5839 ms, compile time=2119 ms, other=42 ms
+		Project Asset Count: scripts=1692, non-scripts=3622
+		Asset File Changes: new=0, changed=1, moved=0, deleted=0
 		Scan Filter Count: 0
-	InvokePackagesCallback: 15.805ms
-	ApplyChangesToAssetFolders: 0.513ms
-	Scan: 121.253ms
-	OnSourceAssetsModified: 0.679ms
-	CategorizeScriptCompilationAssets: 39.623ms
-	ProcessAssetsWithTransientArtifactChanges: 78.497ms
-	CategorizeAssets: 43.100ms
-	CompileScripts: 2997.596ms
-	ImportOutOfDateAssets: 1799.244ms (1797.776ms without children)
-		UnloadImportedAssets: 0.639ms
-		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.491ms
-		OnDemandSchedulerStart: 0.318ms
-	PostProcessAllAssets: 146.712ms
-		VCAutoAddAssetPostprocess 0.751ms
-		XRBuildSystem.XRAssetImported 0.451ms
-		PostProcessCallbackCreateDeferredMaterials 0.051ms
-		MonoPostProcessAllAssets: 145.064ms
-			AssetPostprocessor.OnPostprocessAllAssets 86.564ms
-			StyleCatalogPostProcessor.OnPostprocessAllAssets 11.756ms
-			UniversalRenderPipelineGlobalSettingsPostprocessor.OnPostprocessAllAssets 11.456ms
-			SyncVS.PostprocessSyncProject 9.279ms
-			BuilderAssetPostprocessor.OnPostprocessAllAssets 4.399ms
-			AssetChangedListener.OnPostprocessAllAssets 2.082ms
-			SpeedTree9Postprocessor.OnPostprocessAllAssets 1.435ms
-			ShaderGraphAssetPostProcessor.OnPostprocessAllAssets 1.178ms
-			WindowAssetPostprocessingWatcher.OnPostprocessAllAssets 1.094ms
-			RetainedModeAssetPostprocessor.OnPostprocessAllAssets 0.819ms
-			RenderPipelineGlobalSettingsPostprocessor.OnPostprocessAllAssets 0.756ms
-			SpriteEditorTexturePostprocessor.OnPostprocessAllAssets 0.671ms
-			MaterialPostprocessor.OnPostprocessAllAssets 0.456ms
-			ArtifactBrowserPostProcessor.OnPostprocessAllAssets 0.313ms
-			TMPro_TexturePostProcessor.OnPostprocessAllAssets 0.308ms
-			ReferencedClipsPostProcessor.OnPostprocessAllAssets 0.281ms
-			TextAssetPostProcessor.OnPostprocessAllAssets 0.262ms
-			SpriteShapeAssetPostProcessor.OnPostprocessAllAssets 0.261ms
-			PostProcessor.OnPostprocessAllAssets 0.257ms
-			InputActionAssetPostprocessor.OnPostprocessAllAssets 0.239ms
-			UVCSAssetPostprocessor.OnPostprocessAllAssets 0.215ms
-			AssetProcessor.OnPostprocessAllAssets 0.184ms
-			InputActionJsonNameModifierAssetProcessor.OnPostprocessAllAssets 0.178ms
-			TerrainToolbarOverlayPostProcessor.OnPostprocessAllAssets 0.146ms
-			AudioMixerPostprocessor.OnPostprocessAllAssets 0.141ms
-			AssetEvents.OnPostprocessAllAssets 0.141ms
-			SpriteLibraryAssetPostprocessor.OnPostprocessAllAssets 0.120ms
-			AssetDatabaseCallbacks.OnPostprocessAllAssets 0.113ms
-			ProjectSettingsPostprocessor.OnPostprocessAllAssets 0.110ms
-			PSDImportPostProcessor.OnPostprocessAllAssets 0.108ms
-			SpeedTreePostProcessor.OnPostprocessAllAssets 0.097ms
-			SamplePostprocessor.OnPostprocessAllAssets 0.095ms
-			ConfigAssetsTracker.OnPostprocessAllAssets 0.074ms
-			ScenarioDriftAssetsTracker.OnPostprocessAllAssets 0.061ms
-	PostAssetChangesProfiler: 3.128ms
-	UnloadStreamsBegin: 2.098ms
-	PersistCurrentRevisions: 0.098ms
-	GenerateScriptTypeHashes: 3.701ms
-	GenerateScriptTypeSerializationHashes: 8.624ms
-	Untracked: 1412.875ms
+	InvokePackagesCallback: 16.882ms
+	ApplyChangesToAssetFolders: 0.836ms
+	Scan: 126.817ms
+	OnSourceAssetsModified: 0.663ms
+	CategorizeScriptCompilationAssets: 43.869ms
+	ProcessAssetsWithTransientArtifactChanges: 55.999ms
+	CategorizeAssets: 42.037ms
+	CompileScripts: 2119.423ms
+	ImportOutOfDateAssets: 1961.377ms (1832.287ms without children)
+		ImportManagerImport: 127.741ms (1.844ms without children)
+			UpdateCategorizedAssets: 0.242ms
+		UnloadImportedAssets: 0.614ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.483ms
+		OnDemandSchedulerStart: 0.226ms
+	PostProcessAllAssets: 163.554ms
+		XRBuildSystem.XRAssetImported 0.678ms
+		VCAutoAddAssetPostprocess 0.576ms
+		ShaderAssetModifiedCallback 0.084ms
+		PostProcessCallbackCreateDeferredMaterials 0.069ms
+		MonoPostProcessAllAssets: 161.340ms
+			AssetPostprocessor.OnPostprocessAllAssets 106.839ms
+			StyleCatalogPostProcessor.OnPostprocessAllAssets 13.101ms
+			SyncVS.PostprocessSyncProject 9.980ms
+			UniversalRenderPipelineGlobalSettingsPostprocessor.OnPostprocessAllAssets 6.415ms
+			BuilderAssetPostprocessor.OnPostprocessAllAssets 4.157ms
+			WindowAssetPostprocessingWatcher.OnPostprocessAllAssets 1.525ms
+			ShaderGraphAssetPostProcessor.OnPostprocessAllAssets 1.184ms
+			SpeedTree9Postprocessor.OnPostprocessAllAssets 1.124ms
+			TextAssetPostProcessor.OnPostprocessAllAssets 0.896ms
+			AssetChangedListener.OnPostprocessAllAssets 0.799ms
+			RetainedModeAssetPostprocessor.OnPostprocessAllAssets 0.673ms
+			InputActionAssetPostprocessor.OnPostprocessAllAssets 0.631ms
+			MaterialPostprocessor.OnPostprocessAllAssets 0.542ms
+			RenderPipelineGlobalSettingsPostprocessor.OnPostprocessAllAssets 0.489ms
+			InputActionJsonNameModifierAssetProcessor.OnPostprocessAllAssets 0.485ms
+			TMPro_TexturePostProcessor.OnPostprocessAllAssets 0.415ms
+			PostProcessor.OnPostprocessAllAssets 0.280ms
+			SpriteEditorTexturePostprocessor.OnPostprocessAllAssets 0.275ms
+			ArtifactBrowserPostProcessor.OnPostprocessAllAssets 0.265ms
+			AudioMixerPostprocessor.OnPostprocessAllAssets 0.257ms
+			ProjectSettingsPostprocessor.OnPostprocessAllAssets 0.230ms
+			UVCSAssetPostprocessor.OnPostprocessAllAssets 0.220ms
+			ReferencedClipsPostProcessor.OnPostprocessAllAssets 0.210ms
+			AssetProcessor.OnPostprocessAllAssets 0.179ms
+			TerrainToolbarOverlayPostProcessor.OnPostprocessAllAssets 0.136ms
+			AssetEvents.OnPostprocessAllAssets 0.128ms
+			SpriteShapeAssetPostProcessor.OnPostprocessAllAssets 0.126ms
+			SpriteLibraryAssetPostprocessor.OnPostprocessAllAssets 0.108ms
+			AssetDatabaseCallbacks.OnPostprocessAllAssets 0.105ms
+			SpeedTreePostProcessor.OnPostprocessAllAssets 0.087ms
+			SamplePostprocessor.OnPostprocessAllAssets 0.080ms
+			PSDImportPostProcessor.OnPostprocessAllAssets 0.075ms
+			ConfigAssetsTracker.OnPostprocessAllAssets 0.073ms
+			ScenarioDriftAssetsTracker.OnPostprocessAllAssets 0.062ms
+	PostAssetChangesProfiler: 4.451ms
+	UnloadStreamsBegin: 2.228ms
+	PersistCurrentRevisions: 0.410ms
+	GenerateScriptTypeHashes: 2.093ms
+	GenerateScriptTypeSerializationHashes: 3.642ms
+	Untracked: 5985.175ms
 
 Application.AssetDatabase Initial Refresh End
 Shader Hidden/ChartRasterizerHardware is not supported: GPU does not support conservative rasterization
-Scanning for USB devices : 45.097ms
+Scanning for USB devices : 37.473ms
 Initializing Unity extensions:
 [MODES] ModeService[none].Initialize
 [MODES] ModeService[none].LoadModes
 [MODES] Loading mode Default (0) for mode-current-id-RoobsWorld
 Unloading 27 Unused Serialized files (Serialized files now loaded: 0)
-Unloading 7777 unused Assets / (3.1 MB). Loaded Objects now: 8675.
-Memory consumption went from 220.6 MB to 217.5 MB.
-Total: 5.978000 ms (FindLiveObjects: 0.349100 ms CreateObjectMapping: 0.190500 ms MarkObjects: 3.892600 ms  DeleteObjects: 1.540600 ms)
+Unloading 7823 unused Assets / (2.3 MB). Loaded Objects now: 8694.
+Memory consumption went from 220.3 MB to 218.0 MB.
+Total: 5.987000 ms (FindLiveObjects: 0.389700 ms CreateObjectMapping: 0.178800 ms MarkObjects: 4.194600 ms  DeleteObjects: 1.218700 ms)
 
 Microsoft Media Foundation video decoding to texture disabled: graphics device is Null, only Direct3D 11 and Direct3D 12 (only on desktop) are supported for hardware-accelerated video decoding.
-[Project] Loading completed in 8.864 seconds
-	Project init time: 				8.671 seconds
+[Project] Loading completed in 13.141 seconds
+	Project init time: 				12.891 seconds
 		Template init time: 		0.000 seconds
-		Package Manager init time: 		0.869 seconds
-		Asset Database init time: 		0.195 seconds
+		Package Manager init time: 		1.055 seconds
+		Asset Database init time: 		0.250 seconds
 		Global illumination init time: 	0.001 seconds
-		Assemblies load time: 			0.534 seconds
-		Unity extensions init time: 	0.008 seconds
-		Asset Database refresh time: 	6.665 seconds
-	Scene opening time: 			0.111 seconds
-##utp:{"type":"ProjectInfo","version":2,"phase":"Immediate","time":1779071500618,"processId":9552,"projectLoad":8.8641202,"projectInit":8.6705032,"templateInit":0.0,"packageManagerInit":0.868637,"assetDatabaseInit":0.1948696,"globalIlluminationInit":0.0014706,"assembliesLoad":0.5335353,"unityExtensionsInit":0.007817,"assetDatabaseRefresh":6.665394,"sceneOpening":0.1111312}
-##utp:{"type":"EditorInfo","version":2,"phase":"Immediate","time":1779071500618,"processId":9552,"editorVersion":"6000.4.7f1 (f3c3c4248748)","branch":"6000.4/staging","buildType":"Release","platform":"Windows"}
+		Assemblies load time: 			0.575 seconds
+		Unity extensions init time: 	0.007 seconds
+		Asset Database refresh time: 	10.529 seconds
+	Scene opening time: 			0.132 seconds
+##utp:{"type":"ProjectInfo","version":2,"phase":"Immediate","time":1779074871407,"processId":29000,"projectLoad":13.1405799,"projectInit":12.8912373,"templateInit":0.0,"packageManagerInit":1.0553723,"assetDatabaseInit":0.2497742,"globalIlluminationInit":0.0013389,"assembliesLoad":0.5751596,"unityExtensionsInit":0.0070564,"assetDatabaseRefresh":10.5287777,"sceneOpening":0.1323607}
+##utp:{"type":"EditorInfo","version":2,"phase":"Immediate","time":1779074871407,"processId":29000,"editorVersion":"6000.4.7f1 (f3c3c4248748)","branch":"6000.4/staging","buildType":"Release","platform":"Windows"}
 [Licensing::Client] Successfully resolved entitlement details
 Running tests for ExecutionSettings with details:
 targetPlatform = 
@@ -519,12 +514,12 @@ UnityEditor.EditorApplication:Internal_CallDelayFunctions ()
 Start Indexing on Editor startup
 [Indexing] Starting Initial Indexing for Assets
 [UnityConnectServicesConfig] config is NOT valid, switching to default
-Created GICache directory at C:/Users/craig/AppData/LocalLow/Unity/Caches/GiCache. Took: 0.011s, timestamps: [8.866 - 8.877]
+Created GICache directory at C:/Users/craig/AppData/LocalLow/Unity/Caches/GiCache. Took: 0.009s, timestamps: [13.143 - 13.152]
 [Licensing::Client] Successfully resolved entitlement details
 Unloading 4 Unused Serialized files (Serialized files now loaded: 0)
-Unloading 2 unused Assets / (56.1 KB). Loaded Objects now: 8701.
-Memory consumption went from 209.8 MB to 209.7 MB.
-Total: 5.374600 ms (FindLiveObjects: 0.270800 ms CreateObjectMapping: 0.163800 ms MarkObjects: 4.912200 ms  DeleteObjects: 0.026600 ms)
+Unloading 2 unused Assets / (56.1 KB). Loaded Objects now: 8718.
+Memory consumption went from 208.7 MB to 208.6 MB.
+Total: 5.423400 ms (FindLiveObjects: 0.206700 ms CreateObjectMapping: 0.089200 ms MarkObjects: 5.110700 ms  DeleteObjects: 0.016000 ms)
 
 Executing IPrebuildSetup for: Unity.PerformanceTesting.Editor.TestRunBuilder.
 UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
@@ -700,56 +695,7 @@ System.Threading._ThreadPoolWaitCallback:PerformWaitCallback ()
 
 (Filename: Assets/Scripts/Core/ServerProgressAutosaveClient.cs Line: 110)
 
-Destroy may not be called from edit mode! Use DestroyImmediate instead.
-Destroying an object in edit mode destroys it permanently.
-UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
-UnityEngine.StackTraceUtility:ExtractStackTrace ()
-UnityEngine.Object:Destroy (UnityEngine.Object,single)
-UnityEngine.Object:Destroy (UnityEngine.Object)
-RoobsWorld.Multiplayer.NetworkTickManager:Deactivate () (at Assets/Scripts/Multiplayer/NetworkTickManager.cs:157)
-RoobsWorld.Tests.NetworkTickManagerTests:HostRemoteCreatureInput_IsIncludedInAuthoritativeCreatureSnapshots () (at Assets/Tests/EditMode/NetworkTickManagerTests.cs:658)
-System.Reflection.RuntimeMethodInfo:Invoke (object,System.Reflection.BindingFlags,System.Reflection.Binder,object[],System.Globalization.CultureInfo)
-System.Reflection.MethodBase:Invoke (object,object[])
-NUnit.Framework.Internal.Reflect:InvokeMethod (System.Reflection.MethodInfo,object,object[])
-NUnit.Framework.Internal.MethodWrapper:Invoke (object,object[])
-NUnit.Framework.Internal.Commands.TestMethodCommand:RunNonAsyncTestMethod (NUnit.Framework.Internal.ITestExecutionContext)
-NUnit.Framework.Internal.Commands.TestMethodCommand:RunTestMethod (NUnit.Framework.Internal.ITestExecutionContext)
-NUnit.Framework.Internal.Commands.TestMethodCommand:Execute (NUnit.Framework.Internal.ITestExecutionContext)
-UnityEngine.TestTools.UnityTestMethodCommand:Execute (NUnit.Framework.Internal.ITestExecutionContext) (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/UnityTestMethodCommand.cs:19)
-UnityEngine.TestRunner.NUnitExtensions.Runner.UnityLogCheckDelegatingCommand/<>c__DisplayClass2_0:<Execute>b__0 () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/UnityLogCheckDelegatingCommand.cs:24)
-UnityEngine.TestRunner.NUnitExtensions.Runner.UnityLogCheckDelegatingCommand:CaptureException (NUnit.Framework.Internal.TestResult,System.Action) (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/UnityLogCheckDelegatingCommand.cs:72)
-UnityEngine.TestRunner.NUnitExtensions.Runner.UnityLogCheckDelegatingCommand:ExecuteAndCheckLog (UnityEngine.TestTools.Logging.LogScope,NUnit.Framework.Internal.TestResult,System.Action) (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/UnityLogCheckDelegatingCommand.cs:83)
-UnityEngine.TestRunner.NUnitExtensions.Runner.UnityLogCheckDelegatingCommand:Execute (NUnit.Framework.Internal.ITestExecutionContext) (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/UnityLogCheckDelegatingCommand.cs:24)
-UnityEngine.TestRunner.NUnitExtensions.Runner.UnityLogCheckDelegatingCommand/<ExecuteEnumerable>d__3:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/UnityLogCheckDelegatingCommand.cs:35)
-UnityEngine.TestTools.BeforeAfterTestCommandBase`1/<ExecuteEnumerable>d__16<NUnit.Framework.ITestAction>:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/BeforeAfterTestCommandBase.cs:212)
-UnityEngine.TestTools.ImmediateEnumerableCommand:Execute (NUnit.Framework.Internal.ITestExecutionContext) (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/ImmediateEnumerableCommand.cs:18)
-UnityEngine.TestTools.BeforeAfterTestCommandBase`1/<ExecuteEnumerable>d__16<System.Reflection.MethodInfo>:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/BeforeAfterTestCommandBase.cs:219)
-UnityEngine.TestTools.BeforeAfterTestCommandBase`1/<ExecuteEnumerable>d__16<System.Reflection.MethodInfo>:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/BeforeAfterTestCommandBase.cs:212)
-UnityEngine.TestTools.BeforeAfterTestCommandBase`1/<ExecuteEnumerable>d__16<UnityEngine.TestTools.IOuterUnityTestAction>:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/BeforeAfterTestCommandBase.cs:212)
-UnityEngine.TestTools.RetryCommand/<ExecuteEnumerable>d__2:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/RetryCommand.cs:37)
-UnityEngine.TestTools.RepeatCommand/<ExecuteEnumerable>d__2:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/RepeatCommand.cs:36)
-UnityEngine.TestTools.IgnoreTestCommand/<ExecuteEnumerable>d__3:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/IgnoreTestCommand.cs:42)
-UnityEngine.TestTools.StrictCheckCommand/<ExecuteEnumerable>d__2:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Commands/StrictCheckCommand.cs:29)
-UnityEngine.TestRunner.NUnitExtensions.Runner.DefaultTestWorkItem/<PerformWork>d__2:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/DefaultTestWorkItem.cs:50)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<RunChildren>d__17:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:207)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<PerformWork>d__13:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:82)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<RunChildren>d__17:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:207)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<PerformWork>d__13:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:82)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<RunChildren>d__17:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:207)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<PerformWork>d__13:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:82)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<RunChildren>d__17:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:207)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<PerformWork>d__13:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:82)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<RunChildren>d__17:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:207)
-UnityEngine.TestRunner.NUnitExtensions.Runner.CompositeWorkItem/<PerformWork>d__13:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEngine.TestRunner/NUnitExtensions/Runner/CompositeWorkItem.cs:82)
-UnityEditor.TestTools.TestRunner.EditModeRunner:MoveNextAndUpdateYieldObject () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRunner/EditModeRunner.cs:167)
-UnityEditor.TestTools.TestRunner.EditModeRunner:TestConsumer (UnityEditor.TestTools.TestRunner.TestRunnerStateSerializer) (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRunner/EditModeRunner.cs:200)
-UnityEditor.TestTools.TestRunner.TestRun.Tasks.EditModeRunTask/<Execute>d__1:MoveNext () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRun/Tasks/EditModeRunTask.cs:48)
-UnityEditor.TestTools.TestRunner.TestRun.TestJobRunner:ExecuteStep () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRun/TestJobRunner.cs:173)
-UnityEditor.TestTools.TestRunner.TestRun.TestJobRunner:ExecuteCallback () (at ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRun/TestJobRunner.cs:108)
-UnityEditor.EditorApplication:Internal_CallUpdateFunctions ()
-
-[./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRunner/EditModeRunner.cs line 167]
-
+Launched and connected shader compiler UnityShaderCompiler.exe after 0.01 seconds
 Saving results to: C:/Users/craig/AppData/LocalLow/DefaultCompany/RoobsWorld\TestResults.xml
 Saving results to: C:\Users\craig\work\spores\TestResults\EditMode.xml
 Executing IPostBuildCleanup for: Unity.PerformanceTesting.Editor.TestRunBuilder.
@@ -767,13 +713,13 @@ UnityEditor.EditorApplication:Internal_CallUpdateFunctions ()
 
 (Filename: ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/TestRun/Tasks/BuildActionTaskBase.cs Line: 48)
 
-Unloading 207 Unused Serialized files (Serialized files now loaded: 0)
-Unloading 3 unused Assets / (1.5 KB). Loaded Objects now: 10092.
-Memory consumption went from 244.9 MB to 244.9 MB.
-Total: 10.297900 ms (FindLiveObjects: 0.215200 ms CreateObjectMapping: 0.104600 ms MarkObjects: 9.959800 ms  DeleteObjects: 0.017700 ms)
+Unloading 208 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 3 unused Assets / (5.9 KB). Loaded Objects now: 10110.
+Memory consumption went from 235.3 MB to 235.3 MB.
+Total: 10.241200 ms (FindLiveObjects: 0.309100 ms CreateObjectMapping: 0.171900 ms MarkObjects: 9.740100 ms  DeleteObjects: 0.019000 ms)
 
 DisplayProgressbar: Undo
-Test run completed. Exiting with code 2 (Failed). One or more tests failed.
+Test run completed. Exiting with code 0 (Ok). Run completed.
 UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
 UnityEngine.StackTraceUtility:ExtractStackTrace ()
 UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
@@ -786,10 +732,11 @@ UnityEditor.EditorApplication:Internal_CallUpdateFunctions ()
 
 (Filename: ./Library/PackageCache/com.unity.test-framework@76560ee600cb/UnityEditor.TestRunner/CommandLineTest/Executer.cs Line: 81)
 
-Killing ADB server in 2.0764291 seconds.
-Start importing ProjectSettings/TimeManager.asset using Guid(00000000000000007000000000000000) (LibraryAssetImporter) -> (Import Result ID: '3cedd79bf2edf30e345dbe752318c531') in 0.0064949 seconds [static dependencies only]. Details - ImportResultOutputID=26f981bd6e0b9d4dc8cd0f2ecd555556 DependenciesID=d0d34f3ea3a1ccc993593c0bbf3bcada StaticDependenciesID=76630de57178a43aa92dc8a92a4f4e1f 
-Start importing Packages/com.unity.render-pipelines.universal/Runtime/Materials/Mesh2D-Lit-Default.mat using Guid(9452ae1262a74094f8a68013fbcd1834) (NativeFormatImporter) -> (Import Result ID: '09abdabb9cc703b3f8188b837816f5fd') in 0.0015492 seconds [static dependencies only]. Details - ImportResultOutputID=d6424f44ea9a6cc5996a332ce9c4c257 DependenciesID=05e971c131e199c6be6de7e70289474f StaticDependenciesID=c6187668193158abaf2f824dfefe47d4 
-Asset Pipeline Refresh (id=aaac19786f559c3449400763bc71b61d): Total: 0.058 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
+Killing ADB server in 2.1006318 seconds.
+Start importing ProjectSettings/TimeManager.asset using Guid(00000000000000007000000000000000) (LibraryAssetImporter) -> (Import Result ID: '3cedd79bf2edf30e345dbe752318c531') in 0.0015824 seconds [static dependencies only]. Details - ImportResultOutputID=26f981bd6e0b9d4dc8cd0f2ecd555556 DependenciesID=d0d34f3ea3a1ccc993593c0bbf3bcada StaticDependenciesID=76630de57178a43aa92dc8a92a4f4e1f 
+Start importing Packages/com.unity.render-pipelines.universal/Runtime/Materials/Mesh2D-Lit-Default.mat using Guid(9452ae1262a74094f8a68013fbcd1834) (NativeFormatImporter) -> (Import Result ID: '09abdabb9cc703b3f8188b837816f5fd') in 0.0012702 seconds [static dependencies only]. Details - ImportResultOutputID=d6424f44ea9a6cc5996a332ce9c4c257 DependenciesID=05e971c131e199c6be6de7e70289474f StaticDependenciesID=c6187668193158abaf2f824dfefe47d4 
+Refreshing native plugins compatible for Editor in 3.08 ms, found 7 plugins.
+Asset Pipeline Refresh (id=23fcdfff37a4959428b10d75e13199ef): Total: 0.051 seconds - Initiated by StopAssetImportingV2(NoUpdateAssetOptions)
 [Physics::Module] Cleanup current backend.
 [Physics::Module] Id: 0xf2b8ea05
 Input System module state changed to: ShutdownInProgress.
@@ -803,4 +750,4 @@ CodeReloadManager destroyed
 Checking for leaked weakptr:
   Found no leaked weakptrs.
 [Package Manager] Server process was shutdown
-##utp:{"type":"MemoryLeaks","version":2,"phase":"Immediate","time":1779071506077,"processId":9552,"allocatedMemory":15671048,"memoryLabels":[{"Default":198625},{"Permanent":15276},{"NewDelete":65067},{"Thread":4230344},{"Manager":31569},{"VertexData":8},{"Geometry":816},{"Texture":24},{"Shader":850257},{"Material":24},{"GfxDevice":55321},{"Animation":392},{"Audio":3008},{"FreeType":8},{"FontEngine":736},{"Physics":2090},{"Physics2D":16},{"Serialization":760},{"Input":9880},{"JobScheduler":33024},{"TextLib":216},{"Mono":32},{"MonoCode":64},{"ScriptingNativeRuntime":155052},{"BaseObject":1621952},{"Resource":1184},{"Renderer":3008},{"Transform":4685},{"File":4013},{"WebCam":616},{"Culling":32},{"Terrain":11394},{"Wind":24},{"STL":40},{"String":13010},{"StaticString":6718},{"Utility":2672230},{"Curl":2559},{"PoolAlloc":2168},{"AI":80},{"TypeTree":20445},{"ScriptManager":448},{"RuntimeInitializeOnLoadManager":64},{"SpriteAtlas":120},{"GI":7792},{"Director":8320},{"CloudService":288},{"WebRequest":808},{"VR":48050},{"SceneManager":504},{"Video":64},{"LazyScriptCache":32},{"Camera":17},{"Secure":2201},{"SerializationCache":1576},{"APIUpdating":10320},{"Subsystems":336},{"VirtualTexturing":57888},{"StaticSafetyDebugInfo":278528},{"Analytics":336},{"Hierarchy":608},{"CoreStats":13032},{"Identifiers":12960},{"Gui":128},{"EditorUtility":130485},{"VersionControl":4},{"Undo":931},{"AssetDatabase":5021214},{"EditorGi":328},{"UnityConnect":37777},{"Upm":1912},{"UpmDiagnostics":8},{"AssetCompliance":64},{"DrivenProperties":72},{"LocalIPC":211},{"ProfilerEditor":9746},{"CoreBusinessMetrics":2599},{"Windowing":456},{"TLS":3430},{"Licensing":664},{"AssetReference":32},{"IPCStream":32}]}
+##utp:{"type":"MemoryLeaks","version":2,"phase":"Immediate","time":1779074877303,"processId":29000,"allocatedMemory":15687525,"memoryLabels":[{"Default":202507},{"Permanent":15276},{"NewDelete":65275},{"Thread":4230344},{"Manager":31569},{"VertexData":8},{"Geometry":816},{"Texture":24},{"Shader":850345},{"Material":24},{"GfxDevice":55321},{"Animation":392},{"Audio":3008},{"FreeType":8},{"FontEngine":736},{"Physics":2090},{"Physics2D":16},{"Serialization":760},{"Input":9880},{"JobScheduler":33024},{"TextLib":216},{"Mono":32},{"MonoCode":64},{"ScriptingNativeRuntime":155052},{"BaseObject":1622880},{"Resource":1184},{"Renderer":3008},{"Transform":4685},{"File":4013},{"WebCam":616},{"Culling":32},{"Terrain":11394},{"Wind":24},{"STL":40},{"String":13011},{"StaticString":6718},{"Utility":2672230},{"Curl":2559},{"PoolAlloc":2168},{"AI":80},{"TypeTree":20445},{"ScriptManager":448},{"RuntimeInitializeOnLoadManager":64},{"SpriteAtlas":120},{"GI":7792},{"Director":8320},{"CloudService":288},{"WebRequest":808},{"VR":48050},{"SceneManager":504},{"Video":64},{"LazyScriptCache":32},{"Camera":17},{"Secure":2201},{"SerializationCache":1576},{"APIUpdating":10320},{"Subsystems":336},{"VirtualTexturing":57888},{"StaticSafetyDebugInfo":278528},{"Analytics":336},{"Hierarchy":608},{"CoreStats":13032},{"Identifiers":12960},{"Gui":128},{"EditorUtility":141047},{"VersionControl":4},{"Undo":931},{"AssetDatabase":5022022},{"EditorGi":328},{"UnityConnect":37777},{"Upm":1912},{"UpmDiagnostics":8},{"AssetCompliance":64},{"DrivenProperties":72},{"LocalIPC":211},{"ProfilerEditor":9746},{"CoreBusinessMetrics":2599},{"Windowing":456},{"TLS":3430},{"Licensing":664},{"AssetReference":32},{"IPCStream":32}]}

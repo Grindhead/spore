@@ -752,6 +752,7 @@ namespace RoobsWorld.Stages.Creature
                 Mathf.Max(0, progression.Allies),
                 Mathf.Max(0, progression.Defeats),
                 Mathf.Max(0, progression.Discoveries),
+                progression.HasPackMate ? 1 : 0,
                 Mathf.Max(0, progression.MigrationsCompleted),
                 cue,
                 gateCue);

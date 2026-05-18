@@ -295,7 +295,8 @@ namespace RoobsWorld.Tests
                 CreatureHealth = 22f,
                 CreatureMaxHealth = 30f,
                 CreatureStamina = 11f,
-                CreatureIsAlive = true
+                CreatureIsAlive = true,
+                CreatureActionFlags = CreatureInputActionFlags.Attack | CreatureInputActionFlags.Ability
             };
             byte[] data = NetworkSerializer.Serialize(pkt);
             Assert.IsNotNull(data);
@@ -318,6 +319,7 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(pkt.CreatureMaxHealth, restored.CreatureMaxHealth, 0.0001f);
             Assert.AreEqual(pkt.CreatureStamina, restored.CreatureStamina, 0.0001f);
             Assert.AreEqual(pkt.CreatureIsAlive, restored.CreatureIsAlive);
+            Assert.AreEqual(pkt.CreatureActionFlags, restored.CreatureActionFlags);
         }
 
         [Test]
@@ -473,6 +475,15 @@ namespace RoobsWorld.Tests
                     CanMigrate = true,
                     NearestNestDistance = 0f,
                     NearestMigrationDistance = 12.5f
+                },
+                CreaturePlayerActions = new[]
+                {
+                    new CreaturePlayerActionNetState
+                    {
+                        PlayerId = 0,
+                        ActionFlags = CreatureInputActionFlags.Attack | CreatureInputActionFlags.Guard,
+                        SourceTick = 77u
+                    }
                 }
             };
 
@@ -518,6 +529,12 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(2, r.CreatureObjective.Progress);
             Assert.AreEqual(7.5f, r.CreatureObjective.HoldSeconds, 0.0001f);
             Assert.IsTrue(r.CreatureWorldProgression.HasProgression);
+            Assert.AreEqual(1, r.CreaturePlayerActions.Length);
+            Assert.AreEqual(0, r.CreaturePlayerActions[0].PlayerId);
+            Assert.AreEqual(
+                CreatureInputActionFlags.Attack | CreatureInputActionFlags.Guard,
+                r.CreaturePlayerActions[0].ActionFlags);
+            Assert.AreEqual(77u, r.CreaturePlayerActions[0].SourceTick);
             Assert.AreEqual(72, r.CreatureWorldProgression.DNA);
             Assert.AreEqual(3, r.CreatureWorldProgression.Meals);
             Assert.IsTrue(r.CreatureWorldProgression.CanMigrate);

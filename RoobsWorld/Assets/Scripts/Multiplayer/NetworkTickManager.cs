@@ -51,6 +51,13 @@ namespace RoobsWorld.Multiplayer
         private const float InputChangeEpsilon = 0.0001f;
         private const float RecoveryRequestRetryInterval = 1.25f;
         private const int MaxCreatureDnaSnapshotChars = 12000;
+        public const uint RemoteCreatureInputStaleTicks = 120u;
+        public const uint CreatureActionIntentTtlTicks = 6u;
+        public const uint RemoteCreatureActionResolveCooldownTicks = 10u;
+        public const float RemoteCreatureAttackRange = 2.8f;
+        public const float RemoteCreatureAbilityRadius = 3.2f;
+        public const float RemoteCreatureFallbackAttackDamage = 6f;
+        public const float RemoteCreatureFallbackAbilityDamage = 8f;
 
         // ---- runtime state ----
 
@@ -70,6 +77,11 @@ namespace RoobsWorld.Multiplayer
 
         private readonly Dictionary<int, RemotePlayerCell> _remotePlayers  = new();
         private readonly Dictionary<int, uint> _lastRemoteInputTicks = new();
+        private readonly Dictionary<int, uint> _lastRemoteCreatureInputHostTicks = new();
+        private readonly Dictionary<int, uint> _lastRemoteCreatureActionHostTicks = new();
+        private readonly Dictionary<int, uint> _lastResolvedRemoteCreatureActionSourceTicks = new();
+        private readonly Dictionary<int, uint> _lastResolvedRemoteCreatureActionHostTicks = new();
+        private readonly Dictionary<int, CreaturePlayerActionNetState> _remoteCreatureActions = new();
         private readonly Dictionary<EntityId, Organism>         _orgById        = new();
         private readonly Dictionary<EntityId, uint> _organismGenomeChecksums = new();
         private readonly List<Organism> _organismCache = new(128);
@@ -152,12 +164,17 @@ namespace RoobsWorld.Multiplayer
             EventBus.Unsubscribe<CellEvolutionCompleteEvent>(OnCellEvolutionComplete);
 
             foreach (var cell in _remotePlayers.Values)
-                if (cell != null) Destroy(cell.gameObject);
+                if (cell != null) DestroyNetworkObject(cell.gameObject);
             foreach (var creature in _remoteCreaturePlayers.Values)
-                if (creature != null) Destroy(creature.gameObject);
+                if (creature != null) DestroyNetworkObject(creature.gameObject);
             _remotePlayers.Clear();
             _remoteCreaturePlayers.Clear();
             _lastRemoteInputTicks.Clear();
+            _lastRemoteCreatureInputHostTicks.Clear();
+            _lastRemoteCreatureActionHostTicks.Clear();
+            _lastResolvedRemoteCreatureActionSourceTicks.Clear();
+            _lastResolvedRemoteCreatureActionHostTicks.Clear();
+            _remoteCreatureActions.Clear();
             _orgById.Clear();
             _organismGenomeChecksums.Clear();
             _organismCache.Clear();
@@ -370,15 +387,17 @@ namespace RoobsWorld.Multiplayer
                 Organisms = orgStates.ToArray(),
                 Foods     = foodStates.ToArray(),
                 PartPickups = pickupStates.ToArray(),
-                CreaturePlayers = BuildCreaturePlayerStates(),
+                CreaturePlayers = BuildCreaturePlayerStates(tick),
                 CreatureRivals = BuildCreatureRivalStates(),
                 CreatureObjective = BuildCreatureObjectiveState(),
-                CreatureWorldProgression = BuildCreatureWorldProgressionState()
+                CreatureWorldProgression = BuildCreatureWorldProgressionState(),
+                CreaturePlayerActions = BuildCreaturePlayerActionStates(tick)
             };
         }
 
-        private CreaturePlayerNetState[] BuildCreaturePlayerStates()
+        private CreaturePlayerNetState[] BuildCreaturePlayerStates(uint hostTick)
         {
+            CleanupStaleRemoteCreaturePlayers(hostTick);
             var states = new List<CreaturePlayerNetState>(_remoteCreaturePlayers.Count + 1);
             var creature = _localCreature;
             if (creature == null)
@@ -413,6 +432,28 @@ namespace RoobsWorld.Multiplayer
             return states.Count == 0 ? Array.Empty<CreaturePlayerNetState>() : states.ToArray();
         }
 
+        private void CleanupStaleRemoteCreaturePlayers(uint hostTick)
+        {
+            _localCreaturePlayerIds.Clear();
+            foreach (var pair in _remoteCreaturePlayers)
+            {
+                if (pair.Value == null)
+                {
+                    _localCreaturePlayerIds.Add(pair.Key);
+                    continue;
+                }
+
+                if (_lastRemoteCreatureInputHostTicks.TryGetValue(pair.Key, out uint lastInputHostTick) &&
+                    IsRemoteCreatureInputStale(hostTick, lastInputHostTick))
+                {
+                    _localCreaturePlayerIds.Add(pair.Key);
+                }
+            }
+
+            for (int i = 0; i < _localCreaturePlayerIds.Count; i++)
+                RemoveRemoteCreaturePlayer(_localCreaturePlayerIds[i]);
+        }
+
         private static string BuildCreatureDnaSnapshot(CreatureDNA dna)
         {
             if (dna == null)
@@ -422,6 +463,50 @@ namespace RoobsWorld.Multiplayer
             if (string.IsNullOrWhiteSpace(json) || json.Length > MaxCreatureDnaSnapshotChars)
                 return string.Empty;
             return json;
+        }
+
+        private CreaturePlayerActionNetState[] BuildCreaturePlayerActionStates(uint hostTick)
+        {
+            var actions = new List<CreaturePlayerActionNetState>(_remoteCreaturePlayers.Count + 1);
+            var creature = _localCreature;
+            if (creature == null)
+                creature = FindLocalCreature();
+
+            if (creature != null && _session != null)
+            {
+                actions.Add(new CreaturePlayerActionNetState
+                {
+                    PlayerId = _session.LocalPlayerId,
+                    ActionFlags = ReadCreatureActionFlags(),
+                    SourceTick = hostTick
+                });
+            }
+
+            foreach (var pair in _remoteCreaturePlayers)
+            {
+                int playerId = pair.Key;
+                if (_remoteCreatureActions.TryGetValue(playerId, out var action) &&
+                    _lastRemoteCreatureActionHostTicks.TryGetValue(playerId, out uint actionHostTick) &&
+                    !IsCreatureActionIntentExpired(hostTick, actionHostTick))
+                {
+                    action.PlayerId = playerId;
+                    actions.Add(action);
+                }
+                else
+                {
+                    _remoteCreatureActions.Remove(playerId);
+                    _lastRemoteCreatureActionHostTicks.Remove(playerId);
+                    pair.Value?.ApplyActionFlags(CreatureInputActionFlags.None);
+                    actions.Add(new CreaturePlayerActionNetState
+                    {
+                        PlayerId = playerId,
+                        ActionFlags = CreatureInputActionFlags.None,
+                        SourceTick = hostTick
+                    });
+                }
+            }
+
+            return actions.Count == 0 ? Array.Empty<CreaturePlayerActionNetState>() : actions.ToArray();
         }
 
         private CreatureRivalNetState[] BuildCreatureRivalStates()
@@ -481,13 +566,14 @@ namespace RoobsWorld.Multiplayer
 
         private void SendLocalInput(float deltaTime)
         {
-            if (_localPlayer == null && _localCreature == null) return;
+            var localCreature = ResolveLocalCreature();
+            if (_localPlayer == null && localCreature == null) return;
 
             Vector2 move = ReadMoveInput();
             bool eatInput = false;
             _inputSendTimer += deltaTime;
 
-            bool hasCreatureInput = _localCreature != null;
+            bool hasCreatureInput = localCreature != null;
             bool changed = (move - _lastSentMove).sqrMagnitude > InputChangeEpsilon
                 || eatInput != _lastSentEatInput;
             if (!changed && _inputSendTimer < InputSendInterval)
@@ -508,7 +594,10 @@ namespace RoobsWorld.Multiplayer
                 HasCreatureInput = hasCreatureInput
             };
             if (hasCreatureInput)
-                FillCreatureInputSnapshot(ref pkt, _localCreature);
+            {
+                FillCreatureInputSnapshot(ref pkt, localCreature);
+                pkt.CreatureActionFlags = ReadCreatureActionFlags();
+            }
 
             var payload = NetworkSerializer.Serialize(pkt);
             _transport.Send(_session.HostPlayerId, Prepend(TagInput, payload));
@@ -877,11 +966,14 @@ namespace RoobsWorld.Multiplayer
             if (move.sqrMagnitude > 1f)
                 move.Normalize();
 
-            if (input.HasCreatureInput || _localCreature != null)
+            if (input.HasCreatureInput)
             {
                 ApplyRemoteCreatureInput(playerId, input, move);
                 return;
             }
+
+            if (_localCreature != null)
+                return;
 
             EnsureRemotePlayerGhost(playerId);
             if (!_remotePlayers.TryGetValue(playerId, out var ghost) || ghost == null)
@@ -930,6 +1022,27 @@ namespace RoobsWorld.Multiplayer
             if (remote == null)
                 return;
 
+            _lastRemoteCreatureInputHostTicks[playerId] = _tick;
+            if (input.CreatureActionFlags == CreatureInputActionFlags.None)
+            {
+                _remoteCreatureActions.Remove(playerId);
+                _lastRemoteCreatureActionHostTicks.Remove(playerId);
+                _lastResolvedRemoteCreatureActionSourceTicks.Remove(playerId);
+                _lastResolvedRemoteCreatureActionHostTicks.Remove(playerId);
+            }
+            else
+            {
+                _remoteCreatureActions[playerId] = new CreaturePlayerActionNetState
+                {
+                    PlayerId = playerId,
+                    ActionFlags = input.CreatureActionFlags,
+                    SourceTick = input.Tick
+                };
+                _lastRemoteCreatureActionHostTicks[playerId] = _tick;
+            }
+            remote.ApplyActionFlags(input.CreatureActionFlags);
+            ResolveRemoteCreatureActionIntent(playerId, remote, input.CreatureActionFlags, input.Tick);
+
             if (move.sqrMagnitude <= 0.0001f)
                 return;
 
@@ -938,6 +1051,193 @@ namespace RoobsWorld.Multiplayer
             var delta = new Vector3(move.x, 0f, move.y) * (moveSpeed * dt);
             float rotationY = Mathf.Atan2(move.x, move.y) * Mathf.Rad2Deg;
             remote.MoveAuthoritative(delta, rotationY);
+        }
+
+        private void ResolveRemoteCreatureActionIntent(
+            int playerId,
+            RemotePlayerCreature remote,
+            CreatureInputActionFlags actionFlags,
+            uint sourceTick)
+        {
+            if (remote == null || !remote.IsAliveSnapshot || actionFlags == CreatureInputActionFlags.None)
+                return;
+
+            bool hasLastSourceTick = _lastResolvedRemoteCreatureActionSourceTicks.TryGetValue(playerId, out uint lastSourceTick);
+            bool hasLastHostTick = _lastResolvedRemoteCreatureActionHostTicks.TryGetValue(playerId, out uint lastHostTick);
+            if (!ShouldResolveRemoteCreatureAction(
+                    hasLastSourceTick,
+                    lastSourceTick,
+                    hasLastHostTick,
+                    lastHostTick,
+                    sourceTick,
+                    _tick))
+            {
+                return;
+            }
+
+            CreatureInputActionFlags dominantAction = GetDominantCreatureAction(actionFlags);
+            bool resolved = dominantAction switch
+            {
+                CreatureInputActionFlags.Attack => ResolveRemoteCreatureAttackIntent(remote),
+                CreatureInputActionFlags.Ability => ResolveRemoteCreatureAbilityIntent(remote),
+                CreatureInputActionFlags.Guard => PublishRemoteCreatureCombatFeedback(remote, CreatureCombatFeedbackType.Guard),
+                _ => false
+            };
+
+            if (!resolved)
+                return;
+
+            _lastResolvedRemoteCreatureActionSourceTicks[playerId] = sourceTick;
+            _lastResolvedRemoteCreatureActionHostTicks[playerId] = _tick;
+        }
+
+        private bool ResolveRemoteCreatureAttackIntent(RemotePlayerCreature remote)
+        {
+            var sourceCreature = remote != null ? remote.GetComponent<CreatureInstance>() : null;
+            float damage = sourceCreature != null
+                ? Mathf.Max(1f, sourceCreature.Stats.Attack)
+                : RemoteCreatureFallbackAttackDamage;
+            return TryApplyRemoteCreatureDamage(remote, RemoteCreatureAttackRange, damage, publishMiss: true);
+        }
+
+        private bool ResolveRemoteCreatureAbilityIntent(RemotePlayerCreature remote)
+        {
+            var sourceCreature = remote != null ? remote.GetComponent<CreatureInstance>() : null;
+            var ability = CreaturePlayerController.ResolveInheritedAbility(sourceCreature?.DNA);
+            if (ability != CreatureInheritedAbilityType.None)
+            {
+                EventBus.Publish(new CreatureAbilityUsedEvent
+                {
+                    AbilityId = CreaturePlayerController.GetAbilityId(ability),
+                    AbilityLabel = CreaturePlayerController.GetAbilityDisplayName(ability),
+                    StaminaSpent = BalanceConstants.CreaturePlayerAbilityStaminaCost,
+                    Position = remote.transform.position
+                });
+            }
+
+            switch (ability)
+            {
+                case CreatureInheritedAbilityType.ToxinBurst:
+                    return TryApplyRemoteCreatureDamage(
+                        remote,
+                        RemoteCreatureAbilityRadius,
+                        RemoteCreatureFallbackAbilityDamage * 1.2f,
+                        publishMiss: false) ||
+                        PublishRemoteCreatureCombatFeedback(remote, CreatureCombatFeedbackType.Telegraph);
+                case CreatureInheritedAbilityType.BioelectricBurst:
+                    return TryApplyRemoteCreatureDamage(
+                        remote,
+                        RemoteCreatureAbilityRadius * 1.12f,
+                        RemoteCreatureFallbackAbilityDamage,
+                        publishMiss: false) ||
+                        PublishRemoteCreatureCombatFeedback(remote, CreatureCombatFeedbackType.Telegraph);
+                case CreatureInheritedAbilityType.GuardSurge:
+                case CreatureInheritedAbilityType.RegenerativeSurge:
+                    return PublishRemoteCreatureCombatFeedback(remote, CreatureCombatFeedbackType.Guard);
+                default:
+                    return PublishRemoteCreatureCombatFeedback(remote, CreatureCombatFeedbackType.Telegraph);
+            }
+        }
+
+        private bool TryApplyRemoteCreatureDamage(
+            RemotePlayerCreature remote,
+            float range,
+            float damage,
+            bool publishMiss)
+        {
+            var target = FindRemoteCreatureActionTarget(remote, range);
+            if (target == null)
+            {
+                return publishMiss &&
+                    PublishRemoteCreatureCombatFeedback(remote, CreatureCombatFeedbackType.Miss);
+            }
+
+            bool wasAliveBeforeHit = target.IsAlive;
+            float safeDamage = Mathf.Max(1f, damage);
+            target.TakeDamage(safeDamage);
+            bool killed = wasAliveBeforeHit && !target.IsAlive;
+            return PublishRemoteCreatureCombatFeedback(
+                remote,
+                killed ? CreatureCombatFeedbackType.Kill : CreatureCombatFeedbackType.Hit,
+                target,
+                safeDamage);
+        }
+
+        private CreatureInstance FindRemoteCreatureActionTarget(RemotePlayerCreature remote, float range)
+        {
+            if (remote == null)
+                return null;
+
+            var sourceCreature = remote.GetComponent<CreatureInstance>();
+            Vector3 source = remote.transform.position;
+            Vector3 forward = remote.transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = Vector3.forward;
+            forward.Normalize();
+
+            float safeRange = Mathf.Max(0.1f, range);
+            var creatures = FindObjectsByType<CreatureInstance>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            CreatureInstance best = null;
+            float bestScore = float.NegativeInfinity;
+            for (int i = 0; i < creatures.Length; i++)
+            {
+                var candidate = creatures[i];
+                if (candidate == null || candidate == sourceCreature || !candidate.IsAlive || candidate.IsPlayer)
+                    continue;
+                if (candidate.GetComponent<RemotePlayerCreature>() != null)
+                    continue;
+                if (!string.IsNullOrWhiteSpace(candidate.DNA?.CreatureId) &&
+                    string.Equals(candidate.DNA.CreatureId, remote.CreatureId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                Vector3 toTarget = candidate.transform.position - source;
+                toTarget.y = 0f;
+                float distance = toTarget.magnitude;
+                if (distance > safeRange)
+                    continue;
+
+                bool closeEnoughForAssist = distance <= safeRange * 0.42f;
+                bool inAssistCone = CreatureTargetAssist.IsWithinAssistCone(forward, toTarget);
+                if (!closeEnoughForAssist && !inAssistCone)
+                    continue;
+
+                float forwardDot = toTarget.sqrMagnitude < 0.0001f
+                    ? 1f
+                    : Vector3.Dot(forward, toTarget.normalized);
+                float score = CreatureTargetAssist.ComputeTargetScore(distance, forwardDot, closeEnoughForAssist);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+
+            return best;
+        }
+
+        private bool PublishRemoteCreatureCombatFeedback(
+            RemotePlayerCreature remote,
+            CreatureCombatFeedbackType feedbackType,
+            CreatureInstance target = null,
+            float amount = 0f)
+        {
+            if (remote == null)
+                return false;
+
+            EventBus.Publish(new CreatureCombatFeedbackEvent
+            {
+                Type = feedbackType,
+                SourceCreatureId = remote.CreatureId,
+                TargetCreatureId = target != null ? target.DNA?.CreatureId : null,
+                Position = target != null ? target.transform.position : remote.transform.position,
+                Amount = Mathf.Max(0f, amount),
+                IsPlayerSource = true,
+                IsPlayerTarget = false
+            });
+            return true;
         }
 
         private void ApplySessionState(in SessionNetState state)
@@ -991,6 +1291,9 @@ namespace RoobsWorld.Multiplayer
 
             if (!_session.IsHost && state.CreaturePlayers != null)
                 ApplyCreaturePlayerState(state.CreaturePlayers);
+
+            if (!_session.IsHost && state.CreaturePlayerActions != null)
+                ApplyCreaturePlayerActionState(state.CreaturePlayerActions);
 
             if (!_session.IsHost && state.CreatureRivals != null)
                 ApplyCreatureRivalState(state.CreatureRivals);
@@ -1125,7 +1428,7 @@ namespace RoobsWorld.Multiplayer
             if (_remotePlayers.TryGetValue(state.PlayerId, out var ghost))
             {
                 if (ghost != null)
-                    Destroy(ghost.gameObject);
+                    DestroyNetworkObject(ghost.gameObject);
                 _remotePlayers.Remove(state.PlayerId);
             }
             var remote = RemotePlayerCreature.Create(state, displayName);
@@ -1138,8 +1441,30 @@ namespace RoobsWorld.Multiplayer
                 return;
 
             _remoteCreaturePlayers.Remove(playerId);
+            _lastRemoteCreatureInputHostTicks.Remove(playerId);
+            _lastRemoteCreatureActionHostTicks.Remove(playerId);
+            _lastResolvedRemoteCreatureActionSourceTicks.Remove(playerId);
+            _lastResolvedRemoteCreatureActionHostTicks.Remove(playerId);
+            _remoteCreatureActions.Remove(playerId);
             if (creature != null)
-                Destroy(creature.gameObject);
+                DestroyNetworkObject(creature.gameObject);
+        }
+
+        private void ApplyCreaturePlayerActionState(CreaturePlayerActionNetState[] actions)
+        {
+            if (actions == null || actions.Length == 0)
+                return;
+
+            int localPlayerId = _session != null ? _session.LocalPlayerId : -1;
+            for (int i = 0; i < actions.Length; i++)
+            {
+                var action = actions[i];
+                if (action.PlayerId < 0 || action.PlayerId == localPlayerId)
+                    continue;
+
+                if (_remoteCreaturePlayers.TryGetValue(action.PlayerId, out var remote) && remote != null)
+                    remote.ApplyActionFlags(action.ActionFlags);
+            }
         }
 
         private void ApplyCreatureRivalState(CreatureRivalNetState[] rivals)
@@ -1199,9 +1524,21 @@ namespace RoobsWorld.Multiplayer
         {
             if (_localPlayer != null)
                 return _localPlayer.transform;
-            if (_localCreature != null)
-                return _localCreature.transform;
+            var creature = ResolveLocalCreature();
+            if (creature != null)
+                return creature.transform;
             return null;
+        }
+
+        private CreatureInstance ResolveLocalCreature()
+        {
+            if (_localCreature != null && _localCreature.IsPlayer)
+                return _localCreature;
+
+            _localCreature = FindLocalCreature();
+            if (_localCreature != null)
+                _voiceChat?.SetLocalPlayerTransform(_localCreature.transform);
+            return _localCreature;
         }
 
         private CreatureInstance FindLocalCreature()
@@ -1245,6 +1582,44 @@ namespace RoobsWorld.Multiplayer
 
             if (move.sqrMagnitude > 1f) move.Normalize();
             return move;
+        }
+
+        private static CreatureInputActionFlags ReadCreatureActionFlags()
+        {
+            if (!InputManager.HasInstance)
+                return CreatureInputActionFlags.None;
+
+            var input = InputManager.Instance;
+            return BuildCreatureActionFlags(
+                input.AttackPressed,
+                input.JumpPressed,
+                input.InteractPressed);
+        }
+
+        public static CreatureInputActionFlags BuildCreatureActionFlags(
+            bool attackPressed,
+            bool guardPressed,
+            bool abilityPressed)
+        {
+            CreatureInputActionFlags flags = CreatureInputActionFlags.None;
+            if (attackPressed)
+                flags |= CreatureInputActionFlags.Attack;
+            if (guardPressed)
+                flags |= CreatureInputActionFlags.Guard;
+            if (abilityPressed)
+                flags |= CreatureInputActionFlags.Ability;
+            return flags;
+        }
+
+        public static CreatureInputActionFlags GetDominantCreatureAction(CreatureInputActionFlags actionFlags)
+        {
+            if ((actionFlags & CreatureInputActionFlags.Attack) != 0)
+                return CreatureInputActionFlags.Attack;
+            if ((actionFlags & CreatureInputActionFlags.Ability) != 0)
+                return CreatureInputActionFlags.Ability;
+            if ((actionFlags & CreatureInputActionFlags.Guard) != 0)
+                return CreatureInputActionFlags.Guard;
+            return CreatureInputActionFlags.None;
         }
 
         private void RefreshObjectCachesIfNeeded()
@@ -1341,11 +1716,22 @@ namespace RoobsWorld.Multiplayer
             RemoveRemoteCreaturePlayer(e.PlayerId);
             if (_remotePlayers.TryGetValue(e.PlayerId, out var ghost))
             {
-                if (ghost != null) Destroy(ghost.gameObject);
+                if (ghost != null) DestroyNetworkObject(ghost.gameObject);
                 _remotePlayers.Remove(e.PlayerId);
                 _lastRemoteInputTicks.Remove(e.PlayerId);
                 Debug.Log($"[NetworkTick] Remote player {e.PlayerId} left — ghost destroyed");
             }
+        }
+
+        private static void DestroyNetworkObject(GameObject target)
+        {
+            if (target == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(target);
+            else
+                DestroyImmediate(target);
         }
 
         // ---- packet helpers ----
@@ -1374,6 +1760,48 @@ namespace RoobsWorld.Multiplayer
         public static bool ShouldAcceptRemoteInputTick(bool hasLastAcceptedTick, uint lastAcceptedTick, uint incomingTick)
         {
             return !hasLastAcceptedTick || incomingTick >= lastAcceptedTick;
+        }
+
+        public static bool IsRemoteCreatureInputStale(
+            uint hostTick,
+            uint lastInputHostTick,
+            uint staleTicks = RemoteCreatureInputStaleTicks)
+        {
+            if (hostTick < lastInputHostTick)
+                return false;
+
+            uint threshold = staleTicks == 0u ? 1u : staleTicks;
+            return hostTick - lastInputHostTick >= threshold;
+        }
+
+        public static bool IsCreatureActionIntentExpired(
+            uint hostTick,
+            uint actionHostTick,
+            uint ttlTicks = CreatureActionIntentTtlTicks)
+        {
+            if (hostTick < actionHostTick)
+                return false;
+
+            uint threshold = ttlTicks == 0u ? 1u : ttlTicks;
+            return hostTick - actionHostTick >= threshold;
+        }
+
+        public static bool ShouldResolveRemoteCreatureAction(
+            bool hasLastResolvedSourceTick,
+            uint lastResolvedSourceTick,
+            bool hasLastResolvedHostTick,
+            uint lastResolvedHostTick,
+            uint incomingSourceTick,
+            uint hostTick,
+            uint cooldownTicks = RemoteCreatureActionResolveCooldownTicks)
+        {
+            if (hasLastResolvedSourceTick && incomingSourceTick == lastResolvedSourceTick)
+                return false;
+            if (!hasLastResolvedHostTick || hostTick < lastResolvedHostTick)
+                return true;
+
+            uint threshold = cooldownTicks == 0u ? 1u : cooldownTicks;
+            return hostTick - lastResolvedHostTick >= threshold;
         }
 
         public static bool ShouldApplyStageTransition(

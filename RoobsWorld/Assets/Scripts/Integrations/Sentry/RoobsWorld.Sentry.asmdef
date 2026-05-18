@@ -1,0 +1,17 @@
+{
+  "name": "RoobsWorld.Sentry",
+  "rootNamespace": "RoobsWorld.Integrations.Sentry",
+  "references": [
+    "RoobsWorld",
+    "Sentry.Unity"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
