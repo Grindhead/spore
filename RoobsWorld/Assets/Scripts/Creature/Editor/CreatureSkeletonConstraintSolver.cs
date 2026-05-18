@@ -23,6 +23,7 @@ namespace RoobsWorld.Creature.Editor
             dna.Body.SpineSegments = spineSegments;
             dna.Body.BodyScale = ClampBodyScale(dna.Body.BodyScale);
             dna.Body.FrontPull = Mathf.Clamp(dna.Body.FrontPull, -0.3f, 0.8f);
+            NormalizeSpine(dna.Body);
 
             for (int i = 0; i < dna.Parts.Count; i++)
             {
@@ -47,6 +48,40 @@ namespace RoobsWorld.Creature.Editor
                 Mathf.Clamp(scale.x, 0.5f, 2.5f),
                 Mathf.Clamp(scale.y, 0.5f, 2.5f),
                 Mathf.Clamp(scale.z, 0.5f, 2.5f));
+        }
+
+        private static void NormalizeSpine(BodyPlan body)
+        {
+            body.Spine ??= new List<SpineSegment>();
+            while (body.Spine.Count < body.SpineSegments)
+                body.Spine.Add(CreateDefaultSegment(body.Spine.Count, body.SpineSegments));
+
+            while (body.Spine.Count > body.SpineSegments)
+                body.Spine.RemoveAt(body.Spine.Count - 1);
+
+            for (int i = 0; i < body.Spine.Count; i++)
+            {
+                var segment = body.Spine[i] ??= CreateDefaultSegment(i, body.SpineSegments);
+                segment.Offset = new Vector3(
+                    Mathf.Clamp(segment.Offset.x, -0.65f, 0.65f),
+                    Mathf.Clamp(segment.Offset.y, -0.45f, 0.65f),
+                    Mathf.Clamp(segment.Offset.z, -0.9f, 0.9f));
+                segment.Scale = new Vector2(
+                    Mathf.Clamp(segment.Scale.x <= 0f ? 1f : segment.Scale.x, 0.35f, 2.2f),
+                    Mathf.Clamp(segment.Scale.y <= 0f ? 1f : segment.Scale.y, 0.35f, 2.2f));
+                segment.Curve = Mathf.Clamp(segment.Curve, -1f, 1f);
+            }
+        }
+
+        private static SpineSegment CreateDefaultSegment(int index, int segmentCount)
+        {
+            float t = segmentCount <= 1 ? 0.5f : index / (float)(segmentCount - 1);
+            return new SpineSegment
+            {
+                Offset = Vector3.zero,
+                Scale = Vector2.one,
+                Curve = 0f
+            };
         }
 
         private static Vector3 ClampOffset(PartPlacement part, Vector3 bodyScale)

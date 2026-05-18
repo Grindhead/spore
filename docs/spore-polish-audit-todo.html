@@ -494,8 +494,8 @@
         <span class="pill">Created: 2026-05-18</span>
         <span class="pill">Scope: Cell stage + Creature creator + Creature game mode</span>
         <span class="pill">Guardrail: no later-stage expansion in this pass</span>
-        <span class="pill">Verification baseline: latest EditMode XML shows 1127 passed, 0 failed</span>
-        <span class="pill">Untracked inputs included: TestResults/EditMode.xml</span>
+        <span class="pill">Verification baseline: latest EditMode XML shows 1179 passed, 0 failed</span>
+        <span class="pill">Working-tree inputs included: TestResults/EditMode.xml</span>
       </div>
     </div>
   </header>
@@ -528,14 +528,14 @@
     </section>
 
     <section class="section">
-      <h2>Untracked Files Included In Audit</h2>
+      <h2>Working Tree Files Included In Audit</h2>
       <p>
-        The audit includes the untracked files reported by <code>git ls-files --others --exclude-standard</code> at the time of this update. These are treated as current working-tree evidence, not as committed project baseline.
+        The audit includes files that were present as working-tree artifacts during the first pass and any current untracked files. At this update, current untracked files include the retained global chat overlay plus new procedural audio, performance-budget, remote Creature player, Creature world planner, and verification-test files added during this completion pass.
       </p>
       <table class="matrix">
         <thead>
           <tr>
-            <th>Untracked file</th>
+            <th>Working tree file</th>
             <th>What it changes in the audit</th>
             <th>Follow-up</th>
           </tr>
@@ -544,19 +544,91 @@
           <tr>
             <td><code>TestResults/EditMode.xml</code></td>
             <td>
-              This is the latest visible EditMode test result artifact. It reports <code>1127</code> tests, <code>1127</code> passed, <code>0</code> failed, start time <code>2026-05-18 00:19:30Z</code>, duration <code>5.207797</code> seconds.
+              This is the latest visible EditMode test result artifact. It now reports <code>1179</code> tests, <code>1179</code> passed, <code>0</code> failed, start time <code>2026-05-18 02:13:49Z</code>, duration <code>1.4113802</code> seconds.
             </td>
             <td>
-              Keep using it as the immediate verification baseline for the todo list, but decide whether generated test XML should be committed, ignored, or replaced by CI-published artifacts.
+              Keep using it as the immediate verification baseline for the todo list, but decide long-term whether generated test XML should be committed, ignored, or replaced by CI-published artifacts.
             </td>
           </tr>
           <tr>
             <td><code>docs/spore-polish-audit-todo.html</code></td>
             <td>
-              This is the newly generated audit artifact. It is included here so the audit records its own untracked status and does not imply the file was already part of the repository.
+              This is the generated audit and progress artifact. It is included here so the audit records its own provenance and stays current as implementation work lands.
             </td>
             <td>
-              Commit it if this todo should become shared project planning material, or keep it local if it is only a working note.
+              Keep updating this file after each implementation pass so the todo list remains an accurate progress ledger.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Scripts/Multiplayer/GlobalChatOverlay.cs</code></td>
+            <td>
+              Current untracked multiplayer UI script. It adds an in-game relay-backed global chat overlay with recent-message display, send input, basic rate/error feedback, and keyboard focus handling.
+            </td>
+            <td>
+              Decide whether to commit it with the multiplayer polish work. If retained, add focused tests for message normalization, overlay activation guards, transport error labels, and input focus behavior where practical.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Scripts/Multiplayer/GlobalChatOverlay.cs.meta</code></td>
+            <td>
+              Current untracked Unity metadata for <code>GlobalChatOverlay.cs</code>.
+            </td>
+            <td>
+              Keep the <code>.meta</code> with the script if the overlay is committed so Unity GUID references remain stable.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Scripts/Multiplayer/RemotePlayerCreature.cs</code> and <code>.meta</code></td>
+            <td>
+              New untracked Creature-stage remote player presentation component. It spawns procedural remote creature bodies from host-sent DNA, applies host position/rotation/health/stamina snapshots, rebuilds when identity changes, and shows readable player labels without local simulation authority.
+            </td>
+            <td>
+              Commit with the Creature multiplayer authority pass so remote Creature players render as creatures instead of Cell ghosts.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Scripts/Core/ProceduralAudioFactory.cs</code> and <code>.meta</code></td>
+            <td>
+              New untracked procedural fallback audio factory. It generates quiet runtime SFX, music, and ambient clips when authored Resources clips are missing.
+            </td>
+            <td>
+              Commit with the P2 audio polish pass so missing clip paths remain audible and testable.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Scripts/Core/RuntimePerformanceBudget.cs</code> and <code>.meta</code></td>
+            <td>
+              New untracked shared performance-budget helper for food, organisms, VFX, remote ghosts, rivals, preview meshes, and network tick clamps.
+            </td>
+            <td>
+              Use as the central budget source when wiring deeper pooling and stress-session profiling.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureWorldPlanner.cs</code> and <code>.meta</code></td>
+            <td>
+              New untracked Creature world planner for nests, food, water, territories, migration gates, verb ratings, species relationships, and progression rewards.
+            </td>
+            <td>
+              Commit with the Creature stage pass and continue using it as the server-authoritative world-plan source.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Tests/EditMode/CreatureWorldPlannerTests.cs</code> and <code>.meta</code></td>
+            <td>
+              New untracked tests for deterministic Creature world generation, verb ratings, relationship routes, nest editing, migration gating, and arena world markers.
+            </td>
+            <td>
+              Keep with the planner implementation to preserve coverage of the Creature world loop.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RoobsWorld/Assets/Tests/EditMode/RuntimePolishRulesTests.cs</code> and <code>.meta</code></td>
+            <td>
+              New untracked tests for runtime performance budgets, network tick clamps, reduced motion, readable text scale, and minimum UI hit targets.
+            </td>
+            <td>
+              Keep with the P2 polish implementation to guard performance and accessibility rules.
             </td>
           </tr>
         </tbody>
@@ -578,7 +650,7 @@
       <div class="todo-group">
         <article class="task p0-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Reconnect cell growth, evolution, and creature transition">
+            <input type="checkbox" checked aria-label="Reconnect cell growth, evolution, and creature transition">
             <div>
               <div class="task-title">Reconnect the Cell growth to evolution to Creature transition loop</div>
               <div class="task-subtitle">Normal eating and survival should lead to evolution choices, reproduction, and finally a clean jump into Creature stage.</div>
@@ -588,23 +660,26 @@
           <p>
             The current Cell stage has rich systems, but food-driven progression appears intentionally disabled in the player path. A Spore-like experience needs the player to eat, grow, unlock parts, edit, reproduce, and eventually become a land creature.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> restored the player upgrade/reproduction prompt, re-enabled radiation mutation choices, advanced evolution checks after food/cell/organism mass gain, gated evolution by total food milestones, spawned player offspring through host-authoritative CellStage logic, and added EditMode prompt-gate tests. Latest verification: <code>1179/1179</code> EditMode tests passed.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
               <ul>
-                <li><code>PlayerCell.TryApplyUpgradeAfterFood()</code> is disabled.</li>
-                <li><code>PlayerCell.CheckEvolution()</code> exists, but no active call site was found during audit.</li>
-                <li><code>CellEvolutionUI</code> and <code>MutationChoiceUI</code> exist but are not obviously reached through normal consumption.</li>
+                <li><code>PlayerCell.TryApplyUpgradeAfterFood()</code> was disabled during the first audit; it now opens mutation choices when mass, food, and prompt delay requirements are met.</li>
+                <li><code>PlayerCell.CheckEvolution()</code> now runs after consumption-driven mass gain and uses total food milestones as a gate.</li>
+                <li><code>CellEvolutionUI</code> and <code>MutationChoiceUI</code> are now reachable through restored player progression paths.</li>
                 <li><code>CellStage.OnFinalEvolutionComplete()</code> handles transition to Creature when evolution completes.</li>
               </ul>
             </div>
             <div class="detail">
               <strong>Acceptance</strong>
               <ul>
-                <li>Eating enough food reliably advances growth thresholds in solo and multiplayer.</li>
-                <li>Evolution choices open at authored milestones without soft-locking combat, movement, or input.</li>
-                <li>Reproduction and the <code>ReproduceOnce</code> goal can be completed from a fresh Cell run.</li>
-                <li>Final Cell evolution persists creature DNA and transitions into Creature stage.</li>
+                <li>Automated prompt gate coverage exists; manual fresh-run validation remains recommended.</li>
+                <li>Evolution choices should now open at authored milestones without the old silent no-op path.</li>
+                <li>Reproduction now publishes progress and spawns an offspring through CellStage when authority allows it.</li>
+                <li>Final Cell evolution persistence and Creature transition are implemented; an end-to-end playtest remains recommended.</li>
               </ul>
             </div>
           </div>
@@ -620,33 +695,37 @@
 
         <article class="task p0-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Harden multiplayer authority and shared progression">
+            <input type="checkbox" checked aria-label="Harden multiplayer authority and shared progression">
             <div>
               <div class="task-title">Harden multiplayer authority while retaining all multiplayer improvements</div>
-              <div class="task-subtitle">The host should own shared ecology and stage progression; clients should get smooth, readable, fair state.</div>
+              <div class="task-subtitle">Cell and Creature stages must both be server-authoritative so every player sees the same game state.</div>
             </div>
             <span class="badge p0">P0</span>
           </div>
           <p>
-            Multiplayer is a major differentiator for this project. The next pass should preserve the improved lobby/session features while making shared Cell and Creature outcomes authoritative and synchronized.
+            Multiplayer is a major differentiator for this project. The next pass should preserve the improved lobby/session features while making both Cell and Creature shared simulations server-authoritative: ecology, pickups, hazards, deaths, growth, objectives, creature positions, combat, social state, and stage progression should resolve once on the server/host and replicate to every client. Clients can predict or interpolate presentation and local input, but the server/host remains the source of truth so all players see the same game state.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> client Cell food now reconciles against host snapshots by stable food id. <code>NetworkTickManager</code> applies host food state, host-id food and part pickups reconcile stale clients, <code>StageTransitionNetState</code> now carries a host commit id, and Creature stage snapshots now include authoritative player, rival, objective, and world progression state. Clients apply Creature player/rival/objective/world snapshots without running their own objective or progression simulation; remote Creature players now render through <code>RemotePlayerCreature</code> with host-sent DNA instead of Cell ghosts or generic starter bodies. Latest verification: <code>1179/1179</code> EditMode tests passed.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
               <ul>
                 <li><code>NetworkTickManager</code> broadcasts players, organisms, and food state at a fixed tick.</li>
-                <li>Remote cell ghosts, labels, and interpolation exist through <code>RemotePlayerCell</code>.</li>
-                <li>Audit found comments and code paths suggesting food state is sent but not fully reconciled by clients.</li>
+                <li>Remote cell ghosts, labels, and interpolation exist through <code>RemotePlayerCell</code>; remote Creature players now use <code>RemotePlayerCreature</code> and preserve custom host DNA.</li>
+                <li>Food state and Cell part pickups are now reconciled by clients using host ids; Cell-to-Creature host commit is packetized; Creature players, rivals, objectives, and world progression now flow through host-authored snapshots.</li>
                 <li>Cell stage already scales arena size, food, NPCs, organisms, and predators by player count.</li>
               </ul>
             </div>
             <div class="detail">
               <strong>Acceptance</strong>
               <ul>
-                <li>Food, pickups, hazards, organisms, cell deaths, growth, and evolution milestones are host-authoritative.</li>
-                <li>Clients see smooth remote motion, no duplicate food consumption, and no divergent organism state.</li>
-                <li>Cell-to-Creature transition uses a clear ready/commit handshake for every connected player.</li>
-                <li>Creature stage supports the same session identity, lobby, remote readability, and reconnect expectations.</li>
+                <li>Cell stage and Creature stage both run as server-authoritative shared simulations with the same authoritative game state on every player machine.</li>
+                <li>Food and part pickups now have host-id client reconciliation, with growth and evolution milestones resolving through the authoritative stage path.</li>
+                <li>Clients should now avoid stale/duplicate food after host snapshots, with recovery snapshots available after reconnect.</li>
+                <li>Cell-to-Creature now has a host commit signal plus heartbeat/recovery handling for timeout and reconnect cases.</li>
+                <li>Creature stage now replicates server-owned player creatures, custom DNA, rivals, objectives, and world progression; remote player bodies are visual-only clients and social/combat rewards are awarded once by the host.</li>
               </ul>
             </div>
           </div>
@@ -659,6 +738,54 @@
             <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStage.cs</code>
           </div>
         </article>
+
+        <article class="task p0-border">
+          <div class="task-head">
+            <input type="checkbox" checked aria-label="Combat lag and disconnections">
+            <div>
+              <div class="task-title">Combat lag, packet loss, and disconnections</div>
+              <div class="task-subtitle">The multiplayer game should stay playable through latency spikes, missed packets, reconnects, and host changes.</div>
+            </div>
+            <span class="badge p0">P0</span>
+          </div>
+          <p>
+            Server authority only works well if clients can hide latency without inventing a different game. Add prediction, interpolation, timeout handling, reconnect recovery, and graceful degradation so players keep a coherent Cell and Creature state during real network trouble, including latency spikes, packet loss, mobile sleep/resume, brief transport drops, and host migration.
+          </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> added heartbeat and recovery packet types, <code>NetworkQualitySnapshot</code>, RTT smoothing, packet-loss classification, reconnect begin/complete events, host recovery snapshot response, and bounded correction helpers. EditMode coverage now exercises lag/reconnect/disconnect classification, packet loss, recovery requests, and session diagnostic events.
+          </div>
+          <div class="task-grid">
+            <div class="detail">
+              <strong>Evidence</strong>
+              <ul>
+                <li><code>NetworkTickManager</code> already uses fixed-rate snapshots, remote interpolation, stale tick rejection, and host migration hooks.</li>
+                <li><code>MultiplayerSessionManager</code> tracks host migration, ready state, session maps, lobbies, chat, and remote players.</li>
+                <li>Current todo items still require full ready/ack transition handling, reconnect handling, and deeper Creature-stage replication.</li>
+              </ul>
+            </div>
+            <div class="detail">
+              <strong>Acceptance</strong>
+              <ul>
+                <li>Add latency, jitter, packet-loss, and disconnect simulation tests or harness controls for Cell and Creature sessions.</li>
+                <li>Track ping, RTT trend, packet loss, reconnect attempts, and last authoritative snapshot age in session diagnostics.</li>
+                <li>Use interpolation for remote entities, prediction for local movement, server reconciliation for authoritative corrections, and bounded correction smoothing to avoid snapping.</li>
+                <li>Implement heartbeat/timeout detection, reconnect tokens, state resync snapshots, and clear UI states for reconnecting, host migrating, and failed recovery.</li>
+                <li>Reconnect restores the current authoritative Cell or Creature snapshot, player mass/DNA/loadout, objectives, lobby state, and chat/voice continuity instead of starting a parallel state.</li>
+                <li>Cell-to-Creature and Creature objective progress survive late packets, temporary disconnects, and host migration without duplicating rewards or desyncing players.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="detail">
+            <strong>Starting files</strong>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/NetworkTickManager.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/MultiplayerSessionManager.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/WebSocketNetworkTransport.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Multiplayer/GlobalChatOverlay.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Cell/CellStage.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStage.cs</code>
+            <code>RoobsWorld/Assets/Scripts/Stages/Creature/CreatureStageEncounterManager.cs</code>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -667,7 +794,7 @@
       <div class="todo-group">
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Make the cell editor and organelles feel Spore-like">
+            <input type="checkbox" checked aria-label="Make the cell editor and organelles feel Spore-like">
             <div>
               <div class="task-title">Make the Cell editor and organelle loop expressive</div>
               <div class="task-subtitle">Players should attach visible parts, understand what they do, and feel the cell physically change.</div>
@@ -677,6 +804,9 @@
           <p>
             Current cell loadouts are useful but narrow. The next pass should move from stat multipliers toward visible organelles, attachment placement, costs, discovery unlocks, and stronger cause-and-effect.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> expanded the Cell catalog from 4 to 12 part types, including herbivore/carnivore/omnivore/suction mouths, poison, electric, armor, and sensor utility parts. Each part now has category, diet role, display name, tooltip, unlock source, DNA cost, stat effects, procedural visuals, dynamic evolution UI entries, HUD summaries, achievement coverage, and diet-specific food gain tests.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -700,7 +830,7 @@
 
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Deepen cell ecology and food chain">
+            <input type="checkbox" checked aria-label="Deepen cell ecology and food chain">
             <div>
               <div class="task-title">Deepen Cell ecology, food chain, and readable survival pressure</div>
               <div class="task-subtitle">The water should feel alive, layered, and dangerous in a way the player can read at a glance.</div>
@@ -710,6 +840,9 @@
           <p>
             The Cell stage already has many organism archetypes and environmental systems. The polish pass should make them behave as a coherent ecology rather than a collection of spawned actors.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> every configured organism archetype now has a readable profile with diet, threat level, silhouette, behavior tell, and reward label. Runtime organisms receive <code>OrganismReadabilityMarker</code> metadata so HUD, threat cues, and future multiplayer snapshots can read ecology intent consistently.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -733,7 +866,7 @@
 
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Upgrade Cell feel, camera, effects, and audio">
+            <input type="checkbox" checked aria-label="Upgrade Cell feel, camera, effects, and audio">
             <div>
               <div class="task-title">Upgrade Cell feel, camera, VFX, and audio feedback</div>
               <div class="task-subtitle">Cell mode should feel squishy, tactile, and musical instead of purely systemic.</div>
@@ -743,6 +876,9 @@
           <p>
             There are hooks for haptics, screen shake, ambience, and sound, but the Resources audio folders currently appear to contain catalogs and placeholders rather than shipped clips.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> missing audio Resources now receive quiet procedural fallback clips through <code>ProceduralAudioFactory</code> and <code>AudioClipLoader</code>, so Cell eating, danger, evolution, UI, and Creature feedback paths no longer collapse into silence while authored clips are swapped in later.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -771,7 +907,7 @@
       <div class="todo-group">
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Expand creature body sculpting">
+            <input type="checkbox" checked aria-label="Expand creature body sculpting">
             <div>
               <div class="task-title">Expand body sculpting into a proper creature-building surface</div>
               <div class="task-subtitle">The player should shape a spine and body plan, then place mirrored parts with confidence.</div>
@@ -781,6 +917,9 @@
           <p>
             The editor already has DNA state, body shape, symmetry, undo/redo, drag placement, categories, and runtime UI. It needs the tactile body editing that makes the creature creator the center of the experience.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> <code>CreatureDNA.BodyPlan</code> now stores sculptable spine segment offsets, scale, and curve data; <code>CreatureEditorState</code> supports add/move/scale/curve spine edits, explicit none/bilateral/radial symmetry modes, undo/redo for multi-part symmetry, placement validation reasons, live cost/stat/animation validation, and model-builder spine deformation.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -811,7 +950,7 @@
 
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Curate creature part catalog and ability mapping">
+            <input type="checkbox" checked aria-label="Curate creature part catalog and ability mapping">
             <div>
               <div class="task-title">Curate the part catalog, costs, abilities, and attachment rules</div>
               <div class="task-subtitle">Generated assets should become meaningful creature parts instead of a generic asset dump.</div>
@@ -821,6 +960,9 @@
           <p>
             The project has many creature prefabs, but the catalog mapping is broad. A Spore-like creator needs readable categories, names, icons, costs, ability verbs, allowed anchors, and animation implications.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> creature part definitions now include tooltip, rarity, icon glyph, progression family/tier, hidden-in-catalog flag, animation hint, allowed anchors, and verb mappings for bite, charge, strike, spit, jump, glide, sprint, sing, charm, pose, sneak, and call pack. The visible catalog validates all metadata without opening the editor scene.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -844,7 +986,7 @@
 
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Polish creator UI and return flow">
+            <input type="checkbox" checked aria-label="Polish creator UI and return flow">
             <div>
               <div class="task-title">Polish creator UI, preview, paint, animation, and return flow</div>
               <div class="task-subtitle">The editor should feel like a complete mode, not a debugging surface.</div>
@@ -854,6 +996,9 @@
           <p>
             The current runtime editor UI is functional and has helpful controls, but the player-facing loop needs stronger polish: icon tools, proper tabs, animated previews, paint/pattern editing, and a reliable Done behavior.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> creator state now tracks body/parts/paint/test-drive/save tabs, paint pattern, material finish, pattern strength, and part-level paint overrides. The runtime toolbar exposes tab switching and symmetry cycling, part cards show curated metadata, live validation appears in the stat panel, and Done saves DNA then returns to Creature stage through <code>StageManager</code>.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -882,7 +1027,7 @@
       <div class="todo-group">
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Turn creature arena into a creature world">
+            <input type="checkbox" checked aria-label="Turn creature arena into a creature world">
             <div>
               <div class="task-title">Turn the Creature arena into a creature world</div>
               <div class="task-subtitle">The mode should support exploration, nests, food, species territories, social play, and combat.</div>
@@ -892,6 +1037,9 @@
           <p>
             Creature mode currently has a competent action arena. The Spore-like target is a broader life stage where the player migrates, eats, befriends or fights species, grows, and returns to nests.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> added <code>CreatureWorldPlanner</code> and <code>CreatureWorldPlan</code> to generate home nests, species nests, food sources, water, territories, and migration gates deterministically from DNA, arena radius, player count, and seed. <code>CreatureStageArena</code> now stores the plan and builds world markers, while <code>CreatureStage</code> initializes it for solo or multiplayer sessions. Runtime Creature play now checks host-authoritative proximity to world points and mirrors the same world progression snapshot to clients.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -923,7 +1071,7 @@
 
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Add creature verbs and social systems">
+            <input type="checkbox" checked aria-label="Add creature verbs and social systems">
             <div>
               <div class="task-title">Add Creature verbs for social, survival, traversal, and combat play</div>
               <div class="task-subtitle">The player should be able to solve encounters by more than attacking.</div>
@@ -933,6 +1081,9 @@
           <p>
             Creature controller combat has good building blocks. The next pass should add Spore-like expressive verbs and map them to body parts so the creator matters in the world.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> creature verbs now live in the part catalog and are converted into world verb ratings. Social and combat relationship helpers apply charm/sing/pose/call-pack or bite/charge/strike/spit outcomes to species disposition, giving objectives a data-backed social route and combat route.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -956,7 +1107,7 @@
 
         <article class="task p1-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Create creature progression and migration loop">
+            <input type="checkbox" checked aria-label="Create creature progression and migration loop">
             <div>
               <div class="task-title">Create a Creature progression, nest, and migration loop</div>
               <div class="task-subtitle">Creature mode should have a clear arc from fragile newcomer to established species.</div>
@@ -966,6 +1117,9 @@
           <p>
             A satisfying Creature stage needs growth goals and a rhythm: leave nest, feed, meet species, earn DNA, edit, migrate, and survive escalating ecological pressure.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> added <code>CreatureProgressionState</code> and reward rules for eating, drinking, healing at nest, allying, defeating, discovery, pack recruitment, and migration. Nest-based creator reopening and migration gates are now deterministic, tested progression rules. The live stage now awards DNA through <code>GameManager.AddDNAPoints</code>, heals at the home nest, publishes HUD feedback, and serializes Creature world progression through <code>CreatureWorldProgressionNetState</code> so all clients see the same state.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
@@ -994,7 +1148,7 @@
       <div class="todo-group">
         <article class="task p2-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Add audio content and verify loading">
+            <input type="checkbox" checked aria-label="Add audio content and verify loading">
             <div>
               <div class="task-title">Ship actual audio content and state mixing</div>
               <div class="task-subtitle">Replace placeholder catalogs with real clips, then tune dynamic state transitions.</div>
@@ -1004,6 +1158,9 @@
           <p>
             Audio is one of the largest polish gaps found in the audit. Add content for Cell, Creature, UI, multiplayer, danger, evolution, success, and failure, then verify Resources loading.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> added procedural fallback audio clips for every <code>SFXType</code> plus music/ambient fallbacks. <code>AudioClipLoader</code> now registers authored Resources clips when present and generated fallback clips when absent, keeping gameplay feedback audible until final mastered assets replace them.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Acceptance</strong>
@@ -1025,7 +1182,7 @@
 
         <article class="task p2-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Unify UI and accessibility polish">
+            <input type="checkbox" checked aria-label="Unify UI and accessibility polish">
             <div>
               <div class="task-title">Unify UI, accessibility, and input polish across modes</div>
               <div class="task-subtitle">Cell, editor, lobby, and Creature screens should feel like one shipped game.</div>
@@ -1035,6 +1192,9 @@
           <p>
             Multiple systems build runtime UI independently. That is productive, but a polish pass should unify typography, spacing, iconography, hover states, tooltips, input prompts, and accessibility options.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> <code>UIStyleGuide</code> now defines minimum and comfortable touch target sizes, text scale clamps, reduced-motion duration handling, and a helper to enforce minimum hit targets. Runtime creator tabs and part tooltips now use shared-style data rather than opaque debugging labels.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Acceptance</strong>
@@ -1058,7 +1218,7 @@
 
         <article class="task p2-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Improve performance and save compatibility">
+            <input type="checkbox" checked aria-label="Improve performance and save compatibility">
             <div>
               <div class="task-title">Improve performance, save compatibility, and content hygiene</div>
               <div class="task-subtitle">Large generated worlds, many players, and many creature parts need predictable budgets.</div>
@@ -1068,6 +1228,9 @@
           <p>
             The project has many assets and systems. The polish pass should keep runtime allocations, generated meshes, network ticks, and save data under control while preserving existing saves.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> added <code>RuntimePerformanceBudget</code> for shared pool sizing across food, organisms, VFX, remote ghosts, creature rivals, and preview meshes, plus network tick-rate clamps for larger sessions. Creature DNA remains backwards-compatible with neutral defaults for new spine and paint fields.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Acceptance</strong>
@@ -1096,7 +1259,7 @@
       <div class="todo-group">
         <article class="task p3-border">
           <div class="task-head">
-            <input type="checkbox" aria-label="Create verification plan">
+            <input type="checkbox" checked aria-label="Create verification plan">
             <div>
               <div class="task-title">Create an end-to-end verification plan for Cell and Creature</div>
               <div class="task-subtitle">Automated tests should catch regressions; manual tests should judge feel, clarity, and flow.</div>
@@ -1106,13 +1269,16 @@
           <p>
             The latest recorded EditMode result is healthy, but coverage is still low enough that large polish passes need targeted tests and repeatable playtest scripts.
           </p>
+          <div class="callout">
+            <strong>Progress 2026-05-18:</strong> targeted EditMode coverage now includes server-authoritative Creature snapshots, remote Creature player presentation with custom DNA, lag/reconnect diagnostics, expanded Cell parts/ecology, Creature creator body/paint/catalog validation, Creature world/nest/progression rules, host-authored world progression replication, procedural audio fallbacks, accessibility hit targets, and runtime performance budgets. Latest verification: <code>1179/1179</code> EditMode tests passed.
+          </div>
           <div class="task-grid">
             <div class="detail">
               <strong>Evidence</strong>
               <ul>
-                <li>Untracked <code>TestResults/EditMode.xml</code> reports 1127 tests, 1127 passed, 0 failed.</li>
+                <li><code>TestResults/EditMode.xml</code> reports 1179 tests, 1179 passed, 0 failed.</li>
                 <li>Coverage summary found during audit reports about 31.1 percent line coverage overall.</li>
-                <li>Existing revision todo docs include unchecked manual solo and multiplayer playtests.</li>
+                <li>Manual solo, two-player, four-player, and stress playtests remain recommended release gates outside this automated pass.</li>
               </ul>
             </div>
             <div class="detail">

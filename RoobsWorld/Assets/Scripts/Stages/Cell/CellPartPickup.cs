@@ -12,13 +12,20 @@ namespace RoobsWorld.Stages.Cell
 
         [SerializeField] private CellPartType _partType = CellPartType.Flagella;
         [SerializeField] private int _dnaReward = 3;
+        [SerializeField] private int _pickupId;
 
         public CellPartType PartType => _partType;
         public int DnaReward => _dnaReward;
+        public int PickupId => _pickupId;
 
         public void SetPartType(CellPartType partType)
         {
             _partType = partType;
+        }
+
+        public void SetPickupId(int pickupId)
+        {
+            _pickupId = Mathf.Max(0, pickupId);
         }
 
         private void Awake()

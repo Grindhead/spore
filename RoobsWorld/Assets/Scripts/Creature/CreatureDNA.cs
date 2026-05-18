@@ -52,7 +52,12 @@ namespace RoobsWorld.Creature
                 {
                     SpineSegments = 2,
                     Symmetry = SymmetryType.Bilateral,
-                    BodyScale = Vector3.one
+                    BodyScale = Vector3.one,
+                    Spine = new List<SpineSegment>
+                    {
+                        new SpineSegment { Offset = Vector3.zero, Scale = Vector2.one, Curve = 0f },
+                        new SpineSegment { Offset = Vector3.zero, Scale = Vector2.one, Curve = 0f }
+                    }
                 },
                 Parts = new List<PartPlacement>
                 {
@@ -100,6 +105,18 @@ namespace RoobsWorld.Creature
         public SymmetryType Symmetry = SymmetryType.Bilateral;
         public Vector3 BodyScale = Vector3.one;
         public float FrontPull = 0f;
+        public List<SpineSegment> Spine = new List<SpineSegment>();
+    }
+
+    /// <summary>
+    /// Per-bone sculpt data used by the creature creator to bend, offset, and resize the body spine.
+    /// </summary>
+    [Serializable]
+    public class SpineSegment
+    {
+        public Vector3 Offset;
+        public Vector2 Scale = Vector2.one;
+        public float Curve;
     }
 
     /// <summary>
@@ -134,5 +151,45 @@ namespace RoobsWorld.Creature
         public Color PrimaryColor = new Color(0.4f, 0.7f, 0.3f);
         public Color SecondaryColor = new Color(0.6f, 0.5f, 0.2f);
         public Color AccentColor = Color.white;
+        public CreaturePaintPattern Pattern = CreaturePaintPattern.None;
+        public CreatureMaterialFinish Material = CreatureMaterialFinish.Matte;
+        public float PatternStrength = 0.5f;
+        public List<CreaturePartPaintOverride> PartOverrides = new List<CreaturePartPaintOverride>();
+    }
+
+    public enum CreaturePaintPattern
+    {
+        None,
+        Spots,
+        Stripes,
+        Mottled,
+        Countershade,
+        Mask
+    }
+
+    public enum CreatureMaterialFinish
+    {
+        Matte,
+        Gloss,
+        Iridescent,
+        Furred,
+        Armored
+    }
+
+    /// <summary>
+    /// Optional color/material override for a specific placed part or part family.
+    /// </summary>
+    [Serializable]
+    public class CreaturePartPaintOverride
+    {
+        public string PartId;
+        public Color PrimaryColor = Color.clear;
+        public Color SecondaryColor = Color.clear;
+        public Color AccentColor = Color.clear;
+        public bool OverridePrimary;
+        public bool OverrideSecondary;
+        public bool OverrideAccent;
+        public bool OverrideMaterial;
+        public CreatureMaterialFinish Material = CreatureMaterialFinish.Matte;
     }
 }

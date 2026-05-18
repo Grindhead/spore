@@ -53,6 +53,38 @@ namespace RoobsWorld.Tests
             Assert.IsTrue(consumed);
             Assert.AreEqual(0, _fm.FoodCount);
         }
+
+        [Test]
+        public void AddOrUpdateNetworkFood_PreservesHostIdAndUpdatesExistingFood()
+        {
+            int id = _fm.AddOrUpdateNetworkFood(42, new Vector3(1f, 0f, 0f), FoodType.Meat, 8f);
+            Assert.AreEqual(42, id);
+            Assert.IsTrue(_fm.HasFood(42));
+            Assert.AreEqual(1, _fm.FoodCount);
+
+            _fm.AddOrUpdateNetworkFood(42, new Vector3(4f, 0f, 0f), FoodType.Toxin, 3f);
+            Assert.AreEqual(1, _fm.FoodCount);
+
+            var nearest = _fm.GetNearestFood(new Vector3(4f, 0f, 0f), 1f);
+            Assert.IsTrue(nearest.HasValue);
+            Assert.AreEqual(42, nearest.Value.Id);
+            Assert.AreEqual(FoodType.Toxin, nearest.Value.Type);
+            Assert.AreEqual(4f, nearest.Value.Position.x, 0.001f);
+        }
+
+        [Test]
+        public void CopyFoodIds_ReturnsManagedIds()
+        {
+            int first = _fm.AddFoodAt(Vector3.zero, FoodType.Plant, 5f);
+            _fm.AddOrUpdateNetworkFood(88, Vector3.right, FoodType.Meat, 8f);
+            var ids = new System.Collections.Generic.List<int>();
+
+            int count = _fm.CopyFoodIds(ids);
+
+            Assert.AreEqual(2, count);
+            CollectionAssert.Contains(ids, first);
+            CollectionAssert.Contains(ids, 88);
+        }
     }
 
     public class FoodTrackerTests
@@ -161,6 +193,34 @@ namespace RoobsWorld.Tests
             var t = new FoodTracker();
             t.Add(Vector3.zero, FoodType.Plant, 5f);
             Assert.IsFalse(t.Get(999).HasValue);
+        }
+
+        [Test]
+        public void AddWithId_UsesProvidedIdAndAdvancesGeneratedIds()
+        {
+            var t = new FoodTracker();
+            int hostId = t.AddWithId(77, new Vector3(2f, 0f, 0f), FoodType.Meat, 9f);
+            int generatedId = t.Add(Vector3.zero, FoodType.Plant, 5f);
+
+            Assert.AreEqual(77, hostId);
+            Assert.AreEqual(78, generatedId);
+            Assert.IsTrue(t.Contains(77));
+            Assert.IsTrue(t.Contains(78));
+        }
+
+        [Test]
+        public void AddWithId_UpdatesExistingEntry()
+        {
+            var t = new FoodTracker();
+            t.AddWithId(7, Vector3.zero, FoodType.Plant, 5f);
+            t.AddWithId(7, new Vector3(3f, 0f, 0f), FoodType.Toxin, 2f);
+
+            Assert.AreEqual(1, t.Count);
+            var entry = t.Get(7);
+            Assert.IsTrue(entry.HasValue);
+            Assert.AreEqual(3f, entry.Value.Position.x, 0.001f);
+            Assert.AreEqual(FoodType.Toxin, entry.Value.Type);
+            Assert.AreEqual(2f, entry.Value.Nutrition, 0.001f);
         }
     }
 }

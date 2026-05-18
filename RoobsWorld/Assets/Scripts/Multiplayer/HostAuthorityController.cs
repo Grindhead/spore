@@ -30,6 +30,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>Only the host may create or destroy organisms in the shared ecosystem.</summary>
         public bool CanSpawnOrganism() => Authoritative;
 
+        /// <summary>Only the host may create shared Cell-stage part pickups.</summary>
+        public bool CanSpawnPickup() => Authoritative;
+
         /// <summary>Only the host may fire environmental events (nutrient bloom, virus outbreak, etc.).</summary>
         public bool CanFireEnvironmentEvent() => Authoritative;
 

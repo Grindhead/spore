@@ -34,6 +34,12 @@ namespace RoobsWorld.Stages.Creature
         private CreatureStageObjectiveType _objectiveType;
         private bool _objectiveIsInsideHoldGround;
         private float _objectiveGuidanceDistance = -1f;
+        private bool _hasWorldProgression;
+        private CreatureProgressionState _worldProgression;
+        private bool _canEditAtNest;
+        private bool _canMigrate;
+        private float _nearestNestDistance = -1f;
+        private float _nearestMigrationDistance = -1f;
 
         public void Initialize(RoobsWorld.Creature.CreatureInstance playerCreature)
         {
@@ -93,6 +99,22 @@ namespace RoobsWorld.Stages.Creature
                 _canvas.gameObject.SetActive(visible);
         }
 
+        public void SetWorldProgression(
+            CreatureProgressionState progression,
+            bool canEditAtNest,
+            bool canMigrate,
+            float nearestNestDistance = -1f,
+            float nearestMigrationDistance = -1f)
+        {
+            _hasWorldProgression = true;
+            _worldProgression = progression;
+            _canEditAtNest = canEditAtNest;
+            _canMigrate = canMigrate;
+            _nearestNestDistance = nearestNestDistance;
+            _nearestMigrationDistance = nearestMigrationDistance;
+            Refresh();
+        }
+
         private void Update()
         {
             if (_canvas == null || !_canvas.gameObject.activeInHierarchy)
@@ -115,6 +137,7 @@ namespace RoobsWorld.Stages.Creature
             EventBus.Subscribe<CreatureHealingZoneEvent>(OnHealingZone);
             EventBus.Subscribe<CreatureStreakBonusEvent>(OnStreakBonus);
             EventBus.Subscribe<CreatureSpeciesRelationshipChangedEvent>(OnSpeciesRelationshipChanged);
+            EventBus.Subscribe<CreatureWorldProgressionEvent>(OnWorldProgression);
         }
 
         private void OnDisable()
@@ -128,6 +151,7 @@ namespace RoobsWorld.Stages.Creature
             EventBus.Unsubscribe<CreatureHealingZoneEvent>(OnHealingZone);
             EventBus.Unsubscribe<CreatureStreakBonusEvent>(OnStreakBonus);
             EventBus.Unsubscribe<CreatureSpeciesRelationshipChangedEvent>(OnSpeciesRelationshipChanged);
+            EventBus.Unsubscribe<CreatureWorldProgressionEvent>(OnWorldProgression);
         }
 
         private void OnDestroy()
@@ -163,7 +187,9 @@ namespace RoobsWorld.Stages.Creature
             float hpMax = Mathf.Max(1f, _playerCreature.Stats.Health);
             int evolutionLevel = RoobsWorld.Creature.CreatureUpgradeCatalog.GetEvolutionLevel(_playerCreature.DNA);
             int dnaPoints = 0;
-            if (GameManager.HasInstance && GameManager.Instance.CurrentSave != null)
+            if (_hasWorldProgression)
+                dnaPoints = _worldProgression.DNA;
+            else if (GameManager.HasInstance && GameManager.Instance.CurrentSave != null)
                 dnaPoints = GameManager.Instance.CurrentSave.DNAPoints;
 
             string staminaSummary = string.Empty;
@@ -215,7 +241,14 @@ namespace RoobsWorld.Stages.Creature
                     healthRatio: hpRatio,
                     defeatedRivals: _defeatedRivals,
                     targetDefeats: _targetDefeats);
-                _statusText.text = Localization.Get(key);
+                _statusText.text = _hasWorldProgression && !_playerCreature.IsInvulnerable && hpRatio > 0.3f
+                    ? BuildWorldStatusText(
+                        _worldProgression,
+                        _canEditAtNest,
+                        _canMigrate,
+                        _nearestNestDistance,
+                        _nearestMigrationDistance)
+                    : Localization.Get(key);
             }
         }
 
@@ -519,6 +552,16 @@ namespace RoobsWorld.Stages.Creature
                 1.2f);
         }
 
+        private void OnWorldProgression(CreatureWorldProgressionEvent evt)
+        {
+            ShowFeedback(
+                BuildWorldProgressionLabel(evt.EventType, evt.DnaReward),
+                evt.EventType == CreatureProgressionEventType.CompleteMigration
+                    ? UIStyleGuide.Colors.TideTealBright
+                    : UIStyleGuide.Colors.AlgaeLime,
+                1.35f);
+        }
+
         private void ShowFeedback(string message, Color color, float duration)
         {
             if (_feedbackText == null)
@@ -664,6 +707,54 @@ namespace RoobsWorld.Stages.Creature
             };
 
             return string.Format(Localization.Get("creature.relationship.shift"), cleanSpecies, dispositionLabel);
+        }
+
+        public static string BuildWorldProgressionLabel(CreatureProgressionEventType eventType, int dnaReward)
+        {
+            string key = eventType switch
+            {
+                CreatureProgressionEventType.Eat => "creature.world.feedback.eat",
+                CreatureProgressionEventType.Drink => "creature.world.feedback.drink",
+                CreatureProgressionEventType.HealAtNest => "creature.world.feedback.nest",
+                CreatureProgressionEventType.AllySpecies => "creature.world.feedback.ally",
+                CreatureProgressionEventType.DefeatSpecies => "creature.world.feedback.defeat",
+                CreatureProgressionEventType.RecruitPackMate => "creature.world.feedback.pack",
+                CreatureProgressionEventType.CompleteMigration => "creature.world.feedback.migration",
+                _ => "creature.world.feedback.discover"
+            };
+            return string.Format(Localization.Get(key), Mathf.Max(0, dnaReward));
+        }
+
+        public static string BuildWorldStatusText(
+            CreatureProgressionState progression,
+            bool canEditAtNest,
+            bool canMigrate,
+            float nearestNestDistance = -1f,
+            float nearestMigrationDistance = -1f)
+        {
+            string cue = string.Empty;
+            if (canMigrate)
+                cue = Localization.Get("creature.world.status.migrate_ready");
+            else if (canEditAtNest)
+                cue = Localization.Get("creature.world.status.nest_ready");
+            else if (progression.IsAtNest)
+                cue = Localization.Get("creature.world.status.at_nest");
+            else if (nearestNestDistance >= 0f)
+                cue = string.Format(Localization.Get("creature.world.status.near_nest"), Mathf.CeilToInt(nearestNestDistance));
+
+            string gateCue = string.Empty;
+            if (!canMigrate && nearestMigrationDistance >= 0f)
+                gateCue = string.Format(Localization.Get("creature.world.status.near_gate"), Mathf.CeilToInt(nearestMigrationDistance));
+
+            return string.Format(
+                Localization.Get("creature.world.status"),
+                Mathf.Max(0, progression.Meals),
+                Mathf.Max(0, progression.Allies),
+                Mathf.Max(0, progression.Defeats),
+                Mathf.Max(0, progression.Discoveries),
+                Mathf.Max(0, progression.MigrationsCompleted),
+                cue,
+                gateCue);
         }
     }
 }

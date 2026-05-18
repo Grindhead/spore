@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using NUnit.Framework;
+using RoobsWorld.Core;
 using RoobsWorld.Multiplayer;
 using RoobsWorld.Stages.Cell;
 
@@ -224,6 +225,7 @@ namespace RoobsWorld.Tests
             var auth = new HostAuthorityController(mgr);
             Assert.IsTrue(auth.CanSpawnFood());
             Assert.IsTrue(auth.CanSpawnOrganism());
+            Assert.IsTrue(auth.CanSpawnPickup());
             Assert.IsTrue(auth.CanFireEnvironmentEvent());
             Assert.IsTrue(auth.CanSpawnLeviathan());
         }
@@ -236,6 +238,7 @@ namespace RoobsWorld.Tests
             var auth = new HostAuthorityController(mgr);
             Assert.IsTrue(auth.CanSpawnFood());
             Assert.IsTrue(auth.CanSpawnOrganism());
+            Assert.IsTrue(auth.CanSpawnPickup());
             Assert.IsTrue(auth.CanFireEnvironmentEvent());
             Assert.IsTrue(auth.CanSpawnLeviathan());
         }
@@ -252,6 +255,7 @@ namespace RoobsWorld.Tests
             var auth = new HostAuthorityController(client);
             Assert.IsFalse(auth.CanSpawnFood());
             Assert.IsFalse(auth.CanSpawnOrganism());
+            Assert.IsFalse(auth.CanSpawnPickup());
             Assert.IsFalse(auth.CanFireEnvironmentEvent());
             Assert.IsFalse(auth.CanSpawnLeviathan());
         }
@@ -262,6 +266,7 @@ namespace RoobsWorld.Tests
             var auth = new HostAuthorityController(null);
             Assert.IsTrue(auth.CanSpawnFood(),           "null session = offline = authoritative");
             Assert.IsTrue(auth.CanSpawnOrganism());
+            Assert.IsTrue(auth.CanSpawnPickup());
             Assert.IsTrue(auth.CanFireEnvironmentEvent());
             Assert.IsTrue(auth.CanSpawnLeviathan());
         }
@@ -280,7 +285,17 @@ namespace RoobsWorld.Tests
                 MoveY    =  0.5f,
                 EatInput = true,
                 Mass     = 3.25f,
-                Tick     = 1234u
+                Tick     = 1234u,
+                HasCreatureInput = true,
+                CreatureId = "creature-2",
+                CreatureDNAJson = "{\"CreatureId\":\"creature-2\"}",
+                CreaturePosX = 9f,
+                CreaturePosY = -4f,
+                CreatureRotY = 135f,
+                CreatureHealth = 22f,
+                CreatureMaxHealth = 30f,
+                CreatureStamina = 11f,
+                CreatureIsAlive = true
             };
             byte[] data = NetworkSerializer.Serialize(pkt);
             Assert.IsNotNull(data);
@@ -293,6 +308,16 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(pkt.EatInput, restored.EatInput);
             Assert.AreEqual(pkt.Mass,     restored.Mass,     0.0001f);
             Assert.AreEqual(pkt.Tick,     restored.Tick);
+            Assert.AreEqual(pkt.HasCreatureInput, restored.HasCreatureInput);
+            Assert.AreEqual(pkt.CreatureId, restored.CreatureId);
+            Assert.AreEqual(pkt.CreatureDNAJson, restored.CreatureDNAJson);
+            Assert.AreEqual(pkt.CreaturePosX, restored.CreaturePosX, 0.0001f);
+            Assert.AreEqual(pkt.CreaturePosY, restored.CreaturePosY, 0.0001f);
+            Assert.AreEqual(pkt.CreatureRotY, restored.CreatureRotY, 0.0001f);
+            Assert.AreEqual(pkt.CreatureHealth, restored.CreatureHealth, 0.0001f);
+            Assert.AreEqual(pkt.CreatureMaxHealth, restored.CreatureMaxHealth, 0.0001f);
+            Assert.AreEqual(pkt.CreatureStamina, restored.CreatureStamina, 0.0001f);
+            Assert.AreEqual(pkt.CreatureIsAlive, restored.CreatureIsAlive);
         }
 
         [Test]
@@ -340,6 +365,45 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void Serialize_StageTransitionNetState_RoundTrip()
+        {
+            var pkt = new StageTransitionNetState
+            {
+                Tick = 44u,
+                RequestingPlayerId = 0,
+                TargetStage = GameStageType.Creature,
+                TransitionId = 9001u
+            };
+
+            byte[] data = NetworkSerializer.Serialize(pkt);
+            var restored = NetworkSerializer.DeserializeStageTransition(data);
+
+            Assert.AreEqual(pkt.Tick, restored.Tick);
+            Assert.AreEqual(pkt.RequestingPlayerId, restored.RequestingPlayerId);
+            Assert.AreEqual(pkt.TargetStage, restored.TargetStage);
+            Assert.AreEqual(pkt.TransitionId, restored.TransitionId);
+        }
+
+        [Test]
+        public void DeserializeStageTransition_FromTaggedPacketSlice_RoundTrip()
+        {
+            var pkt = new StageTransitionNetState
+            {
+                Tick = 45u,
+                RequestingPlayerId = 0,
+                TargetStage = GameStageType.Creature
+            };
+
+            byte[] payload = NetworkSerializer.Serialize(pkt);
+            byte[] packet = NetworkTickManager.Prepend(NetworkTickManager.TagStageTransition, payload);
+            var restored = NetworkSerializer.DeserializeStageTransition(packet, 1, packet.Length - 1);
+
+            Assert.AreEqual(pkt.Tick, restored.Tick);
+            Assert.AreEqual(pkt.RequestingPlayerId, restored.RequestingPlayerId);
+            Assert.AreEqual(pkt.TargetStage, restored.TargetStage);
+        }
+
+        [Test]
         public void Serialize_SessionNetState_RoundTrip()
         {
             var state = new SessionNetState
@@ -363,6 +427,52 @@ namespace RoobsWorld.Tests
                 {
                     new FoodNetState { FoodId = 7, PosX = -1f, PosY = 4f,
                         FoodType = FoodType.Plant, Exists = true }
+                },
+                PartPickups = new[]
+                {
+                    new PartPickupNetState { PickupId = 5, PosX = 8f, PosY = -6f,
+                        PartType = CellPartType.Spike, Exists = true }
+                },
+                CreaturePlayers = new[]
+                {
+                    new CreaturePlayerNetState { PlayerId = 0, CreatureId = "player-roob",
+                        CreatureDNAJson = "{\"CreatureId\":\"player-roob\",\"CreatureName\":\"Roob\"}",
+                        PosX = 2f, PosY = 3f, RotY = 45f, Health = 21f, MaxHealth = 30f,
+                        Stamina = 14f, IsAlive = true }
+                },
+                CreatureRivals = new[]
+                {
+                    new CreatureRivalNetState { CreatureId = "rival-alpha",
+                        Archetype = 2, IsAlpha = true, PosX = -4f, PosY = 9f, RotY = 180f,
+                        Health = 18f, MaxHealth = 25f, Exists = true, IsAlive = true }
+                },
+                CreatureObjective = new CreatureObjectiveNetState
+                {
+                    HasObjective = true,
+                    ObjectiveType = 1,
+                    Progress = 2,
+                    Target = 3,
+                    ActiveRivals = 4,
+                    DesiredActiveRivals = 5,
+                    ObjectivesCompleted = 1,
+                    HoldSeconds = 7.5f,
+                    IsComplete = false
+                },
+                CreatureWorldProgression = new CreatureWorldProgressionNetState
+                {
+                    HasProgression = true,
+                    DNA = 72,
+                    Meals = 3,
+                    Allies = 1,
+                    Defeats = 2,
+                    Discoveries = 4,
+                    MigrationsCompleted = 1,
+                    IsAtNest = true,
+                    HasPackMate = false,
+                    CanEditAtNest = true,
+                    CanMigrate = true,
+                    NearestNestDistance = 0f,
+                    NearestMigrationDistance = 12.5f
                 }
             };
 
@@ -388,6 +498,74 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(7,           r.Foods[0].FoodId);
             Assert.AreEqual(FoodType.Plant, r.Foods[0].FoodType);
             Assert.IsTrue(r.Foods[0].Exists);
+
+            Assert.AreEqual(1, r.PartPickups.Length);
+            Assert.AreEqual(5, r.PartPickups[0].PickupId);
+            Assert.AreEqual(CellPartType.Spike, r.PartPickups[0].PartType);
+            Assert.IsTrue(r.PartPickups[0].Exists);
+
+            Assert.AreEqual(1, r.CreaturePlayers.Length);
+            Assert.AreEqual("player-roob", r.CreaturePlayers[0].CreatureId);
+            Assert.That(r.CreaturePlayers[0].CreatureDNAJson, Does.Contain("player-roob"));
+            Assert.AreEqual(14f, r.CreaturePlayers[0].Stamina, 0.0001f);
+
+            Assert.AreEqual(1, r.CreatureRivals.Length);
+            Assert.AreEqual("rival-alpha", r.CreatureRivals[0].CreatureId);
+            Assert.IsTrue(r.CreatureRivals[0].IsAlpha);
+            Assert.AreEqual(2, r.CreatureRivals[0].Archetype);
+
+            Assert.IsTrue(r.CreatureObjective.HasObjective);
+            Assert.AreEqual(2, r.CreatureObjective.Progress);
+            Assert.AreEqual(7.5f, r.CreatureObjective.HoldSeconds, 0.0001f);
+            Assert.IsTrue(r.CreatureWorldProgression.HasProgression);
+            Assert.AreEqual(72, r.CreatureWorldProgression.DNA);
+            Assert.AreEqual(3, r.CreatureWorldProgression.Meals);
+            Assert.IsTrue(r.CreatureWorldProgression.CanMigrate);
+            Assert.AreEqual(12.5f, r.CreatureWorldProgression.NearestMigrationDistance, 0.0001f);
+        }
+
+        [Test]
+        public void Serialize_Heartbeat_And_RecoveryRequest_RoundTrip()
+        {
+            var heartbeat = new NetworkHeartbeatPacket
+            {
+                PlayerId = 3,
+                Sequence = 12u,
+                SentAtSeconds = 42.5d,
+                IsAck = true
+            };
+            byte[] heartbeatPacket = NetworkTickManager.Prepend(
+                NetworkTickManager.TagHeartbeat,
+                NetworkSerializer.Serialize(heartbeat));
+            var restoredHeartbeat = NetworkSerializer.DeserializeHeartbeat(
+                heartbeatPacket,
+                1,
+                heartbeatPacket.Length - 1);
+
+            Assert.AreEqual(heartbeat.PlayerId, restoredHeartbeat.PlayerId);
+            Assert.AreEqual(heartbeat.Sequence, restoredHeartbeat.Sequence);
+            Assert.AreEqual(heartbeat.SentAtSeconds, restoredHeartbeat.SentAtSeconds);
+            Assert.IsTrue(restoredHeartbeat.IsAck);
+
+            var recovery = new NetworkRecoveryRequestPacket
+            {
+                PlayerId = 4,
+                LastReceivedTick = 88u,
+                CurrentStage = GameStageType.Creature,
+                ReconnectAttempt = 2
+            };
+            byte[] recoveryPacket = NetworkTickManager.Prepend(
+                NetworkTickManager.TagRecoveryRequest,
+                NetworkSerializer.Serialize(recovery));
+            var restoredRecovery = NetworkSerializer.DeserializeRecoveryRequest(
+                recoveryPacket,
+                1,
+                recoveryPacket.Length - 1);
+
+            Assert.AreEqual(recovery.PlayerId, restoredRecovery.PlayerId);
+            Assert.AreEqual(recovery.LastReceivedTick, restoredRecovery.LastReceivedTick);
+            Assert.AreEqual(recovery.CurrentStage, restoredRecovery.CurrentStage);
+            Assert.AreEqual(recovery.ReconnectAttempt, restoredRecovery.ReconnectAttempt);
         }
 
         [Test]
@@ -401,7 +579,8 @@ namespace RoobsWorld.Tests
                     new PlayerNetState { PlayerId = 1, PosX = 2f, PosY = 3f, IsAlive = true }
                 },
                 Organisms = Array.Empty<OrganismNetState>(),
-                Foods = Array.Empty<FoodNetState>()
+                Foods = Array.Empty<FoodNetState>(),
+                PartPickups = Array.Empty<PartPickupNetState>()
             };
 
             byte[] payload = NetworkSerializer.Serialize(state);
@@ -422,7 +601,8 @@ namespace RoobsWorld.Tests
                 Tick      = 1u,
                 Players   = Array.Empty<PlayerNetState>(),
                 Organisms = Array.Empty<OrganismNetState>(),
-                Foods     = Array.Empty<FoodNetState>()
+                Foods     = Array.Empty<FoodNetState>(),
+                PartPickups = Array.Empty<PartPickupNetState>()
             };
             byte[] data = NetworkSerializer.Serialize(state);
             var r = NetworkSerializer.DeserializeSession(data);
@@ -430,6 +610,7 @@ namespace RoobsWorld.Tests
             Assert.AreEqual(0, r.Players.Length);
             Assert.AreEqual(0, r.Organisms.Length);
             Assert.AreEqual(0, r.Foods.Length);
+            Assert.AreEqual(0, r.PartPickups.Length);
         }
 
         [Test]
@@ -439,6 +620,7 @@ namespace RoobsWorld.Tests
             byte[] data = NetworkSerializer.Serialize(state);
             var r = NetworkSerializer.DeserializeSession(data);
             Assert.AreEqual(0, r.Players.Length);
+            Assert.AreEqual(0, r.PartPickups.Length);
         }
 
         [Test]

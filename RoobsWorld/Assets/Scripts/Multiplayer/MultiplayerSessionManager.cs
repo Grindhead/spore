@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using RoobsWorld.Core;
+using UnityEngine;
 
 namespace RoobsWorld.Multiplayer
 {
@@ -140,6 +141,7 @@ namespace RoobsWorld.Multiplayer
         private string _localLobbyId = DefaultLobbyId;
         private SessionMapDefinition? _sessionMap;
         private readonly Dictionary<int, string> _playerLobbyIds = new Dictionary<int, string>();
+        private NetworkQualitySnapshot _networkQuality;
 
         // ---- public read properties ----
 
@@ -167,6 +169,7 @@ namespace RoobsWorld.Multiplayer
         public IReadOnlyList<MultiplayerClan> Clans => _clans;
         public IReadOnlyList<MultiplayerClan> Parties => _clans;
         public IReadOnlyList<MultiplayerChatMessage> ChatMessages => _chatMessages;
+        public NetworkQualitySnapshot NetworkQuality => _networkQuality;
 
         // ---- events ----
 
@@ -198,6 +201,9 @@ namespace RoobsWorld.Multiplayer
         /// <summary>A server-filtered global chat message was received for this session.</summary>
         public event Action<MultiplayerChatMessage> OnChatMessageReceived;
 
+        /// <summary>Network quality changed due to heartbeat, packet loss, reconnect, or snapshot age.</summary>
+        public event Action<NetworkQualitySnapshot> OnNetworkQualityChanged;
+
         // ---- constructor ----
 
         public MultiplayerSessionManager(INetworkTransport transport = null)
@@ -223,6 +229,7 @@ namespace RoobsWorld.Multiplayer
             _clans.Clear();
             _chatMessages.Clear();
             _sessionMap = null;
+            _networkQuality = default;
             ResetLobbyState();
             State          = SessionState.Hosting;
 
@@ -251,6 +258,7 @@ namespace RoobsWorld.Multiplayer
             _localReady    = true;
             _chatMessages.Clear();
             _sessionMap = null;
+            _networkQuality = default;
             ResetLobbyState();
             State          = SessionState.Hosting;
 
@@ -278,6 +286,7 @@ namespace RoobsWorld.Multiplayer
             _localReady    = false;
             _chatMessages.Clear();
             _sessionMap = null;
+            _networkQuality = default;
             ResetLobbyState();
             State          = localPlayerId == hostPlayerId ? SessionState.Hosting : SessionState.Connected;
 
@@ -309,6 +318,7 @@ namespace RoobsWorld.Multiplayer
             _remotePlayers.Clear();
             _clans.Clear();
             _chatMessages.Clear();
+            _networkQuality = default;
             ResetLobbyState();
             State          = SessionState.Connected;
             return true;
@@ -403,6 +413,52 @@ namespace RoobsWorld.Multiplayer
             OnGameStarted?.Invoke();
             EventBus.Publish(new MultiplayerGameStartedEvent { SessionCode = _sessionCode });
             return true;
+        }
+
+        /// <summary>Applies latest network quality diagnostics from the tick manager.</summary>
+        public bool ApplyNetworkQuality(NetworkQualitySnapshot snapshot)
+        {
+            if (State == SessionState.Offline)
+                return false;
+
+            _networkQuality = snapshot;
+            OnNetworkQualityChanged?.Invoke(_networkQuality);
+            EventBus.Publish(new MultiplayerNetworkQualityChangedEvent
+            {
+                PingMs = _networkQuality.PingMs,
+                RttTrendMs = _networkQuality.RttTrendMs,
+                PacketLossRatio = _networkQuality.PacketLossRatio,
+                LastAuthoritativeSnapshotAgeSeconds = _networkQuality.LastAuthoritativeSnapshotAgeSeconds,
+                ReconnectAttempts = _networkQuality.ReconnectAttempts,
+                Quality = _networkQuality.Quality
+            });
+            return true;
+        }
+
+        /// <summary>Marks the session as temporarily disconnected without losing lobby, chat, clan, or map state.</summary>
+        public bool BeginReconnectAttempt()
+        {
+            if (State == SessionState.Offline)
+                return false;
+
+            State = SessionState.Disconnected;
+            var next = _networkQuality;
+            next.ReconnectAttempts = Mathf.Max(0, next.ReconnectAttempts) + 1;
+            next.Quality = NetworkConnectionQuality.Reconnecting;
+            return ApplyNetworkQuality(next);
+        }
+
+        /// <summary>Restores connected/hosting state after a successful authoritative snapshot resync.</summary>
+        public bool CompleteReconnect()
+        {
+            if (State == SessionState.Offline)
+                return false;
+
+            State = IsHost ? SessionState.Hosting : SessionState.Connected;
+            var next = _networkQuality;
+            next.LastAuthoritativeSnapshotAgeSeconds = 0f;
+            next.Quality = NetworkConnectionQuality.Healthy;
+            return ApplyNetworkQuality(next);
         }
 
         /// <summary>Applies a server-filtered global chat message for the current session.</summary>
@@ -556,6 +612,7 @@ namespace RoobsWorld.Multiplayer
             _localClanId   = -1;
             _localReady    = false;
             _sessionMap    = null;
+            _networkQuality = default;
             ResetLobbyState();
             State          = SessionState.Offline;
         }

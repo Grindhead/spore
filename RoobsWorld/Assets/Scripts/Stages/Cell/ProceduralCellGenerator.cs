@@ -236,6 +236,30 @@ namespace RoobsWorld.Stages.Cell
             if (loadout.HasPart(CellPartType.Jet))
                 AddLoadoutJet(root, bodyColor);
 
+            if (loadout.HasPart(CellPartType.HerbivoreMouth))
+                AddLoadoutFrontMarker(root, "HerbivoreMouth", Color.Lerp(bodyColor, new Color(0.45f, 1f, 0.25f), 0.7f), 0.12f, 0.055f);
+
+            if (loadout.HasPart(CellPartType.CarnivoreMouth))
+                AddLoadoutFrontMarker(root, "CarnivoreMouth", Color.Lerp(bodyColor, new Color(1f, 0.28f, 0.18f), 0.7f), 0.16f, 0.045f);
+
+            if (loadout.HasPart(CellPartType.OmnivoreMouth))
+                AddLoadoutFrontMarker(root, "OmnivoreMouth", Color.Lerp(bodyColor, new Color(1f, 0.74f, 0.22f), 0.7f), 0.14f, 0.05f);
+
+            if (loadout.HasPart(CellPartType.SuctionMouth))
+                AddLoadoutFrontMarker(root, "SuctionMouth", Color.Lerp(bodyColor, new Color(0.22f, 0.9f, 1f), 0.65f), 0.18f, 0.035f);
+
+            if (loadout.HasPart(CellPartType.PoisonVacuole))
+                AddLoadoutRing(root, "PoisonVacuole", "cell_poison", 5, CellSphereRadius * 0.8f, 0.18f, new Color(0.8f, 0.2f, 1f), 0.16f);
+
+            if (loadout.HasPart(CellPartType.ElectricNodule))
+                AddLoadoutRing(root, "ElectricNodule", "cell_electric", 4, CellSphereRadius * 0.95f, 0.22f, new Color(1f, 0.95f, 0.18f), 0.2f);
+
+            if (loadout.HasPart(CellPartType.ArmorPlate))
+                AddLoadoutRing(root, "ArmorPlate", "cell_armor", 6, CellSphereRadius * 0.86f, 0.12f, new Color(0.72f, 0.78f, 0.82f), 0.08f);
+
+            if (loadout.HasPart(CellPartType.SensorEye))
+                AddLoadoutFrontMarker(root, "SensorEye", Color.Lerp(bodyColor, new Color(0.65f, 0.95f, 1f), 0.65f), 0.09f, 0.075f);
+
             int visualSeed = 7717 + MathUtils.StableHash(root.name) + Mathf.RoundToInt(root.transform.position.sqrMagnitude * 10f);
             MenuMicrobeVisuals.Apply(root, bodyColor, visualSeed, 5);
         }
@@ -326,6 +350,21 @@ namespace RoobsWorld.Stages.Cell
             var jetColor = Color.Lerp(bodyColor, Color.black, 0.15f);
             mr.sharedMaterial = CreateFlatUnlitMaterial(jetColor, "LoadoutJet");
             ApplyRendererColor(mr, jetColor, 0.12f);
+        }
+
+        private static void AddLoadoutFrontMarker(GameObject root, string partName, Color color, float width, float height)
+        {
+            var holder = new GameObject($"Loadout_{partName}_0");
+            holder.transform.SetParent(root.transform, false);
+            holder.transform.localPosition = new Vector3(0f, DetailSurfaceY + 0.04f, CellSphereRadius * 0.76f);
+            holder.transform.localRotation = Quaternion.identity;
+            holder.transform.localScale = new Vector3(Mathf.Max(0.03f, width), Mathf.Max(0.02f, height), Mathf.Max(0.02f, width * 0.55f));
+
+            var mf = holder.AddComponent<MeshFilter>();
+            mf.mesh = ProceduralMeshFactory.CreateOrganicSphere(1f, 8);
+            var mr = holder.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = CreateFlatUnlitMaterial(color, $"Loadout{partName}");
+            ApplyRendererColor(mr, color, 0.14f);
         }
 
         private static void AddSporeLikeDetails(GameObject root, Genome genome, Color displayColor)

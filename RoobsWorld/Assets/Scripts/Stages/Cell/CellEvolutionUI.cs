@@ -120,42 +120,61 @@ namespace RoobsWorld.Stages.Cell
         private void BuildPartOptions()
         {
             _partOptions.Clear();
-            _partOptions.Add(new PartOption
+            var definitions = CellPartLoadout.GetAllDefinitions();
+            for (int i = 0; i < definitions.Count; i++)
             {
-                Type = CellPartType.Flagella,
-                Name = "Flagella",
-                Effect = "+20% swim speed",
-                Flavor = "Fast and agile propulsion for quick turns and chases.",
-                Glyph = "~~",
-                Accent = UIStyleGuide.Colors.AlgaeLime
-            });
-            _partOptions.Add(new PartOption
+                var definition = definitions[i];
+                _partOptions.Add(new PartOption
+                {
+                    Type = definition.Type,
+                    Name = definition.DisplayName,
+                    Effect = BuildPartEffectLabel(definition),
+                    Flavor = $"{definition.Tooltip} Unlock: {definition.UnlockSource}. Cost: {definition.DnaCost} DNA.",
+                    Glyph = GetPartGlyph(definition),
+                    Accent = GetPartAccent(definition)
+                });
+            }
+        }
+
+        private static string BuildPartEffectLabel(CellPartDefinition definition)
+        {
+            var parts = new List<string>(4);
+            if (Mathf.Abs(definition.SpeedBonus) > 0.001f)
+                parts.Add($"{definition.SpeedBonus * 100f:+0;-0}% speed");
+            if (definition.PlantGainBonus > 0f)
+                parts.Add($"+{Mathf.RoundToInt(definition.PlantGainBonus * 100f)}% plant");
+            if (definition.MeatGainBonus > 0f)
+                parts.Add($"+{Mathf.RoundToInt(definition.MeatGainBonus * 100f)}% meat");
+            if (definition.ToxinGainBonus > 0f)
+                parts.Add($"+{Mathf.RoundToInt(definition.ToxinGainBonus * 100f)}% toxin");
+            if (definition.ContactDamageMultiplier > 1f)
+                parts.Add($"{definition.ContactDamageMultiplier:0.0}x contact");
+            if (definition.ProbeRadiusBonus > 0f)
+                parts.Add("+reach");
+
+            return parts.Count > 0 ? string.Join(" / ", parts) : "utility";
+        }
+
+        private static string GetPartGlyph(CellPartDefinition definition)
+        {
+            return definition.Category switch
             {
-                Type = CellPartType.Cilia,
-                Name = "Cilia",
-                Effect = "+10% swim speed",
-                Flavor = "Balanced locomotion upgrade with steady movement control.",
-                Glyph = "///",
-                Accent = UIStyleGuide.Colors.TideTealBright
-            });
-            _partOptions.Add(new PartOption
+                CellPartCategory.Mouth => "()",
+                CellPartCategory.Defense => "^^",
+                CellPartCategory.Utility => "**",
+                _ => "~~"
+            };
+        }
+
+        private static Color GetPartAccent(CellPartDefinition definition)
+        {
+            return definition.Category switch
             {
-                Type = CellPartType.Spike,
-                Name = "Spike",
-                Effect = "Contact damage",
-                Flavor = "Weaponized surface trait to punish close-range predators.",
-                Glyph = "^",
-                Accent = UIStyleGuide.Colors.CoralBright
-            });
-            _partOptions.Add(new PartOption
-            {
-                Type = CellPartType.Jet,
-                Name = "Jet",
-                Effect = "+35% swim speed",
-                Flavor = "Burst propulsion mutation for high-speed repositioning.",
-                Glyph = ">>",
-                Accent = UIStyleGuide.Colors.FossilGoldBright
-            });
+                CellPartCategory.Mouth => UIStyleGuide.Colors.FossilGoldBright,
+                CellPartCategory.Defense => UIStyleGuide.Colors.CoralBright,
+                CellPartCategory.Utility => UIStyleGuide.Colors.TideTealBright,
+                _ => UIStyleGuide.Colors.AlgaeLime
+            };
         }
 
         private void CreatePaletteButtons(RectTransform parent, Font font)
@@ -167,11 +186,13 @@ namespace RoobsWorld.Stages.Cell
                 int col = i % 2;
                 int row = i / 2;
 
+                int rows = Mathf.Max(1, Mathf.CeilToInt(count / 2f));
                 float width = 0.43f;
-                float height = 0.32f;
+                float rowGap = 0.025f;
+                float height = Mathf.Clamp((0.76f - rowGap * Mathf.Max(0, rows - 1)) / rows, 0.1f, 0.32f);
                 float xMin = col == 0 ? 0.06f : 0.51f;
                 float xMax = xMin + width;
-                float yMax = row == 0 ? 0.82f : 0.45f;
+                float yMax = 0.84f - row * (height + rowGap);
                 float yMin = yMax - height;
 
                 var frame = CreatePanel($"Frame_{option.Type}", parent, new Vector2(xMin, yMin), new Vector2(xMax, yMax), UIStyleGuide.Colors.WithAlpha(option.Accent, 0.27f));

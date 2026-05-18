@@ -19,7 +19,8 @@ namespace RoobsWorld.Stages.Creature
         Roam,
         Loiter,
         Forage,
-        Investigate
+        Investigate,
+        Alert
     }
 
     /// <summary>
@@ -46,10 +47,14 @@ namespace RoobsWorld.Stages.Creature
         [SerializeField] private float _movementAcceleration = 10f;
         [SerializeField] private float _movementDeceleration = 14f;
         [SerializeField] private float _personalSpaceRadius = 3.2f;
+        [SerializeField] private float _herdAwarenessRadius = 9f;
         [SerializeField] private float _socialSpacingWeight = 0.55f;
+        [SerializeField] private float _herdCohesionWeight = 0.24f;
         [SerializeField] private float _ambientActivityMinSeconds = 1.4f;
         [SerializeField] private float _ambientActivityMaxSeconds = 4.6f;
         [SerializeField] private float _meanderStrength = 0.2f;
+        [SerializeField] private float _alertDurationSeconds = 2.2f;
+        [SerializeField] private float _alertReactionRadius = 11f;
 
         private Rigidbody _rb;
         private CreatureInstance _self;
@@ -68,9 +73,11 @@ namespace RoobsWorld.Stages.Creature
         private float _attackCooldownTimer;
         private float _attackTelegraphTimer;
         private float _attackRecoveryTimer;
+        private float _alertTimer;
         private float _meanderPhase;
         private Vector3 _planarVelocity;
         private Vector3 _ambientInterestPoint;
+        private Vector3 _lastAlertPosition;
 
         public CreatureRivalArchetype Archetype => _archetype;
         public bool IsAlpha => _isAlpha;
@@ -87,6 +94,17 @@ namespace RoobsWorld.Stages.Creature
             _stage = FindAnyObjectByType<CreatureStage>();
             _meanderPhase = Random.Range(0f, Mathf.PI * 2f);
             _ambientInterestPoint = _wanderTarget;
+            _lastAlertPosition = transform.position;
+        }
+
+        private void OnEnable()
+        {
+            EventBus.Subscribe<CreatureCombatFeedbackEvent>(OnCombatFeedback);
+        }
+
+        private void OnDisable()
+        {
+            EventBus.Unsubscribe<CreatureCombatFeedbackEvent>(OnCombatFeedback);
         }
 
         public void SetPlayerTarget(Transform playerTarget)
@@ -149,6 +167,7 @@ namespace RoobsWorld.Stages.Creature
 
             _attackCooldownTimer = Mathf.Max(0f, _attackCooldownTimer - Time.deltaTime);
             _attackRecoveryTimer = Mathf.Max(0f, _attackRecoveryTimer - Time.deltaTime);
+            _alertTimer = Mathf.Max(0f, _alertTimer - Time.deltaTime);
             _wanderRetargetTimer -= Time.deltaTime;
 
             if (_attackTelegraphTimer > 0f)
@@ -309,8 +328,32 @@ namespace RoobsWorld.Stages.Creature
             UpdateAmbientActivity();
 
             Vector3 socialSpacing = ComputeRuntimeSocialSpacingDirection();
+            Vector3 herdCohesion = ComputeRuntimeHerdCohesionDirection();
+            if (_alertTimer > 0f)
+            {
+                _ambientActivity = CreatureRivalAmbientActivity.Alert;
+                Vector3 awayFromAlert = transform.position - _lastAlertPosition;
+                awayFromAlert.y = 0f;
+                Vector3 toAnchor = _anchorPosition - transform.position;
+                toAnchor.y = 0f;
+                Vector3 alertDirection = SafeNormalize(
+                    awayFromAlert.normalized * 0.72f
+                    + toAnchor.normalized * 0.28f);
+                return BlendAmbientSteering(
+                    alertDirection,
+                    socialSpacing,
+                    herdCohesion,
+                    socialWeight: Mathf.Max(_socialSpacingWeight, 0.72f),
+                    cohesionWeight: 0f);
+            }
+
             if (IsStationaryAmbientActivity(_ambientActivity))
-                return BlendSocialSteering(Vector3.zero, socialSpacing, _socialSpacingWeight);
+                return BlendAmbientSteering(
+                    Vector3.zero,
+                    socialSpacing,
+                    herdCohesion,
+                    _socialSpacingWeight,
+                    _herdCohesionWeight);
 
             if (_ambientActivity == CreatureRivalAmbientActivity.Investigate)
             {
@@ -324,7 +367,12 @@ namespace RoobsWorld.Stages.Creature
                 desired,
                 Time.time * 0.85f + _meanderPhase,
                 _meanderStrength);
-            return BlendSocialSteering(desired, socialSpacing, _socialSpacingWeight);
+            return BlendAmbientSteering(
+                desired,
+                socialSpacing,
+                herdCohesion,
+                _socialSpacingWeight,
+                _herdCohesionWeight);
         }
 
         private void UpdateAmbientActivity()
@@ -499,6 +547,7 @@ namespace RoobsWorld.Stages.Creature
                 case CreatureRivalAmbientActivity.Forage: return 0.18f;
                 case CreatureRivalAmbientActivity.Loiter: return 0.12f;
                 case CreatureRivalAmbientActivity.Investigate: return 0.72f;
+                case CreatureRivalAmbientActivity.Alert: return 1.08f;
                 default: return 1f;
             }
         }
@@ -542,6 +591,58 @@ namespace RoobsWorld.Stages.Creature
 
             float weight = Mathf.Clamp01(socialSpacingWeight);
             return SafeNormalize(desired * (1f - weight) + spacing * weight);
+        }
+
+        public static Vector3 ComputeHerdCohesionDirection(
+            Vector3 selfPosition,
+            IReadOnlyList<Vector3> herdPositions,
+            float minComfortDistance,
+            float herdAwarenessRadius)
+        {
+            if (herdPositions == null || herdPositions.Count == 0)
+                return Vector3.zero;
+
+            float safeMin = Mathf.Max(0f, minComfortDistance);
+            float safeMax = Mathf.Max(safeMin + 0.1f, herdAwarenessRadius);
+            Vector3 center = Vector3.zero;
+            int count = 0;
+
+            for (int i = 0; i < herdPositions.Count; i++)
+            {
+                Vector3 delta = herdPositions[i] - selfPosition;
+                delta.y = 0f;
+                float distance = delta.magnitude;
+                if (distance <= safeMin || distance > safeMax)
+                    continue;
+
+                center += herdPositions[i];
+                count++;
+            }
+
+            if (count == 0)
+                return Vector3.zero;
+
+            center /= count;
+            center.y = selfPosition.y;
+            return SafeNormalize(center - selfPosition);
+        }
+
+        public static Vector3 BlendAmbientSteering(
+            Vector3 desiredDirection,
+            Vector3 socialSpacingDirection,
+            Vector3 herdCohesionDirection,
+            float socialWeight,
+            float cohesionWeight)
+        {
+            Vector3 blended = BlendSocialSteering(desiredDirection, socialSpacingDirection, socialWeight);
+            Vector3 cohesion = SafeNormalize(herdCohesionDirection);
+            if (cohesion.sqrMagnitude < 0.0001f)
+                return blended;
+            if (blended.sqrMagnitude < 0.0001f)
+                return cohesion;
+
+            float weight = Mathf.Clamp01(cohesionWeight);
+            return SafeNormalize(blended * (1f - weight) + cohesion * weight);
         }
 
         public static Vector3 ApplyPlanarMeander(Vector3 desiredDirection, float phase, float strength)
@@ -622,6 +723,34 @@ namespace RoobsWorld.Stages.Creature
             return SafeNormalize(sum);
         }
 
+        private Vector3 ComputeRuntimeHerdCohesionDirection()
+        {
+            float awarenessRadius = Mathf.Max(_personalSpaceRadius + 0.1f, _herdAwarenessRadius);
+            int count = Physics.OverlapSphereNonAlloc(transform.position, awarenessRadius, _nearbyCreatureBuffer);
+            if (count <= 0)
+                return Vector3.zero;
+
+            var herdPositions = new List<Vector3>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var otherAi = FindRivalAIOnCollider(_nearbyCreatureBuffer[i]);
+                if (otherAi == null || otherAi == this || otherAi.Archetype != _archetype)
+                    continue;
+
+                var otherCreature = otherAi.GetComponent<CreatureInstance>();
+                if (otherCreature == null || !otherCreature.IsAlive)
+                    continue;
+
+                herdPositions.Add(otherAi.transform.position);
+            }
+
+            return ComputeHerdCohesionDirection(
+                transform.position,
+                herdPositions,
+                _personalSpaceRadius,
+                awarenessRadius);
+        }
+
         private static Vector3 ComputeSocialSpacingContribution(
             Vector3 selfPosition,
             Vector3 neighborPosition,
@@ -655,6 +784,52 @@ namespace RoobsWorld.Stages.Creature
 
             var parent = hit.GetComponentInParent<CreatureInstance>();
             return parent != null ? parent : hit.GetComponentInChildren<CreatureInstance>();
+        }
+
+        private static CreatureRivalAI FindRivalAIOnCollider(Collider hit)
+        {
+            if (hit == null)
+                return null;
+
+            var direct = hit.GetComponent<CreatureRivalAI>();
+            if (direct != null)
+                return direct;
+
+            if (hit.attachedRigidbody != null)
+            {
+                var body = hit.attachedRigidbody.GetComponent<CreatureRivalAI>();
+                if (body != null)
+                    return body;
+            }
+
+            var parent = hit.GetComponentInParent<CreatureRivalAI>();
+            return parent != null ? parent : hit.GetComponentInChildren<CreatureRivalAI>();
+        }
+
+        private void OnCombatFeedback(CreatureCombatFeedbackEvent evt)
+        {
+            if (_self == null || !_self.IsAlive)
+                return;
+
+            if (evt.Type != CreatureCombatFeedbackType.Hit &&
+                evt.Type != CreatureCombatFeedbackType.PlayerDamaged &&
+                evt.Type != CreatureCombatFeedbackType.Kill &&
+                evt.Type != CreatureCombatFeedbackType.Telegraph)
+            {
+                return;
+            }
+
+            if (evt.SourceCreatureId == _self.DNA?.CreatureId)
+                return;
+
+            Vector3 delta = evt.Position - transform.position;
+            delta.y = 0f;
+            if (delta.magnitude > Mathf.Max(0.1f, _alertReactionRadius))
+                return;
+
+            _lastAlertPosition = evt.Position;
+            _alertTimer = Mathf.Max(_alertTimer, Mathf.Max(0.1f, _alertDurationSeconds));
+            _ambientActivityTimer = 0f;
         }
 
         private static bool IsAmbientIntent(CreatureRivalIntent intent)

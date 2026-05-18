@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using RoobsWorld.Core;
+using RoobsWorld.Creature;
 using RoobsWorld.Stages.Cell;
+using RoobsWorld.Stages.Creature;
 
 namespace RoobsWorld.Multiplayer
 {
@@ -36,6 +38,9 @@ namespace RoobsWorld.Multiplayer
         public const byte TagSession = 0x01;
         public const byte TagInput   = 0x02;
         public const byte TagVoice   = 0x03;
+        public const byte TagStageTransition = 0x04;
+        public const byte TagHeartbeat = 0x05;
+        public const byte TagRecoveryRequest = 0x06;
 
         /// <summary>Host broadcast rate (seconds between snapshots).</summary>
         public const float BroadcastInterval = 0.05f; // 20 Hz
@@ -44,12 +49,16 @@ namespace RoobsWorld.Multiplayer
         private const float InputSendInterval = BroadcastInterval;
         private const float ObjectCacheRefreshInterval = 0.5f;
         private const float InputChangeEpsilon = 0.0001f;
+        private const float RecoveryRequestRetryInterval = 1.25f;
+        private const int MaxCreatureDnaSnapshotChars = 12000;
 
         // ---- runtime state ----
 
         private MultiplayerSessionManager            _session;
         private INetworkTransport                    _transport;
+        private WebSocketNetworkTransport            _webSocketTransport;
         private PlayerCell                           _localPlayer;
+        private CreatureInstance                     _localCreature;
 
         private uint  _tick;
         private float _broadcastTimer;
@@ -64,8 +73,33 @@ namespace RoobsWorld.Multiplayer
         private readonly Dictionary<EntityId, Organism>         _orgById        = new();
         private readonly Dictionary<EntityId, uint> _organismGenomeChecksums = new();
         private readonly List<Organism> _organismCache = new(128);
+        private readonly List<int> _localFoodIds = new(256);
+        private readonly List<int> _localPartPickupIds = new(64);
+        private readonly HashSet<int> _hostFoodIds = new();
+        private readonly HashSet<int> _hostPartPickupIds = new();
+        private readonly HashSet<string> _hostCreatureRivalIds = new();
+        private readonly HashSet<int> _hostCreaturePlayerIds = new();
+        private readonly List<string> _localCreatureRivalIds = new(32);
+        private readonly List<int> _localCreaturePlayerIds = new(16);
+        private readonly Dictionary<int, RemotePlayerCreature> _remoteCreaturePlayers = new();
         private FoodItem[] _foodCache = Array.Empty<FoodItem>();
+        private CellPartPickup[] _partPickupCache = Array.Empty<CellPartPickup>();
+        private FoodManager _foodManagerCache;
+        private CellStage _cellStageCache;
+        private CreatureStage _creatureStageCache;
         private ProximityVoiceChat _voiceChat;
+        private float _heartbeatTimer;
+        private float _recoveryRequestTimer = RecoveryRequestRetryInterval;
+        private float _lastAuthoritativeSnapshotAgeSeconds;
+        private int _packetsSentForQuality;
+        private int _packetsReceivedForQuality;
+        private int _reconnectAttempts;
+        private float _lastPingMs;
+        private float _rttTrendMs;
+        private uint _heartbeatSequence;
+        private NetworkQualitySnapshot _qualitySnapshot;
+
+        public NetworkQualitySnapshot CurrentQuality => _qualitySnapshot;
 
         // ---- activation ----
 
@@ -73,19 +107,28 @@ namespace RoobsWorld.Multiplayer
         /// Starts the tick loop. Call from <c>CellStage.OnEnter()</c> after the session is available.
         /// Does nothing when <paramref name="session"/> state is Offline (single-player safety).
         /// </summary>
-        public void Activate(MultiplayerSessionManager session, INetworkTransport transport, PlayerCell localPlayer)
+        public void Activate(
+            MultiplayerSessionManager session,
+            INetworkTransport transport,
+            PlayerCell localPlayer,
+            CreatureInstance localCreature = null)
         {
             _session     = session;
             _transport   = transport;
             _localPlayer = localPlayer;
+            _localCreature = localCreature;
 
             EventBus.Subscribe<MultiplayerPlayerJoinedEvent>(OnRemotePlayerJoined);
             EventBus.Subscribe<MultiplayerPlayerLeftEvent>(OnRemotePlayerLeft);
+            EventBus.Subscribe<CellEvolutionCompleteEvent>(OnCellEvolutionComplete);
 
             if (_session?.RemotePlayers != null)
             {
                 foreach (var player in _session.RemotePlayers)
-                    EnsureRemotePlayerGhost(player.PlayerId, player.DisplayName);
+                {
+                    if (_localPlayer != null)
+                        EnsureRemotePlayerGhost(player.PlayerId, player.DisplayName);
+                }
             }
 
             _voiceChat = gameObject.GetComponent<ProximityVoiceChat>()
@@ -93,11 +136,12 @@ namespace RoobsWorld.Multiplayer
             _voiceChat.Activate(
                 _session,
                 _transport,
-                _localPlayer != null ? _localPlayer.transform : null,
+                ResolveLocalVoiceTransform(),
                 GetRemotePlayerTransform);
 
-            if (_transport is WebSocketNetworkTransport wsTransport)
-                _ = wsTransport.SendJoinLobbyAsync("cell");
+            AttachWebSocketTransport(_transport as WebSocketNetworkTransport);
+            if (_webSocketTransport != null)
+                _ = _webSocketTransport.SendJoinLobbyAsync("cell");
         }
 
         /// <summary>Stops the tick loop and destroys all remote player ghosts.</summary>
@@ -105,22 +149,50 @@ namespace RoobsWorld.Multiplayer
         {
             EventBus.Unsubscribe<MultiplayerPlayerJoinedEvent>(OnRemotePlayerJoined);
             EventBus.Unsubscribe<MultiplayerPlayerLeftEvent>(OnRemotePlayerLeft);
+            EventBus.Unsubscribe<CellEvolutionCompleteEvent>(OnCellEvolutionComplete);
 
             foreach (var cell in _remotePlayers.Values)
                 if (cell != null) Destroy(cell.gameObject);
+            foreach (var creature in _remoteCreaturePlayers.Values)
+                if (creature != null) Destroy(creature.gameObject);
             _remotePlayers.Clear();
+            _remoteCreaturePlayers.Clear();
             _lastRemoteInputTicks.Clear();
             _orgById.Clear();
             _organismGenomeChecksums.Clear();
             _organismCache.Clear();
+            _localFoodIds.Clear();
+            _localPartPickupIds.Clear();
+            _localCreatureRivalIds.Clear();
+            _localCreaturePlayerIds.Clear();
+            _hostFoodIds.Clear();
+            _hostPartPickupIds.Clear();
+            _hostCreatureRivalIds.Clear();
+            _hostCreaturePlayerIds.Clear();
             _foodCache = Array.Empty<FoodItem>();
+            _partPickupCache = Array.Empty<CellPartPickup>();
+            _foodManagerCache = null;
+            _cellStageCache = null;
+            _creatureStageCache = null;
             _objectCachesReady = false;
             _lastSentMove = new Vector2(float.NaN, float.NaN);
             _lastSentEatInput = false;
+            _localCreature = null;
+            _heartbeatTimer = 0f;
+            _recoveryRequestTimer = RecoveryRequestRetryInterval;
+            _lastAuthoritativeSnapshotAgeSeconds = 0f;
+            _packetsSentForQuality = 0;
+            _packetsReceivedForQuality = 0;
+            _reconnectAttempts = 0;
+            _lastPingMs = 0f;
+            _rttTrendMs = 0f;
+            _heartbeatSequence = 0;
+            _qualitySnapshot = default;
             _voiceChat?.Deactivate();
 
-            if (_transport is WebSocketNetworkTransport wsTransport)
-                _ = wsTransport.SendJoinLobbyAsync(MultiplayerSessionManager.DefaultLobbyId);
+            if (_webSocketTransport != null)
+                _ = _webSocketTransport.SendJoinLobbyAsync(MultiplayerSessionManager.DefaultLobbyId);
+            DetachWebSocketTransport();
 
             _session   = null;
             _transport = null;
@@ -133,15 +205,25 @@ namespace RoobsWorld.Multiplayer
             if (_session == null || _transport == null) return;
             if (_session.State == SessionState.Offline)  return;
 
+            float deltaTime = Mathf.Max(0f, Time.unscaledDeltaTime);
+            if (_session.IsHost)
+                _lastAuthoritativeSnapshotAgeSeconds = 0f;
+            else
+                _lastAuthoritativeSnapshotAgeSeconds += deltaTime;
+
             // Drain all inbound packets this frame
             byte[] raw;
             while ((raw = _transport.TryReceive(out int fromId)) != null)
                 HandlePacket(fromId, raw);
 
+            UpdateNetworkQuality();
+            SendHeartbeatIfDue(deltaTime);
+            SendRecoveryRequestIfNeeded(deltaTime);
+
             // Host broadcasts state at fixed interval
             if (_session.IsHost)
             {
-                _broadcastTimer += Time.unscaledDeltaTime;
+                _broadcastTimer += deltaTime;
                 if (_broadcastTimer >= BroadcastInterval)
                 {
                     _broadcastTimer = 0f;
@@ -255,25 +337,157 @@ namespace RoobsWorld.Multiplayer
                     ? Array.Empty<FoodItem>()
                     : Array.FindAll(_foodCache, f => f != null);
 
+            var pickupStates = new List<PartPickupNetState>(_partPickupCache.Length);
+            bool pickupCacheHadDestroyedItems = false;
+            for (int i = 0; i < _partPickupCache.Length; i++)
+            {
+                var pickup = _partPickupCache[i];
+                if (pickup == null)
+                {
+                    pickupCacheHadDestroyedItems = true;
+                    continue;
+                }
+
+                var pos = pickup.transform.position;
+                pickupStates.Add(new PartPickupNetState
+                {
+                    PickupId = pickup.PickupId,
+                    PosX = pos.x,
+                    PosY = pos.z,
+                    PartType = pickup.PartType,
+                    Exists = pickup.gameObject.activeSelf
+                });
+            }
+            if (pickupCacheHadDestroyedItems)
+                _partPickupCache = pickupStates.Count == 0
+                    ? Array.Empty<CellPartPickup>()
+                    : Array.FindAll(_partPickupCache, p => p != null);
+
             return new SessionNetState
             {
                 Tick      = tick,
                 Players   = players.ToArray(),
                 Organisms = orgStates.ToArray(),
-                Foods     = foodStates.ToArray()
+                Foods     = foodStates.ToArray(),
+                PartPickups = pickupStates.ToArray(),
+                CreaturePlayers = BuildCreaturePlayerStates(),
+                CreatureRivals = BuildCreatureRivalStates(),
+                CreatureObjective = BuildCreatureObjectiveState(),
+                CreatureWorldProgression = BuildCreatureWorldProgressionState()
             };
+        }
+
+        private CreaturePlayerNetState[] BuildCreaturePlayerStates()
+        {
+            var states = new List<CreaturePlayerNetState>(_remoteCreaturePlayers.Count + 1);
+            var creature = _localCreature;
+            if (creature == null)
+                creature = FindLocalCreature();
+            _localCreature = creature;
+
+            if (creature != null)
+            {
+                var controller = creature.GetComponent<CreaturePlayerController>();
+                states.Add(new CreaturePlayerNetState
+                {
+                    PlayerId = _session != null ? _session.LocalPlayerId : -1,
+                    CreatureId = creature.DNA?.CreatureId ?? string.Empty,
+                    CreatureDNAJson = BuildCreatureDnaSnapshot(creature.DNA),
+                    PosX = creature.transform.position.x,
+                    PosY = creature.transform.position.z,
+                    RotY = creature.transform.eulerAngles.y,
+                    Health = creature.CurrentHealth,
+                    MaxHealth = creature.MaxHealth,
+                    Stamina = controller != null ? controller.CurrentStamina : 0f,
+                    IsAlive = creature.IsAlive
+                });
+            }
+
+            foreach (var pair in _remoteCreaturePlayers)
+            {
+                var remote = pair.Value;
+                if (remote != null)
+                    states.Add(remote.CreateSnapshot());
+            }
+
+            return states.Count == 0 ? Array.Empty<CreaturePlayerNetState>() : states.ToArray();
+        }
+
+        private static string BuildCreatureDnaSnapshot(CreatureDNA dna)
+        {
+            if (dna == null)
+                return string.Empty;
+
+            string json = dna.ToJson();
+            if (string.IsNullOrWhiteSpace(json) || json.Length > MaxCreatureDnaSnapshotChars)
+                return string.Empty;
+            return json;
+        }
+
+        private CreatureRivalNetState[] BuildCreatureRivalStates()
+        {
+            var rivals = FindObjectsByType<CreatureRivalAI>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            if (rivals == null || rivals.Length == 0)
+                return Array.Empty<CreatureRivalNetState>();
+
+            var states = new List<CreatureRivalNetState>(rivals.Length);
+            for (int i = 0; i < rivals.Length; i++)
+            {
+                var ai = rivals[i];
+                if (ai == null)
+                    continue;
+
+                var creature = ai.GetComponent<CreatureInstance>();
+                if (creature == null || creature.DNA == null)
+                    continue;
+
+                states.Add(new CreatureRivalNetState
+                {
+                    CreatureId = creature.DNA.CreatureId,
+                    Archetype = (int)ai.Archetype,
+                    IsAlpha = ai.IsAlpha,
+                    PosX = creature.transform.position.x,
+                    PosY = creature.transform.position.z,
+                    RotY = creature.transform.eulerAngles.y,
+                    Health = creature.CurrentHealth,
+                    MaxHealth = creature.MaxHealth,
+                    Exists = creature.gameObject.activeSelf,
+                    IsAlive = creature.IsAlive
+                });
+            }
+
+            return states.ToArray();
+        }
+
+        private CreatureObjectiveNetState BuildCreatureObjectiveState()
+        {
+            var creatureStage = _creatureStageCache;
+            if (creatureStage == null)
+                creatureStage = FindAnyObjectByType<CreatureStage>();
+            _creatureStageCache = creatureStage;
+            return creatureStage != null ? creatureStage.CreateNetworkObjectiveSnapshot() : default;
+        }
+
+        private CreatureWorldProgressionNetState BuildCreatureWorldProgressionState()
+        {
+            var creatureStage = _creatureStageCache;
+            if (creatureStage == null)
+                creatureStage = FindAnyObjectByType<CreatureStage>();
+            _creatureStageCache = creatureStage;
+            return creatureStage != null ? creatureStage.CreateNetworkWorldProgressionSnapshot() : default;
         }
 
         // ---- client: send input ----
 
         private void SendLocalInput(float deltaTime)
         {
-            if (_localPlayer == null) return;
+            if (_localPlayer == null && _localCreature == null) return;
 
             Vector2 move = ReadMoveInput();
             bool eatInput = false;
             _inputSendTimer += deltaTime;
 
+            bool hasCreatureInput = _localCreature != null;
             bool changed = (move - _lastSentMove).sqrMagnitude > InputChangeEpsilon
                 || eatInput != _lastSentEatInput;
             if (!changed && _inputSendTimer < InputSendInterval)
@@ -289,12 +503,32 @@ namespace RoobsWorld.Multiplayer
                 MoveX    = move.x,
                 MoveY    = move.y,
                 EatInput = eatInput,
-                Mass     = _localPlayer.CurrentMass,
-                Tick     = _tick
+                Mass     = _localPlayer != null ? _localPlayer.CurrentMass : 0f,
+                Tick     = _tick,
+                HasCreatureInput = hasCreatureInput
             };
+            if (hasCreatureInput)
+                FillCreatureInputSnapshot(ref pkt, _localCreature);
 
             var payload = NetworkSerializer.Serialize(pkt);
             _transport.Send(_session.HostPlayerId, Prepend(TagInput, payload));
+        }
+
+        private static void FillCreatureInputSnapshot(ref RemoteInputPacket pkt, CreatureInstance creature)
+        {
+            if (creature == null)
+                return;
+
+            var controller = creature.GetComponent<CreaturePlayerController>();
+            pkt.CreatureId = creature.DNA?.CreatureId ?? string.Empty;
+            pkt.CreatureDNAJson = BuildCreatureDnaSnapshot(creature.DNA);
+            pkt.CreaturePosX = creature.transform.position.x;
+            pkt.CreaturePosY = creature.transform.position.z;
+            pkt.CreatureRotY = creature.transform.eulerAngles.y;
+            pkt.CreatureHealth = creature.CurrentHealth;
+            pkt.CreatureMaxHealth = creature.MaxHealth;
+            pkt.CreatureStamina = controller != null ? controller.CurrentStamina : 0f;
+            pkt.CreatureIsAlive = creature.IsAlive;
         }
 
         // ---- client: apply received state ----
@@ -351,10 +585,280 @@ namespace RoobsWorld.Multiplayer
                 // Host receives client input — reserved for future input-driven movement
                 // (clients currently move their own player locally; host reconciles on next broadcast)
             }
+            else if (tag == TagStageTransition)
+            {
+                StageTransitionNetState transition;
+                try { transition = NetworkSerializer.DeserializeStageTransition(raw, payloadOffset, payloadCount); }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[NetworkTick] Invalid StageTransitionNetState packet from player {fromId}: {ex.Message}");
+                    return;
+                }
+
+                ApplyStageTransition(fromId, transition);
+            }
+            else if (tag == TagHeartbeat)
+            {
+                NetworkHeartbeatPacket heartbeat;
+                try { heartbeat = NetworkSerializer.DeserializeHeartbeat(raw, payloadOffset, payloadCount); }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[NetworkTick] Invalid NetworkHeartbeatPacket from player {fromId}: {ex.Message}");
+                    return;
+                }
+
+                HandleHeartbeat(fromId, heartbeat);
+            }
+            else if (tag == TagRecoveryRequest)
+            {
+                if (!_session.IsHost) return;
+                NetworkRecoveryRequestPacket request;
+                try { request = NetworkSerializer.DeserializeRecoveryRequest(raw, payloadOffset, payloadCount); }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[NetworkTick] Invalid NetworkRecoveryRequestPacket from player {fromId}: {ex.Message}");
+                    return;
+                }
+
+                HandleRecoveryRequest(fromId, request);
+            }
             else
             {
                 Debug.LogError($"[NetworkTick] Invalid packet tag from player {fromId}: 0x{tag:X2}.");
             }
+        }
+
+        private void OnCellEvolutionComplete(CellEvolutionCompleteEvent evt)
+        {
+            if (_session == null || _transport == null || !_session.IsHost)
+                return;
+
+            BroadcastStageTransition(GameStageType.Creature);
+        }
+
+        private void BroadcastStageTransition(GameStageType targetStage)
+        {
+            if (!StageManager.IsStageSupported(targetStage))
+                return;
+
+            var pkt = new StageTransitionNetState
+            {
+                Tick = _tick,
+                RequestingPlayerId = _session != null ? _session.LocalPlayerId : -1,
+                TargetStage = targetStage,
+                TransitionId = _tick == 0 ? 1u : _tick
+            };
+            _transport.Broadcast(Prepend(TagStageTransition, NetworkSerializer.Serialize(pkt)));
+        }
+
+        private void ApplyStageTransition(int fromId, in StageTransitionNetState transition)
+        {
+            if (!StageManager.HasInstance)
+                return;
+
+            if (!ShouldApplyStageTransition(
+                    _session != null && _session.IsHost,
+                    fromId,
+                    _session != null ? _session.HostPlayerId : -1,
+                    StageManager.Instance.CurrentStageType,
+                    transition.TargetStage,
+                    StageManager.Instance.IsTransitioning))
+            {
+                return;
+            }
+
+            StageManager.Instance.TransitionTo(transition.TargetStage);
+        }
+
+        private void SendHeartbeatIfDue(float deltaTime)
+        {
+            if (_session == null || _transport == null || _session.State == SessionState.Offline)
+                return;
+
+            _heartbeatTimer += Mathf.Max(0f, deltaTime);
+            if (_heartbeatTimer < NetworkResilienceRules.DefaultHeartbeatIntervalSeconds)
+                return;
+
+            _heartbeatTimer = 0f;
+            var heartbeat = new NetworkHeartbeatPacket
+            {
+                PlayerId = _session.LocalPlayerId,
+                Sequence = ++_heartbeatSequence,
+                SentAtSeconds = Time.realtimeSinceStartupAsDouble,
+                IsAck = false
+            };
+
+            byte[] packet = Prepend(TagHeartbeat, NetworkSerializer.Serialize(heartbeat));
+            if (_session.IsHost)
+                _transport.Broadcast(packet);
+            else
+                _transport.Send(_session.HostPlayerId, packet);
+            _packetsSentForQuality++;
+        }
+
+        private void HandleHeartbeat(int fromId, in NetworkHeartbeatPacket heartbeat)
+        {
+            if (heartbeat.IsAck)
+            {
+                float ping = (float)Math.Max(0d, (Time.realtimeSinceStartupAsDouble - heartbeat.SentAtSeconds) * 1000d);
+                _lastPingMs = ping;
+                _rttTrendMs = NetworkResilienceRules.SmoothRtt(_rttTrendMs, ping);
+                _packetsReceivedForQuality++;
+                UpdateNetworkQuality(forcePublish: true);
+                return;
+            }
+
+            var ack = heartbeat;
+            ack.PlayerId = _session != null ? _session.LocalPlayerId : ack.PlayerId;
+            ack.IsAck = true;
+            _transport?.Send(fromId, Prepend(TagHeartbeat, NetworkSerializer.Serialize(ack)));
+        }
+
+        private void SendRecoveryRequestIfNeeded(float deltaTime)
+        {
+            if (_session == null || _transport == null || _session.IsHost)
+                return;
+
+            _recoveryRequestTimer += Mathf.Max(0f, deltaTime);
+            if (!NetworkResilienceRules.ShouldRequestRecovery(
+                    false,
+                    _qualitySnapshot.Quality,
+                    _recoveryRequestTimer,
+                    RecoveryRequestRetryInterval))
+            {
+                return;
+            }
+
+            _recoveryRequestTimer = 0f;
+            _reconnectAttempts++;
+            var request = new NetworkRecoveryRequestPacket
+            {
+                PlayerId = _session.LocalPlayerId,
+                LastReceivedTick = _tick,
+                CurrentStage = StageManager.HasInstance ? StageManager.Instance.CurrentStageType : GameStageType.None,
+                ReconnectAttempt = _reconnectAttempts
+            };
+            _transport.Send(_session.HostPlayerId, Prepend(TagRecoveryRequest, NetworkSerializer.Serialize(request)));
+        }
+
+        private void HandleRecoveryRequest(int fromId, in NetworkRecoveryRequestPacket request)
+        {
+            if (_session == null || _transport == null || !_session.IsHost)
+                return;
+            if (fromId >= 0 && request.PlayerId != fromId)
+                return;
+
+            var state = BuildSessionState(++_tick);
+            _transport.Send(request.PlayerId, Prepend(TagSession, NetworkSerializer.Serialize(state)));
+        }
+
+        private void UpdateNetworkQuality(bool forcePublish = false)
+        {
+            if (_session == null || _session.State == SessionState.Offline)
+                return;
+
+            bool connected = IsTransportHealthyForQuality();
+            float snapshotAge = _session.IsHost ? 0f : _lastAuthoritativeSnapshotAgeSeconds;
+            var next = NetworkResilienceRules.BuildSnapshot(
+                connected,
+                _lastPingMs,
+                _rttTrendMs,
+                _packetsSentForQuality,
+                _packetsReceivedForQuality,
+                snapshotAge,
+                _reconnectAttempts);
+
+            if (!forcePublish && IsSameQualitySnapshot(_qualitySnapshot, next))
+                return;
+
+            _qualitySnapshot = next;
+            if (!_session.IsHost &&
+                next.Quality != NetworkConnectionQuality.Healthy &&
+                _session.State != SessionState.Disconnected)
+            {
+                _session.BeginReconnectAttempt();
+                return;
+            }
+
+            _session.ApplyNetworkQuality(next);
+        }
+
+        private bool IsTransportHealthyForQuality()
+        {
+            if (_transport == null)
+                return false;
+            if (_transport is NullNetworkTransport)
+                return true;
+            return _transport.IsConnected;
+        }
+
+        private static bool IsSameQualitySnapshot(NetworkQualitySnapshot a, NetworkQualitySnapshot b)
+        {
+            return a.Quality == b.Quality
+                && Mathf.Abs(a.PingMs - b.PingMs) < 0.01f
+                && Mathf.Abs(a.RttTrendMs - b.RttTrendMs) < 0.01f
+                && Mathf.Abs(a.PacketLossRatio - b.PacketLossRatio) < 0.001f
+                && Mathf.Abs(a.LastAuthoritativeSnapshotAgeSeconds - b.LastAuthoritativeSnapshotAgeSeconds) < 0.05f
+                && a.ReconnectAttempts == b.ReconnectAttempts;
+        }
+
+        private void AttachWebSocketTransport(WebSocketNetworkTransport transport)
+        {
+            DetachWebSocketTransport();
+            _webSocketTransport = transport;
+            if (_webSocketTransport == null)
+                return;
+
+            _webSocketTransport.OnRemotePlayerJoined += OnTransportRemotePlayerJoined;
+            _webSocketTransport.OnRemotePlayerLeft += OnTransportRemotePlayerLeft;
+            _webSocketTransport.OnHostMigrated += OnTransportHostMigrated;
+            _webSocketTransport.OnPlayerLobbyChanged += OnTransportPlayerLobbyChanged;
+            _webSocketTransport.OnSessionMapReceived += OnTransportSessionMapReceived;
+            _webSocketTransport.OnGlobalChatMessage += OnTransportGlobalChatMessage;
+        }
+
+        private void DetachWebSocketTransport()
+        {
+            if (_webSocketTransport == null)
+                return;
+
+            _webSocketTransport.OnRemotePlayerJoined -= OnTransportRemotePlayerJoined;
+            _webSocketTransport.OnRemotePlayerLeft -= OnTransportRemotePlayerLeft;
+            _webSocketTransport.OnHostMigrated -= OnTransportHostMigrated;
+            _webSocketTransport.OnPlayerLobbyChanged -= OnTransportPlayerLobbyChanged;
+            _webSocketTransport.OnSessionMapReceived -= OnTransportSessionMapReceived;
+            _webSocketTransport.OnGlobalChatMessage -= OnTransportGlobalChatMessage;
+            _webSocketTransport = null;
+        }
+
+        private void OnTransportRemotePlayerJoined(int playerId)
+        {
+            _session?.AddRemotePlayer(playerId, $"Player {playerId}");
+        }
+
+        private void OnTransportRemotePlayerLeft(int playerId, bool wasHost)
+        {
+            _session?.RemovePlayer(playerId);
+        }
+
+        private void OnTransportHostMigrated(int newHostPlayerId)
+        {
+            _session?.ApplyHostMigration(newHostPlayerId);
+        }
+
+        private void OnTransportPlayerLobbyChanged(int playerId, string lobbyId)
+        {
+            _session?.ApplyPlayerLobby(playerId, lobbyId);
+        }
+
+        private void OnTransportSessionMapReceived(SessionMapDefinition map)
+        {
+            _session?.ApplySessionMap(map);
+        }
+
+        private void OnTransportGlobalChatMessage(int fromPlayerId, string message)
+        {
+            _session?.ApplyChatMessage(fromPlayerId, message);
         }
 
         private void ApplyRemoteInput(int fromId, in RemoteInputPacket input)
@@ -373,6 +877,12 @@ namespace RoobsWorld.Multiplayer
             if (move.sqrMagnitude > 1f)
                 move.Normalize();
 
+            if (input.HasCreatureInput || _localCreature != null)
+            {
+                ApplyRemoteCreatureInput(playerId, input, move);
+                return;
+            }
+
             EnsureRemotePlayerGhost(playerId);
             if (!_remotePlayers.TryGetValue(playerId, out var ghost) || ghost == null)
                 return;
@@ -389,10 +899,54 @@ namespace RoobsWorld.Multiplayer
             ghost.MoveAuthoritative(delta);
         }
 
+        private void ApplyRemoteCreatureInput(int playerId, in RemoteInputPacket input, Vector2 move)
+        {
+            var state = new CreaturePlayerNetState
+            {
+                PlayerId = playerId,
+                CreatureId = input.CreatureId,
+                CreatureDNAJson = input.CreatureDNAJson,
+                PosX = input.CreaturePosX,
+                PosY = input.CreaturePosY,
+                RotY = input.CreatureRotY,
+                Health = Mathf.Max(0f, input.CreatureHealth),
+                MaxHealth = Mathf.Max(1f, input.CreatureMaxHealth),
+                Stamina = Mathf.Max(0f, input.CreatureStamina),
+                IsAlive = input.CreatureIsAlive
+            };
+            if (string.IsNullOrWhiteSpace(state.CreatureId))
+                state.CreatureId = $"remote_creature_{playerId}";
+
+            if (!_remoteCreaturePlayers.TryGetValue(playerId, out var remote) || remote == null || !remote.MatchesIdentity(state))
+            {
+                AddOrUpdateRemoteCreaturePlayer(state);
+                _remoteCreaturePlayers.TryGetValue(playerId, out remote);
+            }
+            else
+            {
+                remote.SetDisplayName(GetRemotePlayerDisplayName(playerId));
+            }
+
+            if (remote == null)
+                return;
+
+            if (move.sqrMagnitude <= 0.0001f)
+                return;
+
+            float dt = Mathf.Clamp(Time.deltaTime, 0f, 0.05f);
+            float moveSpeed = RemoteInputMoveSpeed;
+            var delta = new Vector3(move.x, 0f, move.y) * (moveSpeed * dt);
+            float rotationY = Mathf.Atan2(move.x, move.y) * Mathf.Rad2Deg;
+            remote.MoveAuthoritative(delta, rotationY);
+        }
+
         private void ApplySessionState(in SessionNetState state)
         {
             if (state.Tick > _tick)
                 _tick = state.Tick;
+            _lastAuthoritativeSnapshotAgeSeconds = 0f;
+            if (_session.State == SessionState.Disconnected)
+                _session.CompleteReconnect();
 
             // Apply remote player positions
             if (state.Players != null)
@@ -428,6 +982,239 @@ namespace RoobsWorld.Multiplayer
                     }
                 }
             }
+
+            if (!_session.IsHost && state.Foods != null)
+                ApplyFoodState(state.Foods);
+
+            if (!_session.IsHost && state.PartPickups != null)
+                ApplyPartPickupState(state.PartPickups);
+
+            if (!_session.IsHost && state.CreaturePlayers != null)
+                ApplyCreaturePlayerState(state.CreaturePlayers);
+
+            if (!_session.IsHost && state.CreatureRivals != null)
+                ApplyCreatureRivalState(state.CreatureRivals);
+
+            if (!_session.IsHost && state.CreatureObjective.HasObjective)
+                ApplyCreatureObjectiveState(state.CreatureObjective);
+
+            if (!_session.IsHost && state.CreatureWorldProgression.HasProgression)
+                ApplyCreatureWorldProgressionState(state.CreatureWorldProgression);
+
+            UpdateNetworkQuality(forcePublish: true);
+        }
+
+        private void ApplyFoodState(FoodNetState[] foods)
+        {
+            FoodManager foodManager = _foodManagerCache;
+            if (foodManager == null)
+                foodManager = FindAnyObjectByType<FoodManager>();
+            _foodManagerCache = foodManager;
+            if (foodManager == null)
+                return;
+
+            _hostFoodIds.Clear();
+            for (int i = 0; i < foods.Length; i++)
+            {
+                var fs = foods[i];
+                if (fs.FoodId <= 0)
+                    continue;
+
+                if (!fs.Exists)
+                {
+                    foodManager.ConsumeFood(fs.FoodId);
+                    continue;
+                }
+
+                _hostFoodIds.Add(fs.FoodId);
+                foodManager.AddOrUpdateNetworkFood(
+                    fs.FoodId,
+                    new Vector3(fs.PosX, 0f, fs.PosY),
+                    fs.FoodType);
+            }
+
+            foodManager.CopyFoodIds(_localFoodIds);
+            for (int i = 0; i < _localFoodIds.Count; i++)
+            {
+                int localId = _localFoodIds[i];
+                if (!_hostFoodIds.Contains(localId))
+                    foodManager.ConsumeFood(localId);
+            }
+        }
+
+        private void ApplyPartPickupState(PartPickupNetState[] pickups)
+        {
+            CellStage cellStage = _cellStageCache;
+            if (cellStage == null)
+                cellStage = FindAnyObjectByType<CellStage>();
+            _cellStageCache = cellStage;
+            if (cellStage == null)
+                return;
+
+            _hostPartPickupIds.Clear();
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                var ps = pickups[i];
+                if (ps.PickupId <= 0)
+                    continue;
+
+                if (!ps.Exists)
+                {
+                    cellStage.RemovePartPickup(ps.PickupId);
+                    continue;
+                }
+
+                _hostPartPickupIds.Add(ps.PickupId);
+                cellStage.AddOrUpdateNetworkPartPickup(
+                    ps.PickupId,
+                    ps.PartType,
+                    new Vector3(ps.PosX, 0f, ps.PosY));
+            }
+
+            cellStage.CopyPartPickupIds(_localPartPickupIds);
+            for (int i = 0; i < _localPartPickupIds.Count; i++)
+            {
+                int localId = _localPartPickupIds[i];
+                if (!_hostPartPickupIds.Contains(localId))
+                    cellStage.RemovePartPickup(localId);
+            }
+        }
+
+        private void ApplyCreaturePlayerState(CreaturePlayerNetState[] players)
+        {
+            _hostCreaturePlayerIds.Clear();
+            int localPlayerId = _session != null ? _session.LocalPlayerId : -1;
+
+            for (int i = 0; i < players.Length; i++)
+            {
+                var ps = players[i];
+                if (ps.PlayerId < 0 || ps.PlayerId == localPlayerId)
+                    continue;
+
+                _hostCreaturePlayerIds.Add(ps.PlayerId);
+                AddOrUpdateRemoteCreaturePlayer(ps);
+            }
+
+            _localCreaturePlayerIds.Clear();
+            foreach (var pair in _remoteCreaturePlayers)
+                _localCreaturePlayerIds.Add(pair.Key);
+
+            for (int i = 0; i < _localCreaturePlayerIds.Count; i++)
+            {
+                int playerId = _localCreaturePlayerIds[i];
+                if (!_hostCreaturePlayerIds.Contains(playerId))
+                    RemoveRemoteCreaturePlayer(playerId);
+            }
+        }
+
+        private void AddOrUpdateRemoteCreaturePlayer(CreaturePlayerNetState state)
+        {
+            string displayName = GetRemotePlayerDisplayName(state.PlayerId);
+            if (_remoteCreaturePlayers.TryGetValue(state.PlayerId, out var existing) && existing != null)
+            {
+                if (existing.MatchesIdentity(state))
+                {
+                    existing.SetDisplayName(displayName);
+                    existing.ApplyState(state, displayName);
+                    return;
+                }
+
+                RemoveRemoteCreaturePlayer(state.PlayerId);
+            }
+
+            if (_remotePlayers.TryGetValue(state.PlayerId, out var ghost))
+            {
+                if (ghost != null)
+                    Destroy(ghost.gameObject);
+                _remotePlayers.Remove(state.PlayerId);
+            }
+            var remote = RemotePlayerCreature.Create(state, displayName);
+            _remoteCreaturePlayers[state.PlayerId] = remote;
+        }
+
+        private void RemoveRemoteCreaturePlayer(int playerId)
+        {
+            if (!_remoteCreaturePlayers.TryGetValue(playerId, out var creature))
+                return;
+
+            _remoteCreaturePlayers.Remove(playerId);
+            if (creature != null)
+                Destroy(creature.gameObject);
+        }
+
+        private void ApplyCreatureRivalState(CreatureRivalNetState[] rivals)
+        {
+            var creatureStage = _creatureStageCache;
+            if (creatureStage == null)
+                creatureStage = FindAnyObjectByType<CreatureStage>();
+            _creatureStageCache = creatureStage;
+            if (creatureStage == null)
+                return;
+
+            _hostCreatureRivalIds.Clear();
+            for (int i = 0; i < rivals.Length; i++)
+            {
+                var rs = rivals[i];
+                if (string.IsNullOrWhiteSpace(rs.CreatureId))
+                    continue;
+
+                if (!rs.Exists || !rs.IsAlive)
+                {
+                    creatureStage.RemoveNetworkRival(rs.CreatureId);
+                    continue;
+                }
+
+                _hostCreatureRivalIds.Add(rs.CreatureId);
+                creatureStage.AddOrUpdateNetworkRival(rs);
+            }
+
+            creatureStage.CopyNetworkRivalIds(_localCreatureRivalIds);
+            for (int i = 0; i < _localCreatureRivalIds.Count; i++)
+            {
+                string localId = _localCreatureRivalIds[i];
+                if (!_hostCreatureRivalIds.Contains(localId))
+                    creatureStage.RemoveNetworkRival(localId);
+            }
+        }
+
+        private void ApplyCreatureObjectiveState(CreatureObjectiveNetState objective)
+        {
+            var creatureStage = _creatureStageCache;
+            if (creatureStage == null)
+                creatureStage = FindAnyObjectByType<CreatureStage>();
+            _creatureStageCache = creatureStage;
+            creatureStage?.ApplyNetworkObjectiveSnapshot(objective);
+        }
+
+        private void ApplyCreatureWorldProgressionState(CreatureWorldProgressionNetState progression)
+        {
+            var creatureStage = _creatureStageCache;
+            if (creatureStage == null)
+                creatureStage = FindAnyObjectByType<CreatureStage>();
+            _creatureStageCache = creatureStage;
+            creatureStage?.ApplyNetworkWorldProgressionSnapshot(progression);
+        }
+
+        private Transform ResolveLocalVoiceTransform()
+        {
+            if (_localPlayer != null)
+                return _localPlayer.transform;
+            if (_localCreature != null)
+                return _localCreature.transform;
+            return null;
+        }
+
+        private CreatureInstance FindLocalCreature()
+        {
+            var controllers = FindObjectsByType<CreaturePlayerController>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            for (int i = 0; i < controllers.Length; i++)
+            {
+                var creature = controllers[i] != null ? controllers[i].GetComponent<CreatureInstance>() : null;
+                if (creature != null && creature.IsPlayer)
+                    return creature;
+            }
+
+            return null;
         }
 
         private void RebuildOrgMap()
@@ -476,6 +1263,7 @@ namespace RoobsWorld.Multiplayer
             _objectCachesReady = true;
             Organism.CopyActiveInstances(_organismCache);
             _foodCache = FindObjectsByType<FoodItem>(FindObjectsInactive.Exclude);
+            _partPickupCache = FindObjectsByType<CellPartPickup>(FindObjectsInactive.Exclude);
             _organismGenomeChecksums.Clear();
 
             for (int i = _organismCache.Count - 1; i >= 0; i--)
@@ -499,7 +1287,8 @@ namespace RoobsWorld.Multiplayer
 
         private void OnRemotePlayerJoined(MultiplayerPlayerJoinedEvent e)
         {
-            EnsureRemotePlayerGhost(e.PlayerId);
+            if (_localPlayer != null)
+                EnsureRemotePlayerGhost(e.PlayerId);
         }
 
         private void EnsureRemotePlayerGhost(int playerId, string displayName = null)
@@ -539,6 +1328,9 @@ namespace RoobsWorld.Multiplayer
 
         private Transform GetRemotePlayerTransform(int playerId)
         {
+            if (_remoteCreaturePlayers.TryGetValue(playerId, out var creature) && creature != null)
+                return creature.transform;
+
             return _remotePlayers.TryGetValue(playerId, out var ghost) && ghost != null
                 ? ghost.transform
                 : null;
@@ -546,6 +1338,7 @@ namespace RoobsWorld.Multiplayer
 
         private void OnRemotePlayerLeft(MultiplayerPlayerLeftEvent e)
         {
+            RemoveRemoteCreaturePlayer(e.PlayerId);
             if (_remotePlayers.TryGetValue(e.PlayerId, out var ghost))
             {
                 if (ghost != null) Destroy(ghost.gameObject);
@@ -581,6 +1374,26 @@ namespace RoobsWorld.Multiplayer
         public static bool ShouldAcceptRemoteInputTick(bool hasLastAcceptedTick, uint lastAcceptedTick, uint incomingTick)
         {
             return !hasLastAcceptedTick || incomingTick >= lastAcceptedTick;
+        }
+
+        public static bool ShouldApplyStageTransition(
+            bool isLocalHost,
+            int fromPlayerId,
+            int hostPlayerId,
+            GameStageType currentStage,
+            GameStageType targetStage,
+            bool isTransitioning)
+        {
+            if (isLocalHost || isTransitioning)
+                return false;
+
+            if (hostPlayerId < 0 || fromPlayerId != hostPlayerId)
+                return false;
+
+            if (!StageManager.IsStageSupported(targetStage))
+                return false;
+
+            return currentStage != targetStage;
         }
 
         public static float ComputeRemoteInputMoveSpeed(float baseSpeed, float remoteMass)

@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using NUnit.Framework;
 using RoobsWorld.Core;
+using RoobsWorld.Creature;
 using RoobsWorld.Multiplayer;
 using RoobsWorld.Stages.Cell;
 using UnityEngine;
@@ -186,6 +187,17 @@ namespace RoobsWorld.Tests
             Assert.AreEqual("Player 7\nMass 8.0 - Smaller", RemotePlayerCell.BuildStatusLabel(7, " ", 8f, 10f, true));
         }
 
+        [Test]
+        public void RemotePlayerCreature_BuildStatusLabel_CombinesNameHealthAndStamina()
+        {
+            Assert.AreEqual(
+                "Alice\nHP 12/20 - STA 7",
+                RemotePlayerCreature.BuildStatusLabel("Alice", 12f, 20f, 7f, true));
+            Assert.AreEqual(
+                "Bob\nDown",
+                RemotePlayerCreature.BuildStatusLabel("Bob", 0f, 20f, 0f, false));
+        }
+
         // ---- packet tag constants are distinct ----
 
         [Test]
@@ -193,7 +205,19 @@ namespace RoobsWorld.Tests
         {
             Assert.AreNotEqual(NetworkTickManager.TagSession, NetworkTickManager.TagInput);
             Assert.AreNotEqual(NetworkTickManager.TagSession, NetworkTickManager.TagVoice);
+            Assert.AreNotEqual(NetworkTickManager.TagSession, NetworkTickManager.TagStageTransition);
+            Assert.AreNotEqual(NetworkTickManager.TagSession, NetworkTickManager.TagHeartbeat);
+            Assert.AreNotEqual(NetworkTickManager.TagSession, NetworkTickManager.TagRecoveryRequest);
             Assert.AreNotEqual(NetworkTickManager.TagInput, NetworkTickManager.TagVoice);
+            Assert.AreNotEqual(NetworkTickManager.TagInput, NetworkTickManager.TagStageTransition);
+            Assert.AreNotEqual(NetworkTickManager.TagInput, NetworkTickManager.TagHeartbeat);
+            Assert.AreNotEqual(NetworkTickManager.TagInput, NetworkTickManager.TagRecoveryRequest);
+            Assert.AreNotEqual(NetworkTickManager.TagVoice, NetworkTickManager.TagStageTransition);
+            Assert.AreNotEqual(NetworkTickManager.TagVoice, NetworkTickManager.TagHeartbeat);
+            Assert.AreNotEqual(NetworkTickManager.TagVoice, NetworkTickManager.TagRecoveryRequest);
+            Assert.AreNotEqual(NetworkTickManager.TagStageTransition, NetworkTickManager.TagHeartbeat);
+            Assert.AreNotEqual(NetworkTickManager.TagStageTransition, NetworkTickManager.TagRecoveryRequest);
+            Assert.AreNotEqual(NetworkTickManager.TagHeartbeat, NetworkTickManager.TagRecoveryRequest);
         }
 
         [Test]
@@ -211,6 +235,62 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void ShouldApplyStageTransition_AcceptsOnlyHostCommandOnClient()
+        {
+            Assert.IsTrue(NetworkTickManager.ShouldApplyStageTransition(
+                isLocalHost: false,
+                fromPlayerId: 0,
+                hostPlayerId: 0,
+                currentStage: GameStageType.Cell,
+                targetStage: GameStageType.Creature,
+                isTransitioning: false));
+
+            Assert.IsFalse(NetworkTickManager.ShouldApplyStageTransition(
+                isLocalHost: true,
+                fromPlayerId: 0,
+                hostPlayerId: 0,
+                currentStage: GameStageType.Cell,
+                targetStage: GameStageType.Creature,
+                isTransitioning: false));
+
+            Assert.IsFalse(NetworkTickManager.ShouldApplyStageTransition(
+                isLocalHost: false,
+                fromPlayerId: 2,
+                hostPlayerId: 0,
+                currentStage: GameStageType.Cell,
+                targetStage: GameStageType.Creature,
+                isTransitioning: false));
+        }
+
+        [Test]
+        public void ShouldApplyStageTransition_RejectsCurrentUnsupportedOrBusyTargets()
+        {
+            Assert.IsFalse(NetworkTickManager.ShouldApplyStageTransition(
+                isLocalHost: false,
+                fromPlayerId: 0,
+                hostPlayerId: 0,
+                currentStage: GameStageType.Creature,
+                targetStage: GameStageType.Creature,
+                isTransitioning: false));
+
+            Assert.IsFalse(NetworkTickManager.ShouldApplyStageTransition(
+                isLocalHost: false,
+                fromPlayerId: 0,
+                hostPlayerId: 0,
+                currentStage: GameStageType.Cell,
+                targetStage: GameStageType.None,
+                isTransitioning: false));
+
+            Assert.IsFalse(NetworkTickManager.ShouldApplyStageTransition(
+                isLocalHost: false,
+                fromPlayerId: 0,
+                hostPlayerId: 0,
+                currentStage: GameStageType.Cell,
+                targetStage: GameStageType.Creature,
+                isTransitioning: true));
+        }
+
+        [Test]
         public void ComputeRemoteInputMoveSpeed_UsesCellMassPenalty()
         {
             float baseSpeed = 7.5f;
@@ -220,6 +300,42 @@ namespace RoobsWorld.Tests
             Assert.That(small, Is.EqualTo(baseSpeed).Within(0.001f));
             Assert.Less(large, small);
             Assert.That(large, Is.EqualTo(baseSpeed * PlayerCell.ComputeSizeSpeedPenalty(10f)).Within(0.001f));
+        }
+
+        [Test]
+        public void NetworkResilienceRules_Classifies_Lag_Reconnect_And_Disconnect()
+        {
+            Assert.AreEqual(
+                NetworkConnectionQuality.Healthy,
+                NetworkResilienceRules.ClassifyQuality(true, 40f, 0f, 0.2f, 0));
+            Assert.AreEqual(
+                NetworkConnectionQuality.Lagging,
+                NetworkResilienceRules.ClassifyQuality(true, 220f, 0f, 0.2f, 0));
+            Assert.AreEqual(
+                NetworkConnectionQuality.Reconnecting,
+                NetworkResilienceRules.ClassifyQuality(true, 40f, 0f, 3.5f, 0));
+            Assert.AreEqual(
+                NetworkConnectionQuality.Disconnected,
+                NetworkResilienceRules.ClassifyQuality(false, 40f, 0f, 0.2f, 0));
+        }
+
+        [Test]
+        public void NetworkResilienceRules_BuildSnapshot_TracksPacketLossAndRecovery()
+        {
+            var snapshot = NetworkResilienceRules.BuildSnapshot(
+                transportConnected: true,
+                pingMs: 90f,
+                rttTrendMs: 120f,
+                packetsSent: 10,
+                packetsReceived: 7,
+                lastAuthoritativeSnapshotAgeSeconds: 3.2f,
+                reconnectAttempts: 1);
+
+            Assert.AreEqual(90f, snapshot.PingMs);
+            Assert.AreEqual(0.3f, snapshot.PacketLossRatio, 0.0001f);
+            Assert.AreEqual(NetworkConnectionQuality.Reconnecting, snapshot.Quality);
+            Assert.IsTrue(NetworkResilienceRules.ShouldRequestRecovery(false, snapshot.Quality, 2f));
+            Assert.IsFalse(NetworkResilienceRules.ShouldRequestRecovery(true, snapshot.Quality, 2f));
         }
 
         [Test]
@@ -307,6 +423,285 @@ namespace RoobsWorld.Tests
                 if (foodGo != null)
                     UnityEngine.Object.DestroyImmediate(foodGo);
                 UnityEngine.Object.DestroyImmediate(mgrGo);
+            }
+        }
+
+        [Test]
+        public void ApplyFoodState_ReconcilesClientFoodToHostSnapshot()
+        {
+            var mgrGo = new GameObject("TestTick");
+            var foodManagerGo = new GameObject("FoodManager_Test");
+            try
+            {
+                var tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var foodManager = foodManagerGo.AddComponent<FoodManager>();
+                int staleLocalId = foodManager.AddFoodAt(Vector3.zero, FoodType.Plant, 5f);
+                Assert.IsTrue(foodManager.HasFood(staleLocalId));
+
+                var applyFoodState = typeof(NetworkTickManager).GetMethod(
+                    "ApplyFoodState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyFoodState);
+
+                var hostFoods = new[]
+                {
+                    new FoodNetState
+                    {
+                        FoodId = 77,
+                        PosX = 4f,
+                        PosY = -2f,
+                        FoodType = FoodType.Meat,
+                        Exists = true
+                    }
+                };
+
+                applyFoodState.Invoke(tickManager, new object[] { hostFoods });
+
+                Assert.IsFalse(foodManager.HasFood(staleLocalId));
+                Assert.IsTrue(foodManager.HasFood(77));
+                var nearest = foodManager.GetNearestFood(new Vector3(4f, 0f, -2f), 0.5f);
+                Assert.IsTrue(nearest.HasValue);
+                Assert.AreEqual(77, nearest.Value.Id);
+                Assert.AreEqual(FoodType.Meat, nearest.Value.Type);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                UnityEngine.Object.DestroyImmediate(foodManagerGo);
+            }
+        }
+
+        [Test]
+        public void BuildSessionState_Includes_CellPartPickups()
+        {
+            var mgrGo = new GameObject("TestTick");
+            var pickupGo = new GameObject("PartPickup");
+            try
+            {
+                var mgr = mgrGo.AddComponent<NetworkTickManager>();
+                var pickup = pickupGo.AddComponent<CellPartPickup>();
+                pickup.SetPickupId(55);
+                pickup.SetPartType(CellPartType.Jet);
+
+                var buildSessionState = typeof(NetworkTickManager).GetMethod(
+                    "BuildSessionState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(buildSessionState);
+
+                var state = (SessionNetState)buildSessionState.Invoke(mgr, new object[] { 1u });
+
+                Assert.IsTrue(Array.Exists(state.PartPickups, p => p.PickupId == 55 && p.PartType == CellPartType.Jet));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pickupGo);
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                DestroyAllPartPickups();
+            }
+        }
+
+        [Test]
+        public void ApplyPartPickupState_ReconcilesClientPickupsToHostSnapshot()
+        {
+            var mgrGo = new GameObject("TestTick");
+            var stageGo = new GameObject("CellStage_Test");
+            try
+            {
+                var tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var stage = stageGo.AddComponent<CellStage>();
+                stage.AddOrUpdateNetworkPartPickup(12, CellPartType.Cilia, Vector3.zero);
+                Assert.IsTrue(stage.HasPartPickup(12));
+
+                var applyPickupState = typeof(NetworkTickManager).GetMethod(
+                    "ApplyPartPickupState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyPickupState);
+
+                var hostPickups = new[]
+                {
+                    new PartPickupNetState
+                    {
+                        PickupId = 77,
+                        PosX = 5f,
+                        PosY = -3f,
+                        PartType = CellPartType.Spike,
+                        Exists = true
+                    }
+                };
+
+                applyPickupState.Invoke(tickManager, new object[] { hostPickups });
+
+                Assert.IsFalse(stage.HasPartPickup(12));
+                Assert.IsTrue(stage.HasPartPickup(77));
+                var pickup = FindPartPickupById(77);
+                Assert.NotNull(pickup);
+                Assert.AreEqual(CellPartType.Spike, pickup.PartType);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                UnityEngine.Object.DestroyImmediate(stageGo);
+                DestroyAllPartPickups();
+            }
+        }
+
+        [Test]
+        public void ApplyCreaturePlayerState_SpawnsRemoteCreatureFromHostSnapshot()
+        {
+            var mgrGo = new GameObject("CreatureTick");
+            try
+            {
+                var tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var applyCreaturePlayers = typeof(NetworkTickManager).GetMethod(
+                    "ApplyCreaturePlayerState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyCreaturePlayers);
+                var dna = CreatureDNA.CreateDefault();
+                dna.CreatureId = "remote-creature-8";
+                dna.CreatureName = "Painted Runner";
+                dna.Body.BodyScale = new Vector3(1.4f, 1.1f, 0.9f);
+
+                var hostPlayers = new[]
+                {
+                    new CreaturePlayerNetState
+                    {
+                        PlayerId = 8,
+                        CreatureId = "remote-creature-8",
+                        CreatureDNAJson = dna.ToJson(),
+                        PosX = 4f,
+                        PosY = -6f,
+                        RotY = 90f,
+                        Health = 14f,
+                        MaxHealth = 22f,
+                        Stamina = 5f,
+                        IsAlive = true
+                    }
+                };
+
+                applyCreaturePlayers.Invoke(tickManager, new object[] { hostPlayers });
+
+                var remote = FindRemoteCreatureByPlayerId(8);
+                Assert.NotNull(remote);
+                Assert.AreEqual("remote-creature-8", remote.CreatureId);
+                Assert.AreEqual(14f, remote.Health, 0.0001f);
+                Assert.AreEqual(22f, remote.MaxHealth, 0.0001f);
+                Assert.AreEqual(5f, remote.Stamina, 0.0001f);
+                Assert.AreEqual(4f, remote.transform.position.x, 0.0001f);
+                Assert.AreEqual(-6f, remote.transform.position.z, 0.0001f);
+                var instance = remote.GetComponent<CreatureInstance>();
+                Assert.NotNull(instance);
+                Assert.AreEqual("Painted Runner", instance.DNA.CreatureName);
+                Assert.AreEqual(1.4f, instance.DNA.Body.BodyScale.x, 0.0001f);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(remote.SourceDnaJson));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                DestroyAllRemoteCreatures();
+            }
+        }
+
+        [Test]
+        public void HostRemoteCreatureInput_IsIncludedInAuthoritativeCreatureSnapshots()
+        {
+            var mgrGo = new GameObject("HostCreatureTick");
+            NetworkTickManager tickManager = null;
+            try
+            {
+                tickManager = mgrGo.AddComponent<NetworkTickManager>();
+                var session = new MultiplayerSessionManager();
+                session.CreateSession();
+                session.AddRemotePlayer(7, "Client Creature");
+                tickManager.Activate(session, new NullNetworkTransport(), null);
+
+                var dna = CreatureDNA.CreateDefault();
+                dna.CreatureId = "client-creature-7";
+                dna.CreatureName = "Client Runner";
+                var input = new RemoteInputPacket
+                {
+                    PlayerId = 7,
+                    MoveX = 0f,
+                    MoveY = 1f,
+                    Tick = 4u,
+                    HasCreatureInput = true,
+                    CreatureId = dna.CreatureId,
+                    CreatureDNAJson = dna.ToJson(),
+                    CreaturePosX = 3f,
+                    CreaturePosY = -2f,
+                    CreatureRotY = 25f,
+                    CreatureHealth = 18f,
+                    CreatureMaxHealth = 24f,
+                    CreatureStamina = 9f,
+                    CreatureIsAlive = true
+                };
+
+                var applyRemoteInput = typeof(NetworkTickManager).GetMethod(
+                    "ApplyRemoteInput",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var buildSessionState = typeof(NetworkTickManager).GetMethod(
+                    "BuildSessionState",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(applyRemoteInput);
+                Assert.NotNull(buildSessionState);
+
+                applyRemoteInput.Invoke(tickManager, new object[] { 7, input });
+                var state = (SessionNetState)buildSessionState.Invoke(tickManager, new object[] { 9u });
+
+                Assert.IsTrue(Array.Exists(
+                    state.CreaturePlayers,
+                    p => p.PlayerId == 7 &&
+                        p.CreatureId == "client-creature-7" &&
+                        p.CreatureDNAJson.Contains("Client Runner")));
+            }
+            finally
+            {
+                tickManager?.Deactivate();
+                UnityEngine.Object.DestroyImmediate(mgrGo);
+                DestroyAllRemoteCreatures();
+            }
+        }
+
+        private static RemotePlayerCreature FindRemoteCreatureByPlayerId(int playerId)
+        {
+            var creatures = UnityEngine.Object.FindObjectsByType<RemotePlayerCreature>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < creatures.Length; i++)
+            {
+                if (creatures[i] != null && creatures[i].PlayerId == playerId)
+                    return creatures[i];
+            }
+
+            return null;
+        }
+
+        private static void DestroyAllRemoteCreatures()
+        {
+            var creatures = UnityEngine.Object.FindObjectsByType<RemotePlayerCreature>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < creatures.Length; i++)
+            {
+                if (creatures[i] != null)
+                    UnityEngine.Object.DestroyImmediate(creatures[i].gameObject);
+            }
+        }
+
+        private static CellPartPickup FindPartPickupById(int pickupId)
+        {
+            var pickups = UnityEngine.Object.FindObjectsByType<CellPartPickup>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                if (pickups[i] != null && pickups[i].PickupId == pickupId)
+                    return pickups[i];
+            }
+
+            return null;
+        }
+
+        private static void DestroyAllPartPickups()
+        {
+            var pickups = UnityEngine.Object.FindObjectsByType<CellPartPickup>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                if (pickups[i] != null)
+                    UnityEngine.Object.DestroyImmediate(pickups[i].gameObject);
             }
         }
 

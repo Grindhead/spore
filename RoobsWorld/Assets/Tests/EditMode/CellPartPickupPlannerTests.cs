@@ -16,14 +16,14 @@ namespace RoobsWorld.Tests.EditMode
         [Test]
         public void BuildPlan_CountAtLeastPartTypes_ContainsAllPartTypes()
         {
-            var plan = CellPartPickupPlanner.BuildPlan(4, new System.Random(7));
+            int partTypeCount = System.Enum.GetValues(typeof(CellPartType)).Length;
+            var plan = CellPartPickupPlanner.BuildPlan(partTypeCount, new System.Random(7));
             var set = new HashSet<CellPartType>(plan);
 
-            Assert.AreEqual(4, plan.Count);
-            Assert.IsTrue(set.Contains(CellPartType.Flagella));
-            Assert.IsTrue(set.Contains(CellPartType.Cilia));
-            Assert.IsTrue(set.Contains(CellPartType.Spike));
-            Assert.IsTrue(set.Contains(CellPartType.Jet));
+            Assert.AreEqual(partTypeCount, plan.Count);
+            Assert.AreEqual(partTypeCount, set.Count);
+            foreach (CellPartType partType in System.Enum.GetValues(typeof(CellPartType)))
+                Assert.IsTrue(set.Contains(partType), $"Missing {partType}");
         }
 
         [Test]
@@ -39,11 +39,12 @@ namespace RoobsWorld.Tests.EditMode
         [Test]
         public void BuildPlan_CountAbovePartTypes_ReturnsRequestedCountAndCoverage()
         {
-            var plan = CellPartPickupPlanner.BuildPlan(8, new System.Random(11));
+            int partTypeCount = System.Enum.GetValues(typeof(CellPartType)).Length;
+            var plan = CellPartPickupPlanner.BuildPlan(partTypeCount + 4, new System.Random(11));
             var set = new HashSet<CellPartType>(plan);
 
-            Assert.AreEqual(8, plan.Count);
-            Assert.AreEqual(4, set.Count);
+            Assert.AreEqual(partTypeCount + 4, plan.Count);
+            Assert.AreEqual(partTypeCount, set.Count);
         }
 
         [Test]
@@ -64,7 +65,7 @@ namespace RoobsWorld.Tests.EditMode
             string jet = CellPartPickupPlanner.GetPreviewText(CellPartType.Jet);
 
             Assert.That(spike, Does.Contain("contact"));
-            Assert.That(jet, Does.Contain("boost"));
+            Assert.That(jet, Does.Contain("Burst"));
         }
 
         [Test]
@@ -75,20 +76,18 @@ namespace RoobsWorld.Tests.EditMode
             Assert.AreEqual(CellPartType.Cilia, CellPartPickupPlanner.SelectGoalPartType(loadout));
 
             loadout.TryUnlock(CellPartType.Cilia);
-            Assert.AreEqual(CellPartType.Spike, CellPartPickupPlanner.SelectGoalPartType(loadout));
+            Assert.AreEqual(CellPartType.HerbivoreMouth, CellPartPickupPlanner.SelectGoalPartType(loadout));
 
-            loadout.TryUnlock(CellPartType.Spike);
-            Assert.AreEqual(CellPartType.Jet, CellPartPickupPlanner.SelectGoalPartType(loadout));
+            loadout.TryUnlock(CellPartType.HerbivoreMouth);
+            Assert.AreEqual(CellPartType.CarnivoreMouth, CellPartPickupPlanner.SelectGoalPartType(loadout));
         }
 
         [Test]
         public void SelectGoalPartType_FallsBackToCilia_WhenAllPartsUnlocked()
         {
             var loadout = new CellPartLoadout();
-            loadout.TryUnlock(CellPartType.Cilia);
-            loadout.TryUnlock(CellPartType.Spike);
-            loadout.TryUnlock(CellPartType.Jet);
-            loadout.TryUnlock(CellPartType.Flagella);
+            foreach (CellPartType partType in System.Enum.GetValues(typeof(CellPartType)))
+                loadout.TryUnlock(partType);
 
             Assert.AreEqual(CellPartType.Cilia, CellPartPickupPlanner.SelectGoalPartType(loadout));
         }

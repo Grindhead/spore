@@ -75,6 +75,9 @@ namespace RoobsWorld.Multiplayer
         private Image _spinnerCore;
 
         private bool _isOpen;
+        private bool _transportHandedOffToGameplay;
+        private bool _transportCallbacksEnabled = true;
+        private int _transportCallbackGeneration;
 
         public Action OnStartGameRequested { get; set; }
         public Action OnClosed { get; set; }
@@ -110,8 +113,15 @@ namespace RoobsWorld.Multiplayer
 
         private void OnDestroy()
         {
+            var boundSession = _session;
+            DisableTransportCallbacks();
             Bind(null);
-            _transport?.Disconnect();
+            if (!_transportHandedOffToGameplay)
+            {
+                _transport?.Disconnect();
+                if (GameManager.HasInstance && ReferenceEquals(GameManager.Instance.Session, boundSession))
+                    GameManager.Instance.SetSession(null, null);
+            }
             _transport = null;
         }
 
@@ -271,6 +281,16 @@ namespace RoobsWorld.Multiplayer
             OnClosed?.Invoke();
         }
 
+        /// <summary>
+        /// Keeps the active relay socket alive for gameplay while disabling lobby-owned callbacks.
+        /// </summary>
+        public void PrepareForGameplayHandoff()
+        {
+            _transportHandedOffToGameplay = true;
+            DisableTransportCallbacks();
+            Bind(null);
+        }
+
         private void OnClosePressed()
         {
             Close();
@@ -335,7 +355,11 @@ namespace RoobsWorld.Multiplayer
 
         private void OnLeavePressed()
         {
+            DisableTransportCallbacks();
             _session?.LeaveSession();
+            _transport?.Disconnect();
+            _transport = null;
+            _transportHandedOffToGameplay = false;
             if (GameManager.HasInstance)
                 GameManager.Instance.SetSession(null, null);
             RefreshPanels();
@@ -471,8 +495,10 @@ namespace RoobsWorld.Multiplayer
 
             if (disconnectExisting && changed)
             {
+                DisableTransportCallbacks();
                 _transport?.Disconnect();
                 _transport = null;
+                _transportHandedOffToGameplay = false;
             }
 
             RefreshSelectedRelayLabel();
@@ -692,12 +718,15 @@ namespace RoobsWorld.Multiplayer
             _isConnecting = true;
             try
             {
+                DisableTransportCallbacks();
                 _transport?.Disconnect();
                 foreach (var relayUrl in GetSelectedRelayUrls())
                 {
                     _transport = new WebSocketNetworkTransport(
                         relayUrl,
                         string.IsNullOrWhiteSpace(_gameToken) ? null : _gameToken);
+                    _transportHandedOffToGameplay = false;
+                    _transportCallbacksEnabled = true;
                     WireTransport(_transport);
                     ShowStatus("Connecting to relay...");
 
@@ -741,8 +770,11 @@ namespace RoobsWorld.Multiplayer
 
         private void WireTransport(WebSocketNetworkTransport transport)
         {
+            int callbackGeneration = ++_transportCallbackGeneration;
+
             transport.OnSessionCreated += (code, playerId) =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyCreatedSession(code, playerId);
                 if (GameManager.HasInstance)
@@ -753,6 +785,7 @@ namespace RoobsWorld.Multiplayer
 
             transport.OnSessionJoined += (code, playerId, hostPlayerId) =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyJoinedSession(code, playerId, hostPlayerId);
                 if (string.IsNullOrWhiteSpace(_activeServerName))
@@ -765,6 +798,7 @@ namespace RoobsWorld.Multiplayer
 
             transport.OnRemotePlayerJoined += playerId =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.AddRemotePlayer(playerId, $"Player {playerId}");
                 RefreshPanels();
@@ -772,6 +806,7 @@ namespace RoobsWorld.Multiplayer
 
             transport.OnRemotePlayerLeft += (playerId, wasHost) =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.RemovePlayer(playerId);
                 RefreshPanels();
@@ -779,6 +814,7 @@ namespace RoobsWorld.Multiplayer
 
             transport.OnHostMigrated += newHostId =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyHostMigration(newHostId);
                 RefreshPanels();
@@ -786,6 +822,7 @@ namespace RoobsWorld.Multiplayer
 
             transport.OnPlayerReadyChanged += (playerId, ready) =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyPlayerReady(playerId, ready);
                 RefreshPlayerList();
@@ -794,33 +831,51 @@ namespace RoobsWorld.Multiplayer
 
             transport.OnPlayerLobbyChanged += (playerId, lobbyId) =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyPlayerLobby(playerId, lobbyId);
             };
 
             transport.OnSessionMapReceived += map =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplySessionMap(map);
             };
 
             transport.OnGameStarted += () =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyGameStarted();
             };
 
             transport.OnGlobalChatMessage += (fromPlayerId, message) =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 EnsureSession();
                 _session.ApplyChatMessage(fromPlayerId, message);
             };
 
             transport.OnError += reason =>
             {
+                if (!IsCurrentTransportCallback(transport, callbackGeneration)) return;
                 ShowStatus(GetFriendlyRelayError(reason), isError: true);
                 RefreshPanels();
             };
+        }
+
+        private bool IsCurrentTransportCallback(WebSocketNetworkTransport transport, int callbackGeneration)
+        {
+            return _transportCallbacksEnabled
+                && callbackGeneration == _transportCallbackGeneration
+                && ReferenceEquals(_transport, transport);
+        }
+
+        private void DisableTransportCallbacks()
+        {
+            _transportCallbacksEnabled = false;
+            _transportCallbackGeneration++;
         }
 
         private static string GetFriendlyRelayError(string reason)

@@ -66,5 +66,53 @@ namespace RoobsWorld.Tests
             Assert.Greater(loadout.BoostDurationMultiplier, 1f);
             Assert.Greater(loadout.BoostSpeedMultiplier, 1f);
         }
+
+        [Test]
+        public void Catalog_Includes_Mouth_Defense_And_Utility_Parts()
+        {
+            var definitions = CellPartLoadout.GetAllDefinitions();
+
+            Assert.GreaterOrEqual(definitions.Count, 12);
+            Assert.AreEqual(CellPartCategory.Mouth, CellPartLoadout.GetDefinition(CellPartType.HerbivoreMouth).Category);
+            Assert.AreEqual(CellDietRole.Carnivore, CellPartLoadout.GetDefinition(CellPartType.CarnivoreMouth).DietRole);
+            Assert.AreEqual(CellPartCategory.Defense, CellPartLoadout.GetDefinition(CellPartType.ArmorPlate).Category);
+            Assert.AreEqual(CellPartCategory.Utility, CellPartLoadout.GetDefinition(CellPartType.SensorEye).Category);
+        }
+
+        [Test]
+        public void Mouths_Specialize_Food_Gain_By_Diet()
+        {
+            var herbivore = new CellPartLoadout();
+            herbivore.TryUnlock(CellPartType.HerbivoreMouth);
+
+            var carnivore = new CellPartLoadout();
+            carnivore.TryUnlock(CellPartType.CarnivoreMouth);
+
+            var omnivore = new CellPartLoadout();
+            omnivore.TryUnlock(CellPartType.OmnivoreMouth);
+
+            Assert.Greater(herbivore.GetFoodGainMultiplier(FoodType.Plant), herbivore.GetFoodGainMultiplier(FoodType.Meat));
+            Assert.Greater(carnivore.GetFoodGainMultiplier(FoodType.Meat), carnivore.GetFoodGainMultiplier(FoodType.Plant));
+            Assert.Greater(omnivore.GetFoodGainMultiplier(FoodType.Plant), 1f);
+            Assert.Greater(omnivore.GetFoodGainMultiplier(FoodType.Meat), 1f);
+        }
+
+        [Test]
+        public void Defensive_And_Sensor_Parts_Add_Readable_Gameplay_Effects()
+        {
+            var loadout = new CellPartLoadout();
+
+            loadout.TryUnlock(CellPartType.PoisonVacuole);
+            loadout.TryUnlock(CellPartType.ElectricNodule);
+            loadout.TryUnlock(CellPartType.ArmorPlate);
+            loadout.TryUnlock(CellPartType.SensorEye);
+
+            Assert.IsTrue(loadout.HasPoisonAdaptation);
+            Assert.IsTrue(loadout.HasArmorPlate);
+            Assert.IsTrue(loadout.HasThreatSensor);
+            Assert.Greater(loadout.ContactDamageMultiplier, 1f);
+            Assert.Greater(loadout.ConsumeProbeRadiusBonus, 0f);
+            Assert.Greater(loadout.GetFoodGainMultiplier(FoodType.Toxin), 1f);
+        }
     }
 }

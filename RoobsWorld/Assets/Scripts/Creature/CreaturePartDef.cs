@@ -19,6 +19,30 @@ namespace RoobsWorld.Creature
         Spike
     }
 
+    public enum CreaturePartRarity
+    {
+        Common,
+        Uncommon,
+        Rare,
+        Apex
+    }
+
+    public enum CreatureVerb
+    {
+        Bite,
+        Charge,
+        Strike,
+        Spit,
+        Jump,
+        Glide,
+        Sprint,
+        Sing,
+        Charm,
+        Pose,
+        Sneak,
+        CallPack
+    }
+
     /// <summary>
     /// Scriptable definition for a creature part, including visuals, stat modifiers, and placement rules.
     /// </summary>
@@ -28,8 +52,11 @@ namespace RoobsWorld.Creature
         [Header("Identity")]
         public string PartId;
         public string DisplayName;
+        public string Tooltip;
         public PartCategory Category;
+        public CreaturePartRarity Rarity = CreaturePartRarity.Common;
         public Sprite Icon;
+        public string IconGlyph;
 
         [Header("Visual")]
         public GameObject ModelPrefab;
@@ -42,6 +69,8 @@ namespace RoobsWorld.Creature
         public float DefenseModifier;
         public float SocialModifier;
         public float StealthModifier;
+        public CreatureVerb[] Verbs = System.Array.Empty<CreatureVerb>();
+        public string AnimationHint;
 
         [Header("Costs")]
         public int DNACost = 10;
@@ -50,5 +79,8 @@ namespace RoobsWorld.Creature
         public int MaxCount = 2;
         public bool RequiresSymmetry = true;
         public int[] AllowedBones;
+        public bool HiddenInCatalog;
+        public string ProgressionFamily;
+        public int ProgressionTier = 1;
     }
 }

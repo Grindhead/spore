@@ -131,6 +131,17 @@ namespace RoobsWorld.Core
         public int KillStreak;
     }
 
+    /// <summary>Fired when host-authoritative Creature-stage world progression pays out.</summary>
+    public struct CreatureWorldProgressionEvent : IGameEvent
+    {
+        public RoobsWorld.Stages.Creature.CreatureProgressionEventType EventType;
+        public string WorldPointId;
+        public int DnaReward;
+        public int TotalDna;
+        public bool CanEditAtNest;
+        public bool CanMigrate;
+    }
+
     /// <summary>Fired when the player uses a Creature-stage active ability inherited from Cell-stage traits.</summary>
     public struct CreatureAbilityUsedEvent : IGameEvent
     {
@@ -386,5 +397,16 @@ namespace RoobsWorld.Core
     public struct MultiplayerGameStartedEvent : IGameEvent
     {
         public string SessionCode;
+    }
+
+    /// <summary>Fired when multiplayer network quality or reconnect state changes.</summary>
+    public struct MultiplayerNetworkQualityChangedEvent : IGameEvent
+    {
+        public float PingMs;
+        public float RttTrendMs;
+        public float PacketLossRatio;
+        public float LastAuthoritativeSnapshotAgeSeconds;
+        public int ReconnectAttempts;
+        public RoobsWorld.Multiplayer.NetworkConnectionQuality Quality;
     }
 }

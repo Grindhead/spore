@@ -716,10 +716,22 @@ namespace RoobsWorld.Stages.Cell
 
             var loadout = _player.PartLoadout;
             string parts = "Parts:";
-            if (loadout.HasPart(CellPartType.Flagella)) parts += " [Flagella]";
-            if (loadout.HasPart(CellPartType.Cilia)) parts += " [Cilia]";
-            if (loadout.HasPart(CellPartType.Spike)) parts += " [Spike]";
-            if (loadout.HasPart(CellPartType.Jet)) parts += " [Jet]";
+            var definitions = CellPartLoadout.GetAllDefinitions();
+            int shownParts = 0;
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                var definition = definitions[i];
+                if (!loadout.HasPart(definition.Type))
+                    continue;
+
+                parts += $" [{definition.DisplayName}]";
+                shownParts++;
+                if (shownParts >= 5)
+                {
+                    parts += " ...";
+                    break;
+                }
+            }
             _partsText.text = parts + BuildNearestPartPreviewText();
 
             if (_symbiosisText != null)

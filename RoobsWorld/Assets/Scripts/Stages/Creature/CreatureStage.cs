@@ -20,11 +20,16 @@ namespace RoobsWorld.Stages.Creature
         private const int MultiplayerRivalsMaxBonus = 3;
         private const int MultiplayerObjectiveDefeatsPerExtraPlayer = 2;
         private const int MultiplayerObjectiveDefeatsMaxBonus = 6;
+        private const float WorldPointInteractionPadding = 1.2f;
+        private const float WorldProgressionTickInterval = 0.25f;
+        private const float NestHealPerSecond = 8f;
 
         private GameObject _playerCreature;
         private CreatureStageHUD _hud;
         private CreatureStageEncounterManager _encounterManager;
         private CreatureStageArena _arena;
+        private NetworkTickManager _networkTick;
+        private GlobalChatOverlay _globalChatOverlay;
         private GameplayTelemetryTracker _telemetryTracker;
         private float _respawnTimer = -1f;
         private bool _objectiveCompleteAnnounced;
@@ -45,8 +50,20 @@ namespace RoobsWorld.Stages.Creature
         private readonly Dictionary<string, float> _speciesRelationshipScores = new Dictionary<string, float>(8);
         private int _minDesiredActiveRivals = MinDesiredActiveRivals;
         private int _maxDesiredActiveRivals = MaxDesiredActiveRivals;
+        private CreatureObjectiveNetState _networkObjectiveSnapshot;
+        private bool _hasNetworkObjectiveSnapshot;
+        private CreatureWorldPlan _worldPlan;
+        private CreatureProgressionState _worldProgression;
+        private CreatureWorldProgressionNetState _networkWorldProgressionSnapshot;
+        private bool _worldProgressionInitialized;
+        private bool _hasNetworkWorldProgressionSnapshot;
+        private bool _wasAtHomeNest;
+        private float _worldProgressionTimer;
+        private readonly HashSet<string> _completedWorldProgressionEvents = new HashSet<string>(32);
+        private readonly HashSet<string> _completedSpeciesProgressionEvents = new HashSet<string>(16);
 
         public GameStageType StageType => GameStageType.Creature;
+        public CreatureWorldPlan WorldPlan => _worldPlan;
 
         private void Start()
         {
@@ -66,6 +83,12 @@ namespace RoobsWorld.Stages.Creature
             _objectiveCompleteAnnounced = false;
             _objectivesCompleted = 0;
             _nextObjectiveTimer = -1f;
+            _worldProgressionTimer = 0f;
+            _worldProgressionInitialized = false;
+            _hasNetworkWorldProgressionSnapshot = false;
+            _wasAtHomeNest = false;
+            _completedWorldProgressionEvents.Clear();
+            _completedSpeciesProgressionEvents.Clear();
             var session = GameManager.HasInstance ? GameManager.Instance.Session : null;
             int activePlayerCount = GetActiveCreaturePlayerCount(session);
             _minDesiredActiveRivals = ComputeMultiplayerScaledCount(
@@ -81,6 +104,7 @@ namespace RoobsWorld.Stages.Creature
             _desiredActiveRivals = _minDesiredActiveRivals;
             EnsureArena();
             SpawnPlayerIfNeeded();
+            InitializeWorldPlan(activePlayerCount);
             InitializeUpgradeMilestone();
             CameraManager.Instance.ActivateRig(CameraRigType.ThirdPerson);
             if (_playerCreature != null)
@@ -88,8 +112,10 @@ namespace RoobsWorld.Stages.Creature
                 CameraManager.Instance.SetFollowTarget(_playerCreature.transform);
                 EnsureEncounterManager(_playerCreature.transform);
                 EnsureHud(_playerCreature);
+                RefreshWorldProgressHud();
             }
             InitializeObjective();
+            ActivateCreatureMultiplayer(session);
             EventBus.Subscribe<CreatureCombatFeedbackEvent>(OnCombatFeedback);
             EventBus.Subscribe<CreatureRivalDefeatedEvent>(OnRivalDefeated);
             _telemetryTracker = GameplayTelemetryTracker.Attach(
@@ -102,8 +128,19 @@ namespace RoobsWorld.Stages.Creature
             EventBus.Unsubscribe<CreatureCombatFeedbackEvent>(OnCombatFeedback);
             EventBus.Unsubscribe<CreatureRivalDefeatedEvent>(OnRivalDefeated);
             _speciesRelationshipScores.Clear();
+            _completedWorldProgressionEvents.Clear();
+            _completedSpeciesProgressionEvents.Clear();
+            _hasNetworkObjectiveSnapshot = false;
+            _hasNetworkWorldProgressionSnapshot = false;
+            _worldProgressionInitialized = false;
+            _wasAtHomeNest = false;
             CameraManager.Instance.SetFollowTarget(null);
             _hud?.SetVisible(false);
+            _networkTick?.Deactivate();
+            _networkTick = null;
+            _globalChatOverlay?.Deactivate();
+            _globalChatOverlay = null;
+            _worldPlan = default;
             if (_objectiveMarker != null)
                 _objectiveMarker.SetActive(false);
             if (_telemetryTracker != null) { Destroy(_telemetryTracker.gameObject); _telemetryTracker = null; }
@@ -111,8 +148,16 @@ namespace RoobsWorld.Stages.Creature
 
         public void OnUpdate()
         {
-            UpdateNextObjectiveTimer();
+            bool hasAuthority = HasCreatureSimulationAuthority();
+            if (!hasAuthority)
+            {
+                UpdateNetworkObjectiveHud();
+                UpdateNetworkWorldProgressHud();
+                HandlePlayerRespawn();
+                return;
+            }
 
+            UpdateNextObjectiveTimer();
             if (_encounterManager != null && !_objectiveCompleteAnnounced)
             {
                 int objectivePopulationProgress = GetObjectivePopulationProgress();
@@ -132,6 +177,7 @@ namespace RoobsWorld.Stages.Creature
 
             UpdateObjectiveTimer();
             UpdateEncounterProgress();
+            UpdateCreatureWorldProgression();
             OfferUpgradeChoiceIfReady();
             HandlePlayerRespawn();
         }
@@ -215,6 +261,92 @@ namespace RoobsWorld.Stages.Creature
             return true;
         }
 
+        public CreatureObjectiveNetState CreateNetworkObjectiveSnapshot()
+        {
+            if (_currentObjective.LocalizationKey == null)
+                return default;
+
+            int progress = _currentObjective.UsesHoldTimer
+                ? GetHoldObjectivePressureProgress()
+                : GetObjectiveDefeatProgress();
+            return new CreatureObjectiveNetState
+            {
+                HasObjective = true,
+                ObjectiveType = (int)_currentObjective.Type,
+                Progress = Mathf.Clamp(progress, 0, GetObjectiveDefeatTarget()),
+                Target = GetObjectiveDefeatTarget(),
+                ActiveRivals = _encounterManager != null ? _encounterManager.ActiveRivalCount : 0,
+                DesiredActiveRivals = Mathf.Max(1, _desiredActiveRivals),
+                ObjectivesCompleted = _objectivesCompleted,
+                HoldSeconds = _holdObjectiveSeconds,
+                IsComplete = _objectiveCompleteAnnounced
+            };
+        }
+
+        public void ApplyNetworkObjectiveSnapshot(CreatureObjectiveNetState snapshot)
+        {
+            if (!snapshot.HasObjective)
+                return;
+
+            _networkObjectiveSnapshot = snapshot;
+            _hasNetworkObjectiveSnapshot = true;
+            _objectivesCompleted = Mathf.Max(_objectivesCompleted, snapshot.ObjectivesCompleted);
+            _objectiveCompleteAnnounced = snapshot.IsComplete;
+            _holdObjectiveSeconds = Mathf.Max(_holdObjectiveSeconds, snapshot.HoldSeconds);
+        }
+
+        public CreatureWorldProgressionNetState CreateNetworkWorldProgressionSnapshot()
+        {
+            if (!_worldProgressionInitialized)
+                InitializeWorldProgression();
+
+            return new CreatureWorldProgressionNetState
+            {
+                HasProgression = _worldProgressionInitialized,
+                DNA = _worldProgression.DNA,
+                Meals = _worldProgression.Meals,
+                Allies = _worldProgression.Allies,
+                Defeats = _worldProgression.Defeats,
+                Discoveries = _worldProgression.Discoveries,
+                MigrationsCompleted = _worldProgression.MigrationsCompleted,
+                IsAtNest = _worldProgression.IsAtNest,
+                HasPackMate = _worldProgression.HasPackMate,
+                CanEditAtNest = CreatureWorldPlanner.ShouldOpenCreatorAtNest(_worldProgression),
+                CanMigrate = HasAvailableMigrationGate(),
+                NearestNestDistance = ComputeNearestWorldPointDistance(_worldPlan, CreatureWorldPointType.HomeNest, GetPlayerWorldPosition()),
+                NearestMigrationDistance = ComputeNearestWorldPointDistance(_worldPlan, CreatureWorldPointType.MigrationGate, GetPlayerWorldPosition())
+            };
+        }
+
+        public void ApplyNetworkWorldProgressionSnapshot(CreatureWorldProgressionNetState snapshot)
+        {
+            if (!snapshot.HasProgression)
+                return;
+
+            _networkWorldProgressionSnapshot = snapshot;
+            _hasNetworkWorldProgressionSnapshot = true;
+            _worldProgression = ToProgressionState(snapshot);
+            _worldProgressionInitialized = true;
+            RefreshWorldProgressHud(snapshot);
+        }
+
+        public void AddOrUpdateNetworkRival(CreatureRivalNetState state)
+        {
+            EnsureEncounterManager(_playerCreature != null ? _playerCreature.transform : null);
+            _encounterManager?.AddOrUpdateNetworkRival(state, _arena);
+        }
+
+        public void RemoveNetworkRival(string creatureId)
+        {
+            _encounterManager?.RemoveNetworkRival(creatureId);
+        }
+
+        public void CopyNetworkRivalIds(List<string> target)
+        {
+            target?.Clear();
+            _encounterManager?.CopyTrackedRivalIds(target);
+        }
+
         public static float ComputeSpeciesRelationshipDelta(CreatureCombatFeedbackType feedbackType)
         {
             return feedbackType switch
@@ -251,6 +383,36 @@ namespace RoobsWorld.Stages.Creature
                 arena.ApplyMapDefinition(map);
         }
 
+        private void InitializeWorldPlan(int activePlayerCount)
+        {
+            var dna = GameManager.HasInstance
+                ? GameManager.Instance.GetPlayerCreatureDNAOrDefault()
+                : _playerCreature?.GetComponent<RoobsWorld.Creature.CreatureInstance>()?.DNA;
+            int seed = GameManager.HasInstance && GameManager.Instance.CurrentSave != null
+                ? (int)(GameManager.Instance.CurrentSave.WorldSeed % int.MaxValue)
+                : 1337;
+            _worldPlan = CreatureWorldPlanner.CreatePlan(
+                dna,
+                _arena != null ? _arena.ArenaRadius : 48f,
+                activePlayerCount,
+                seed);
+            _arena?.ApplyWorldPlan(_worldPlan);
+            _minDesiredActiveRivals = Mathf.Max(_minDesiredActiveRivals, Mathf.Min(_worldPlan.RecommendedActiveRivals, _maxDesiredActiveRivals));
+            _desiredActiveRivals = Mathf.Clamp(_desiredActiveRivals, _minDesiredActiveRivals, _maxDesiredActiveRivals);
+            InitializeWorldProgression();
+        }
+
+        private void InitializeWorldProgression()
+        {
+            _worldProgression = new CreatureProgressionState
+            {
+                DNA = GetCurrentDnaPoints(0),
+                IsAtNest = false
+            };
+            _worldProgressionInitialized = true;
+            RefreshWorldProgressHud();
+        }
+
         private void EnsureHud(GameObject playerCreature)
         {
             if (playerCreature == null)
@@ -263,16 +425,48 @@ namespace RoobsWorld.Stages.Creature
             _hud.Initialize(creature);
         }
 
+        private void ActivateCreatureMultiplayer(MultiplayerSessionManager session)
+        {
+            var transport = GameManager.HasInstance ? GameManager.Instance.SessionTransport : null;
+            var creature = _playerCreature != null
+                ? _playerCreature.GetComponent<RoobsWorld.Creature.CreatureInstance>()
+                : null;
+
+            _networkTick = gameObject.GetComponent<NetworkTickManager>()
+                ?? gameObject.AddComponent<NetworkTickManager>();
+            _networkTick.Activate(session, transport, null, creature);
+
+            _globalChatOverlay = gameObject.GetComponent<GlobalChatOverlay>()
+                ?? gameObject.AddComponent<GlobalChatOverlay>();
+            _globalChatOverlay.Activate(session, transport as WebSocketNetworkTransport);
+        }
+
         private void EnsureEncounterManager(Transform playerTransform)
         {
             if (_encounterManager == null)
                 _encounterManager = gameObject.GetComponent<CreatureStageEncounterManager>() ?? gameObject.AddComponent<CreatureStageEncounterManager>();
 
-            if (_encounterManager.ActiveRivalCount <= 0 && _encounterManager.DefeatedCount <= 0)
+            if (!HasCreatureSimulationAuthority())
+            {
+                if (!_encounterManager.IsInitialized)
+                    _encounterManager.InitializeNetworkClient(playerTransform);
+                else
+                    _encounterManager.SetPlayerTarget(playerTransform);
+            }
+            else if (_encounterManager.ActiveRivalCount <= 0 && _encounterManager.DefeatedCount <= 0)
                 _encounterManager.Initialize(playerTransform);
             else
                 _encounterManager.SetPlayerTarget(playerTransform);
             _encounterManager.SetArena(_arena);
+        }
+
+        private static bool HasCreatureSimulationAuthority()
+        {
+            if (!GameManager.HasInstance)
+                return true;
+
+            var session = GameManager.Instance.Session;
+            return session == null || session.State == SessionState.Offline || session.IsHost;
         }
 
         private void UpdateEncounterProgress()
@@ -310,6 +504,267 @@ namespace RoobsWorld.Stages.Creature
 
             if (IsCurrentObjectiveComplete(objectiveDefeatProgress))
                 CompleteCurrentObjective();
+        }
+
+        private void UpdateNetworkObjectiveHud()
+        {
+            if (!_hasNetworkObjectiveSnapshot || _hud == null)
+                return;
+
+            var snapshot = _networkObjectiveSnapshot;
+            var type = (CreatureStageObjectiveType)Mathf.Clamp(
+                snapshot.ObjectiveType,
+                0,
+                System.Enum.GetValues(typeof(CreatureStageObjectiveType)).Length - 1);
+            string label = Localization.Get(GetObjectiveLocalizationKey(type));
+            string status = snapshot.IsComplete
+                ? BuildObjectiveCooldownText(0f)
+                : string.Format(
+                    Localization.Get("creature.encounter.progress"),
+                    Mathf.Max(0, snapshot.Progress),
+                    Mathf.Max(1, snapshot.Target),
+                    Mathf.Max(0, snapshot.ActiveRivals),
+                    Mathf.Max(1, snapshot.DesiredActiveRivals),
+                    0);
+
+            _hud.SetEncounterProgress(
+                snapshot.Progress,
+                snapshot.ActiveRivals,
+                snapshot.Target,
+                snapshot.DesiredActiveRivals,
+                0);
+            _hud.SetObjectiveStatus(label, status, type, false, !snapshot.IsComplete, -1f);
+        }
+
+        private void UpdateNetworkWorldProgressHud()
+        {
+            if (!_hasNetworkWorldProgressionSnapshot)
+                return;
+
+            RefreshWorldProgressHud(_networkWorldProgressionSnapshot);
+        }
+
+        private void UpdateCreatureWorldProgression()
+        {
+            if (_playerCreature == null || _worldPlan.Points == null || _worldPlan.Points.Length == 0)
+                return;
+
+            if (!_worldProgressionInitialized)
+                InitializeWorldProgression();
+
+            _worldProgression.DNA = GetCurrentDnaPoints(_worldProgression.DNA);
+            _worldProgressionTimer -= Time.deltaTime;
+            if (_worldProgressionTimer > 0f)
+            {
+                RefreshWorldProgressHud();
+                return;
+            }
+            _worldProgressionTimer = WorldProgressionTickInterval;
+
+            Vector3 playerPosition = _playerCreature.transform.position;
+            bool isAtHomeNest = false;
+            for (int i = 0; i < _worldPlan.Points.Length; i++)
+            {
+                var point = _worldPlan.Points[i];
+                if (!CreatureWorldPlanner.IsInsideWorldPoint(point, playerPosition, WorldPointInteractionPadding))
+                    continue;
+
+                if (point.Type == CreatureWorldPointType.HomeNest)
+                {
+                    isAtHomeNest = true;
+                    _worldProgression.IsAtNest = true;
+                }
+
+                TryApplyWorldPointProgression(point);
+            }
+
+            _worldProgression.IsAtNest = isAtHomeNest;
+            UpdateNestHealing(isAtHomeNest, playerPosition);
+            RefreshWorldProgressHud();
+        }
+
+        private void TryApplyWorldPointProgression(CreatureWorldPoint point)
+        {
+            bool firstVisit = !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.DiscoverLandmark))
+                && !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.Eat))
+                && !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.Drink))
+                && !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.HealAtNest))
+                && !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.CompleteMigration));
+            bool canMigrate = CreatureWorldPlanner.CanMigrate(_worldProgression)
+                && !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.CompleteMigration));
+
+            if (!CreatureWorldPlanner.TryGetWorldPointProgressionEvent(point, firstVisit, canMigrate, out var eventType))
+                return;
+
+            TryAwardWorldProgression(eventType, point.Id);
+        }
+
+        private bool TryAwardWorldProgression(CreatureProgressionEventType eventType, string sourceId)
+        {
+            string key = $"{eventType}:{sourceId ?? string.Empty}";
+            if (!_completedWorldProgressionEvents.Add(key))
+                return false;
+
+            int reward = CreatureWorldPlanner.ComputeDnaReward(eventType);
+            _worldProgression = CreatureWorldPlanner.ApplyProgressionEvent(_worldProgression, eventType);
+            if (GameManager.HasInstance)
+            {
+                GameManager.Instance.AddDNAPoints(reward);
+                _worldProgression.DNA = GetCurrentDnaPoints(_worldProgression.DNA);
+            }
+
+            AudioManager.Instance?.PlaySFX(SFXType.DNAGained);
+            bool canEdit = CreatureWorldPlanner.ShouldOpenCreatorAtNest(_worldProgression);
+            bool canMigrate = HasAvailableMigrationGate();
+            EventBus.Publish(new CreatureWorldProgressionEvent
+            {
+                EventType = eventType,
+                WorldPointId = sourceId,
+                DnaReward = reward,
+                TotalDna = _worldProgression.DNA,
+                CanEditAtNest = canEdit,
+                CanMigrate = canMigrate
+            });
+
+            if (canEdit)
+                RoobsWorld.UI.TutorialOverlay.Instance?.ShowContextualTip("creature.world.nest_ready", 2.5f);
+            if (canMigrate)
+                RoobsWorld.UI.TutorialOverlay.Instance?.ShowContextualTip("creature.world.migration_ready", 2.5f);
+
+            RefreshWorldProgressHud();
+            return true;
+        }
+
+        private void UpdateNestHealing(bool isAtHomeNest, Vector3 playerPosition)
+        {
+            if (isAtHomeNest != _wasAtHomeNest)
+            {
+                EventBus.Publish(new CreatureHealingZoneEvent
+                {
+                    Started = isAtHomeNest,
+                    Position = playerPosition,
+                    IsPlayer = true
+                });
+            }
+            _wasAtHomeNest = isAtHomeNest;
+
+            if (!isAtHomeNest)
+                return;
+
+            var creature = _playerCreature != null
+                ? _playerCreature.GetComponent<RoobsWorld.Creature.CreatureInstance>()
+                : null;
+            creature?.Heal(NestHealPerSecond * Time.deltaTime);
+        }
+
+        private void RefreshWorldProgressHud()
+        {
+            if (_hud == null || !_worldProgressionInitialized)
+                return;
+
+            _hud.SetWorldProgression(
+                _worldProgression,
+                CreatureWorldPlanner.ShouldOpenCreatorAtNest(_worldProgression),
+                HasAvailableMigrationGate(),
+                ComputeNearestWorldPointDistance(_worldPlan, CreatureWorldPointType.HomeNest, GetPlayerWorldPosition()),
+                ComputeNearestWorldPointDistance(_worldPlan, CreatureWorldPointType.MigrationGate, GetPlayerWorldPosition()));
+        }
+
+        private void RefreshWorldProgressHud(CreatureWorldProgressionNetState snapshot)
+        {
+            if (_hud == null || !snapshot.HasProgression)
+                return;
+
+            _hud.SetWorldProgression(
+                ToProgressionState(snapshot),
+                snapshot.CanEditAtNest,
+                snapshot.CanMigrate,
+                snapshot.NearestNestDistance,
+                snapshot.NearestMigrationDistance);
+        }
+
+        private Vector3 GetPlayerWorldPosition()
+        {
+            return _playerCreature != null ? _playerCreature.transform.position : Vector3.zero;
+        }
+
+        private static CreatureProgressionState ToProgressionState(CreatureWorldProgressionNetState snapshot)
+        {
+            return new CreatureProgressionState
+            {
+                DNA = snapshot.DNA,
+                Meals = snapshot.Meals,
+                Allies = snapshot.Allies,
+                Defeats = snapshot.Defeats,
+                Discoveries = snapshot.Discoveries,
+                MigrationsCompleted = snapshot.MigrationsCompleted,
+                IsAtNest = snapshot.IsAtNest,
+                HasPackMate = snapshot.HasPackMate
+            };
+        }
+
+        private static string BuildWorldProgressionKey(CreatureWorldPoint point, CreatureProgressionEventType eventType)
+        {
+            return $"{eventType}:{point.Id ?? string.Empty}";
+        }
+
+        public static float ComputeNearestWorldPointDistance(
+            CreatureWorldPlan plan,
+            CreatureWorldPointType type,
+            Vector3 position,
+            float extraRadius = WorldPointInteractionPadding)
+        {
+            if (plan.Points == null || plan.Points.Length == 0)
+                return -1f;
+
+            float nearest = float.PositiveInfinity;
+            for (int i = 0; i < plan.Points.Length; i++)
+            {
+                var point = plan.Points[i];
+                if (point.Type != type)
+                    continue;
+
+                nearest = Mathf.Min(nearest, CreatureWorldPlanner.ComputeDistanceOutsideWorldPoint(point, position, extraRadius));
+            }
+
+            return float.IsPositiveInfinity(nearest) ? -1f : nearest;
+        }
+
+        private bool HasAvailableMigrationGate()
+        {
+            if (!CreatureWorldPlanner.CanMigrate(_worldProgression))
+                return false;
+
+            if (_worldPlan.Points == null || _worldPlan.Points.Length == 0)
+                return true;
+
+            for (int i = 0; i < _worldPlan.Points.Length; i++)
+            {
+                var point = _worldPlan.Points[i];
+                if (point.Type == CreatureWorldPointType.MigrationGate &&
+                    !_completedWorldProgressionEvents.Contains(BuildWorldProgressionKey(point, CreatureProgressionEventType.CompleteMigration)))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static int GetCurrentDnaPoints(int fallback)
+        {
+            if (GameManager.HasInstance && GameManager.Instance.CurrentSave != null)
+                return Mathf.Max(0, GameManager.Instance.CurrentSave.DNAPoints);
+            return Mathf.Max(0, fallback);
+        }
+
+        private static string GetObjectiveLocalizationKey(CreatureStageObjectiveType type)
+        {
+            return type switch
+            {
+                CreatureStageObjectiveType.AlphaHunt => "creature.objective.alpha_hunt",
+                CreatureStageObjectiveType.HoldFeedingGround => "creature.objective.hold_ground",
+                CreatureStageObjectiveType.PacifyRivals => "creature.objective.pacify",
+                _ => "creature.objective.rival_cull"
+            };
         }
 
         private void OfferUpgradeChoiceIfReady()
@@ -944,6 +1399,7 @@ namespace RoobsWorld.Stages.Creature
                 return;
 
             ApplySpeciesRelationshipDelta(evt.ArchetypeName, -0.75f);
+            TryAwardSpeciesProgression(CreatureProgressionEventType.DefeatSpecies, evt.ArchetypeName);
         }
 
         private void TrackSpeciesRelationship(CreatureCombatFeedbackEvent evt)
@@ -997,6 +1453,25 @@ namespace RoobsWorld.Stages.Creature
                 Score = newScore,
                 Delta = delta
             });
+
+            if (newDisposition == CreatureSpeciesDisposition.Allied)
+                TryAwardSpeciesProgression(CreatureProgressionEventType.AllySpecies, speciesLabel);
+        }
+
+        private void TryAwardSpeciesProgression(CreatureProgressionEventType eventType, string speciesLabel)
+        {
+            if (!HasCreatureSimulationAuthority() || string.IsNullOrWhiteSpace(speciesLabel))
+                return;
+
+            if (!_worldProgressionInitialized)
+                InitializeWorldProgression();
+
+            string cleanSpecies = speciesLabel.Trim();
+            string key = $"{eventType}:{cleanSpecies}";
+            if (!_completedSpeciesProgressionEvents.Add(key))
+                return;
+
+            TryAwardWorldProgression(eventType, $"species:{cleanSpecies}");
         }
     }
 }

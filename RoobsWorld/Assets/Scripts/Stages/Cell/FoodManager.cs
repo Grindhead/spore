@@ -78,19 +78,63 @@ namespace RoobsWorld.Stages.Cell
         /// <summary>Add one food at a position (e.g. for environmental manipulation). Returns the food's manager id.</summary>
         public int AddFoodAt(Vector3 position, FoodType type = FoodType.Plant, float nutrition = 5f)
         {
-            Color color = AccessibilityPalette.GetFoodColor(type);
-            string namePrefix = type == FoodType.Meat ? "DeadCell" : type == FoodType.Plant ? "Algae" : "Toxin";
-            string prefabName = type == FoodType.Meat
-                ? "cell_food_meat"
-                : type == FoodType.Toxin ? "cell_food_bacteria" : "cell_food_algae";
-            GameObject go = ModelFactory.CreateCellFood(position, color, 0.15f, prefabName);
-            go.name = $"{namePrefix}_manual_{_tracker.Count}";
-            var foodItem = go.AddComponent<FoodItem>();
-            foodItem.Initialize(type, nutrition);
-            foodItem.EnsureTriggerColliders();
+            GameObject go = CreateFoodObject(position, type, nutrition, $"{GetFoodNamePrefix(type)}_manual_{_tracker.Count}");
             int id = _tracker.Add(position, type, nutrition);
-            foodItem.SetFoodManagerId(id);
+            go.GetComponent<FoodItem>().SetFoodManagerId(id);
             _idToGameObject[id] = go;
+            if (_spatialGrid != null)
+                _spatialGrid.Register(id, position, CellSpatialGrid.Category.Food);
+            return id;
+        }
+
+        public bool HasFood(int id)
+        {
+            return id > 0 && _idToGameObject.TryGetValue(id, out var go) && go != null && _tracker.Contains(id);
+        }
+
+        public int CopyFoodIds(List<int> destination)
+        {
+            if (destination == null)
+                return 0;
+
+            destination.Clear();
+            foreach (var kv in _idToGameObject)
+            {
+                if (kv.Key > 0 && kv.Value != null)
+                    destination.Add(kv.Key);
+            }
+
+            return destination.Count;
+        }
+
+        public int AddOrUpdateNetworkFood(int id, Vector3 position, FoodType type, float nutrition = 0f)
+        {
+            if (id <= 0)
+                return AddFoodAt(position, type, nutrition > 0f ? nutrition : GetDefaultNutrition(type));
+
+            float resolvedNutrition = nutrition > 0f ? nutrition : GetDefaultNutrition(type);
+            if (_spatialGrid != null)
+                _spatialGrid.Unregister(id);
+
+            if (_idToGameObject.TryGetValue(id, out GameObject existing) && existing != null)
+            {
+                existing.transform.position = position;
+                var item = existing.GetComponent<FoodItem>() ?? existing.AddComponent<FoodItem>();
+                item.Initialize(type, resolvedNutrition);
+                item.SetFoodManagerId(id);
+                item.EnsureTriggerColliders();
+            }
+            else
+            {
+                if (existing == null)
+                    _idToGameObject.Remove(id);
+
+                var go = CreateFoodObject(position, type, resolvedNutrition, $"{GetFoodNamePrefix(type)}_net_{id}");
+                go.GetComponent<FoodItem>().SetFoodManagerId(id);
+                _idToGameObject[id] = go;
+            }
+
+            _tracker.AddWithId(id, position, type, resolvedNutrition);
             if (_spatialGrid != null)
                 _spatialGrid.Register(id, position, CellSpatialGrid.Category.Food);
             return id;
@@ -114,17 +158,53 @@ namespace RoobsWorld.Stages.Cell
             for (int i = 0; i < count; i++)
             {
                 var pos = GetSpawnPointInRing(minRadius, maxRadius, SpawnMinSeparation);
-                GameObject go = ModelFactory.CreateCellFood(pos, color, 0.15f, prefabName);
-                go.name = $"{namePrefix}_{i}";
-                var foodItem = go.AddComponent<FoodItem>();
-                foodItem.Initialize(type, nutrition);
-                foodItem.EnsureTriggerColliders();
+                GameObject go = CreateFoodObject(pos, type, nutrition, $"{namePrefix}_{i}", color, prefabName);
+                var foodItem = go.GetComponent<FoodItem>();
                 int id = _tracker.Add(pos, type, nutrition);
                 foodItem.SetFoodManagerId(id);
                 _idToGameObject[id] = go;
                 if (_spatialGrid != null)
                     _spatialGrid.Register(id, pos, CellSpatialGrid.Category.Food);
             }
+        }
+
+        private GameObject CreateFoodObject(
+            Vector3 position,
+            FoodType type,
+            float nutrition,
+            string objectName,
+            Color? overrideColor = null,
+            string overridePrefabName = null)
+        {
+            Color color = overrideColor ?? AccessibilityPalette.GetFoodColor(type);
+            string prefabName = string.IsNullOrWhiteSpace(overridePrefabName)
+                ? GetPrefabName(type)
+                : overridePrefabName;
+            GameObject go = ModelFactory.CreateCellFood(position, color, 0.15f, prefabName);
+            go.name = objectName;
+            var foodItem = go.GetComponent<FoodItem>() ?? go.AddComponent<FoodItem>();
+            foodItem.Initialize(type, nutrition);
+            foodItem.EnsureTriggerColliders();
+            return go;
+        }
+
+        private string GetFoodNamePrefix(FoodType type)
+        {
+            return type == FoodType.Meat ? "DeadCell" : type == FoodType.Plant ? "Algae" : "Toxin";
+        }
+
+        private string GetPrefabName(FoodType type)
+        {
+            return type == FoodType.Meat
+                ? "cell_food_meat"
+                : type == FoodType.Toxin ? "cell_food_bacteria" : "cell_food_algae";
+        }
+
+        private float GetDefaultNutrition(FoodType type)
+        {
+            return type == FoodType.Meat
+                ? _deadCellNutrition
+                : type == FoodType.Toxin ? _bacteriaNutrition : _algaeNutrition;
         }
 
         private Vector3 GetSpawnPointInRing(float minRadius, float maxRadius, float minSeparation)

@@ -320,6 +320,54 @@ namespace RoobsWorld.Tests
         }
 
         [Test]
+        public void ApplyNetworkQuality_Publishes_Reconnect_Diagnostics()
+        {
+            MultiplayerNetworkQualityChangedEvent? received = null;
+            EventBus.Subscribe<MultiplayerNetworkQualityChangedEvent>(e => received = e);
+
+            var mgr = new MultiplayerSessionManager();
+            mgr.JoinSession("ABCD12", localPlayerId: 1);
+            var snapshot = new NetworkQualitySnapshot
+            {
+                PingMs = 80f,
+                RttTrendMs = 120f,
+                PacketLossRatio = 0.2f,
+                LastAuthoritativeSnapshotAgeSeconds = 3.5f,
+                ReconnectAttempts = 1,
+                Quality = NetworkConnectionQuality.Reconnecting
+            };
+
+            Assert.IsTrue(mgr.ApplyNetworkQuality(snapshot));
+
+            Assert.IsNotNull(received);
+            Assert.AreEqual(NetworkConnectionQuality.Reconnecting, received.Value.Quality);
+            Assert.AreEqual(0.2f, mgr.NetworkQuality.PacketLossRatio, 0.0001f);
+        }
+
+        [Test]
+        public void BeginAndCompleteReconnect_PreserveSessionIdentity()
+        {
+            var mgr = new MultiplayerSessionManager();
+            mgr.JoinSession("ABCD12", localPlayerId: 1);
+            mgr.AddRemotePlayer(2, "Friend");
+            Assert.AreEqual(SessionState.Connected, mgr.State);
+
+            Assert.IsTrue(mgr.BeginReconnectAttempt());
+
+            Assert.AreEqual(SessionState.Disconnected, mgr.State);
+            Assert.AreEqual("ABCD12", mgr.SessionCode);
+            Assert.AreEqual(2, mgr.PlayerCount);
+            Assert.AreEqual(NetworkConnectionQuality.Reconnecting, mgr.NetworkQuality.Quality);
+
+            Assert.IsTrue(mgr.CompleteReconnect());
+
+            Assert.AreEqual(SessionState.Connected, mgr.State);
+            Assert.AreEqual("ABCD12", mgr.SessionCode);
+            Assert.AreEqual(2, mgr.PlayerCount);
+            Assert.AreEqual(NetworkConnectionQuality.Healthy, mgr.NetworkQuality.Quality);
+        }
+
+        [Test]
         public void ApplyChatMessage_Stores_ServerFiltered_Message()
         {
             var mgr = new MultiplayerSessionManager();
@@ -436,6 +484,7 @@ namespace RoobsWorld.Tests
 
             Assert.IsTrue(auth.CanSpawnFood());
             Assert.IsTrue(auth.CanSpawnOrganism());
+            Assert.IsTrue(auth.CanSpawnPickup());
             Assert.IsTrue(auth.CanFireEnvironmentEvent());
             Assert.IsTrue(auth.CanSpawnLeviathan());
         }
@@ -449,6 +498,7 @@ namespace RoobsWorld.Tests
 
             Assert.IsFalse(auth.CanSpawnFood());
             Assert.IsFalse(auth.CanSpawnOrganism());
+            Assert.IsFalse(auth.CanSpawnPickup());
             Assert.IsFalse(auth.CanFireEnvironmentEvent());
             Assert.IsFalse(auth.CanSpawnLeviathan());
         }
@@ -461,6 +511,7 @@ namespace RoobsWorld.Tests
 
             Assert.IsTrue(auth.CanSpawnFood());
             Assert.IsTrue(auth.CanSpawnOrganism());
+            Assert.IsTrue(auth.CanSpawnPickup());
             Assert.IsTrue(auth.CanFireEnvironmentEvent());
             Assert.IsTrue(auth.CanSpawnLeviathan());
         }

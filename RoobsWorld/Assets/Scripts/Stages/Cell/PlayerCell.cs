@@ -579,9 +579,12 @@ namespace RoobsWorld.Stages.Cell
             if (_currentMass > _peakMass) _peakMass = _currentMass;
         }
 
-        private void ApplyConsumptionMassGain(float massGain)
+        private void ApplyConsumptionMassGain(float massGain, FoodType? foodType = null)
         {
-            _currentMass += Mathf.Max(MinimumConsumptionMassGain, massGain * _partLoadout.FoodGainMultiplier);
+            float gainMultiplier = foodType.HasValue
+                ? _partLoadout.GetFoodGainMultiplier(foodType.Value)
+                : _partLoadout.FoodGainMultiplier;
+            _currentMass += Mathf.Max(MinimumConsumptionMassGain, massGain * gainMultiplier);
             TrackPeakMass();
         }
 
@@ -631,7 +634,7 @@ namespace RoobsWorld.Stages.Cell
                 _dietVarietyChain,
                 DietVarietyChainThreshold,
                 DietVarietyMassBonusMultiplier);
-            ApplyConsumptionMassGain(baseMassGain + varietyMassBonus);
+            ApplyConsumptionMassGain(baseMassGain + varietyMassBonus, foodType);
             _foodConsumedTotal++;
             _foodConsumedSinceUpgrade++;
             int dnaReward = BalanceConstants.CellDNAPointsPerFood;

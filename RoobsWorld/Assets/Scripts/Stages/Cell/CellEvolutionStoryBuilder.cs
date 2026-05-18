@@ -65,6 +65,14 @@ namespace RoobsWorld.Stages.Cell
                 if (loadout.HasPart(CellPartType.Cilia)) parts.Add("cilia");
                 if (loadout.HasPart(CellPartType.Spike)) parts.Add("spikes");
                 if (loadout.HasPart(CellPartType.Jet)) parts.Add("jet");
+                if (loadout.HasPart(CellPartType.HerbivoreMouth)) parts.Add("filter mouth");
+                if (loadout.HasPart(CellPartType.CarnivoreMouth)) parts.Add("bite mouth");
+                if (loadout.HasPart(CellPartType.OmnivoreMouth)) parts.Add("omnivore mouth");
+                if (loadout.HasPart(CellPartType.SuctionMouth)) parts.Add("suction mouth");
+                if (loadout.HasPart(CellPartType.PoisonVacuole)) parts.Add("poison vacuoles");
+                if (loadout.HasPart(CellPartType.ElectricNodule)) parts.Add("electric nodules");
+                if (loadout.HasPart(CellPartType.ArmorPlate)) parts.Add("armour plates");
+                if (loadout.HasPart(CellPartType.SensorEye)) parts.Add("sensor eye");
             }
 
             if (parts.Count == 0)

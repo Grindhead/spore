@@ -44,6 +44,7 @@ namespace RoobsWorld.Stages.Cell
         private Transform _arenaBackdropRoot;
         private CellBackgroundFish _backgroundFish;
         private bool _cellStageCompleted;
+        private int _nextPartPickupId = 1;
         private int _timeScaleIndex;
         private CellGoal? _currentGoal;
         private int _completedGoalCount;
@@ -53,6 +54,7 @@ namespace RoobsWorld.Stages.Cell
         private bool _playerWasThreatenedByPredator;
         private HostAuthorityController _authority;
         private NetworkTickManager _networkTick;
+        private GlobalChatOverlay _globalChatOverlay;
         private CellStageContext _context;
         private readonly CellStageOrchestrator _orchestrator = new CellStageOrchestrator();
         private readonly CellStageSpawnDirector _spawnDirector = new CellStageSpawnDirector();
@@ -281,6 +283,9 @@ namespace RoobsWorld.Stages.Cell
                 ?? gameObject.AddComponent<NetworkTickManager>();
             var transport = GameManager.HasInstance ? GameManager.Instance.SessionTransport : null;
             _networkTick.Activate(session, transport, _player);
+            _globalChatOverlay = gameObject.GetComponent<GlobalChatOverlay>()
+                ?? gameObject.AddComponent<GlobalChatOverlay>();
+            _globalChatOverlay.Activate(session, transport as WebSocketNetworkTransport);
             _tutorialController = gameObject.GetComponent<CellTutorialController>()
                 ?? gameObject.AddComponent<CellTutorialController>();
             _tutorialController.Activate(_player);
@@ -294,6 +299,7 @@ namespace RoobsWorld.Stages.Cell
             _goalVarietyChain = 0;
             _hasLastGoalCategory = false;
             _cellStageCompleted = false;
+            _nextPartPickupId = 1;
             SetCurrentGoal(CellGoal.CreateEatFoodGoal(FoodType.Plant, 3));
             ShowGoalLinkedTutorialTip();
             EventBus.Subscribe<CellEvolutionTriggeredEvent>(OnEvolutionTriggered);
@@ -384,6 +390,8 @@ namespace RoobsWorld.Stages.Cell
             _authority = null;
             _networkTick?.Deactivate();
             _networkTick = null;
+            _globalChatOverlay?.Deactivate();
+            _globalChatOverlay = null;
             _arenaCurrentsCache.Clear();
             _predatorCache.Clear();
             _organismCache.Clear();
@@ -1289,6 +1297,9 @@ namespace RoobsWorld.Stages.Cell
 
         private void EnsureGoalPartPickupOpportunity(int remainingCount)
         {
+            if (_authority != null && !_authority.CanSpawnPickup())
+                return;
+
             if (_player == null || remainingCount <= 0)
                 return;
 
@@ -2175,6 +2186,8 @@ namespace RoobsWorld.Stages.Cell
 
         private void SpawnPartPickups()
         {
+            if (_authority != null && !_authority.CanSpawnPickup()) return;
+
             int pickupCount = ScaleResourceCountForCurrentPlayers(
                 _initialPartPickupCount,
                 BalanceConstants.CellMultiplayerPartPickupPerExtraPlayer,
@@ -2192,15 +2205,95 @@ namespace RoobsWorld.Stages.Cell
 
         private CellPartPickup SpawnPartPickup(CellPartType partType, Vector3 position, string pickupName)
         {
+            return AddOrUpdatePartPickup(AllocatePartPickupId(), partType, position, pickupName);
+        }
+
+        public CellPartPickup AddOrUpdateNetworkPartPickup(int pickupId, CellPartType partType, Vector3 position)
+        {
+            int safeId = pickupId > 0 ? pickupId : AllocatePartPickupId();
+            if (safeId >= _nextPartPickupId)
+                _nextPartPickupId = safeId + 1;
+            return AddOrUpdatePartPickup(safeId, partType, position, $"CellPartPickup_net_{safeId}");
+        }
+
+        public bool RemovePartPickup(int pickupId)
+        {
+            var pickup = FindPartPickupById(pickupId);
+            if (pickup == null)
+                return false;
+
+            UnityObjectUtil.Destroy(pickup.gameObject);
+            return true;
+        }
+
+        public bool HasPartPickup(int pickupId)
+        {
+            return FindPartPickupById(pickupId) != null;
+        }
+
+        public int CopyPartPickupIds(List<int> destination)
+        {
+            if (destination == null)
+                return 0;
+
+            destination.Clear();
+            var pickups = FindObjectsByType<CellPartPickup>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                var pickup = pickups[i];
+                if (pickup != null && pickup.PickupId > 0)
+                    destination.Add(pickup.PickupId);
+            }
+
+            return destination.Count;
+        }
+
+        private int AllocatePartPickupId()
+        {
+            if (_nextPartPickupId <= 0)
+                _nextPartPickupId = 1;
+            return _nextPartPickupId++;
+        }
+
+        private CellPartPickup AddOrUpdatePartPickup(int pickupId, CellPartType partType, Vector3 position, string pickupName)
+        {
             Vector3 spawnPos = ClampToArena(position);
             spawnPos.y = 0.3f;
+
+            var existing = FindPartPickupById(pickupId);
+            if (existing != null)
+            {
+                existing.transform.position = spawnPos;
+                existing.SetPartType(partType);
+                existing.SetPickupId(pickupId);
+                existing.EnsureTriggerColliders();
+                return existing;
+            }
+
             var pickup = ModelFactory.CreateCellPickup(spawnPos, GetPickupColor(partType));
             pickup.name = pickupName;
 
             var pickupComponent = pickup.AddComponent<CellPartPickup>();
             pickupComponent.SetPartType(partType);
+            pickupComponent.SetPickupId(pickupId);
             pickupComponent.EnsureTriggerColliders();
             return pickupComponent;
+        }
+
+        private static CellPartPickup FindPartPickupById(int pickupId)
+        {
+            if (pickupId <= 0)
+                return null;
+
+            var pickups = FindObjectsByType<CellPartPickup>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < pickups.Length; i++)
+            {
+                var pickup = pickups[i];
+                if (pickup != null && pickup.PickupId == pickupId)
+                    return pickup;
+            }
+
+            return null;
         }
 
         private Vector3 GetPartPickupSpawnPoint(CellPartType partType, List<Vector3> existingPositions)
@@ -2596,6 +2689,22 @@ namespace RoobsWorld.Stages.Cell
                     return new Color(1f, 0.25f, 0.25f);
                 case CellPartType.Jet:
                     return new Color(1f, 0.7f, 0.2f);
+                case CellPartType.HerbivoreMouth:
+                    return new Color(0.48f, 1f, 0.25f);
+                case CellPartType.CarnivoreMouth:
+                    return new Color(1f, 0.32f, 0.18f);
+                case CellPartType.OmnivoreMouth:
+                    return new Color(0.95f, 0.72f, 0.26f);
+                case CellPartType.SuctionMouth:
+                    return new Color(0.3f, 0.95f, 0.9f);
+                case CellPartType.PoisonVacuole:
+                    return new Color(0.74f, 0.25f, 1f);
+                case CellPartType.ElectricNodule:
+                    return new Color(1f, 0.95f, 0.2f);
+                case CellPartType.ArmorPlate:
+                    return new Color(0.72f, 0.78f, 0.82f);
+                case CellPartType.SensorEye:
+                    return new Color(0.6f, 0.9f, 1f);
                 default:
                     return Color.white;
             }

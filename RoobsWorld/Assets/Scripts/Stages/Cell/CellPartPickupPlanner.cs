@@ -51,12 +51,21 @@ namespace RoobsWorld.Stages.Cell
         {
             switch (partType)
             {
+                case CellPartType.HerbivoreMouth:
+                case CellPartType.OmnivoreMouth:
+                case CellPartType.SuctionMouth:
                 case CellPartType.Cilia:
                     return new SpawnBand(0.2f, 0.58f, allowToxicZone: false);
+                case CellPartType.CarnivoreMouth:
                 case CellPartType.Spike:
                     return new SpawnBand(0.52f, 0.88f, allowToxicZone: false);
+                case CellPartType.PoisonVacuole:
+                case CellPartType.ElectricNodule:
                 case CellPartType.Jet:
                     return new SpawnBand(0.62f, 0.92f, allowToxicZone: true);
+                case CellPartType.ArmorPlate:
+                case CellPartType.SensorEye:
+                    return new SpawnBand(0.35f, 0.76f, allowToxicZone: false);
                 default:
                     return new SpawnBand(0.18f, 0.72f, allowToxicZone: false);
             }
@@ -64,13 +73,8 @@ namespace RoobsWorld.Stages.Cell
 
         public static string GetPreviewText(CellPartType partType)
         {
-            return partType switch
-            {
-                CellPartType.Cilia => "Cilia: wider feeding reach",
-                CellPartType.Spike => "Spike: safer contact damage",
-                CellPartType.Jet => "Jet: stronger escape boosts",
-                _ => "Flagella: better cruising speed"
-            };
+            var definition = CellPartLoadout.GetDefinition(partType);
+            return $"{definition.DisplayName}: {definition.Tooltip}";
         }
 
         public static CellPartType SelectGoalPartType(CellPartLoadout loadout)
@@ -80,10 +84,18 @@ namespace RoobsWorld.Stages.Cell
 
             if (!loadout.HasPart(CellPartType.Cilia))
                 return CellPartType.Cilia;
+            if (!loadout.HasPart(CellPartType.HerbivoreMouth))
+                return CellPartType.HerbivoreMouth;
+            if (!loadout.HasPart(CellPartType.CarnivoreMouth))
+                return CellPartType.CarnivoreMouth;
+            if (!loadout.HasPart(CellPartType.OmnivoreMouth))
+                return CellPartType.OmnivoreMouth;
             if (!loadout.HasPart(CellPartType.Spike))
                 return CellPartType.Spike;
             if (!loadout.HasPart(CellPartType.Jet))
                 return CellPartType.Jet;
+            if (!loadout.HasPart(CellPartType.SensorEye))
+                return CellPartType.SensorEye;
             if (!loadout.HasPart(CellPartType.Flagella))
                 return CellPartType.Flagella;
 

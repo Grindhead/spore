@@ -356,6 +356,7 @@ namespace RoobsWorld.UI
             {
                 // Prevent OnClosed from nulling the field between Close() and teardown steps.
                 lobby.OnClosed = null;
+                lobby.PrepareForGameplayHandoff();
                 lobby.Close();
                 lobby.transform.SetParent(null, false);
                 Destroy(lobby.gameObject);

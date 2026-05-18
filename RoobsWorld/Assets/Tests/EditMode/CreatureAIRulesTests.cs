@@ -290,6 +290,65 @@ namespace RoobsWorld.Tests.EditMode
             Assert.That(direction.magnitude, Is.EqualTo(1f).Within(0.001f));
         }
 
+        [Test]
+        public void HerdCohesionDirection_MovesTowardCompatibleGroupBeyondPersonalSpace()
+        {
+            Vector3 direction = CreatureRivalAI.ComputeHerdCohesionDirection(
+                selfPosition: Vector3.zero,
+                herdPositions: new[]
+                {
+                    new Vector3(1f, 0f, 0f),
+                    new Vector3(5f, 0f, 0f),
+                    new Vector3(6f, 0f, 2f),
+                    new Vector3(20f, 0f, 0f)
+                },
+                minComfortDistance: 3f,
+                herdAwarenessRadius: 8f);
+
+            Assert.That(direction.x, Is.GreaterThan(0f));
+            Assert.That(direction.z, Is.GreaterThan(0f));
+            Assert.That(direction.magnitude, Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [Test]
+        public void HerdCohesionDirection_IgnoresCrowdedAndFarCreatures()
+        {
+            Vector3 direction = CreatureRivalAI.ComputeHerdCohesionDirection(
+                selfPosition: Vector3.zero,
+                herdPositions: new[]
+                {
+                    new Vector3(1f, 0f, 0f),
+                    new Vector3(20f, 0f, 0f)
+                },
+                minComfortDistance: 3f,
+                herdAwarenessRadius: 8f);
+
+            Assert.AreEqual(Vector3.zero, direction);
+        }
+
+        [Test]
+        public void BlendAmbientSteering_CanBalanceSpacingAndHerdPull()
+        {
+            Vector3 direction = CreatureRivalAI.BlendAmbientSteering(
+                desiredDirection: Vector3.forward,
+                socialSpacingDirection: Vector3.left,
+                herdCohesionDirection: Vector3.right,
+                socialWeight: 0.5f,
+                cohesionWeight: 0.25f);
+
+            Assert.That(direction.z, Is.GreaterThan(0f));
+            Assert.That(direction.magnitude, Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [Test]
+        public void AlertAmbientActivity_IsFastAndNonStationary()
+        {
+            Assert.Greater(
+                CreatureRivalAI.GetAmbientSpeedMultiplier(CreatureRivalAmbientActivity.Alert),
+                CreatureRivalAI.GetAmbientSpeedMultiplier(CreatureRivalAmbientActivity.Investigate));
+            Assert.IsFalse(CreatureRivalAI.IsStationaryAmbientActivity(CreatureRivalAmbientActivity.Alert));
+        }
+
         private static CreatureDNA CreateDna(string id, float bodyScale)
         {
             var dna = CreatureDNA.CreateDefault();

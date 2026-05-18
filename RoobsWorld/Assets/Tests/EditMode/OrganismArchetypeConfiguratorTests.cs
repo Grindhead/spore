@@ -47,6 +47,37 @@ namespace RoobsWorld.Tests
             Assert.IsNull(organism.GetComponent<ColonialCell>());
         }
 
+        [Test]
+        public void Profiles_CoverEveryArchetype_WithReadableGameplayMetadata()
+        {
+            foreach (OrganismArchetype archetype in System.Enum.GetValues(typeof(OrganismArchetype)))
+            {
+                var profile = OrganismArchetypeConfigurator.GetProfile(archetype);
+
+                Assert.AreEqual(archetype, profile.Archetype);
+                Assert.IsNotEmpty(profile.Silhouette);
+                Assert.IsNotEmpty(profile.BehaviorTell);
+                Assert.IsNotEmpty(profile.RewardLabel);
+                Assert.IsTrue(System.Enum.IsDefined(typeof(CellStage.TrophicRole), profile.Diet));
+                Assert.IsTrue(System.Enum.IsDefined(typeof(CellThreatLevel), profile.ThreatLevel));
+            }
+        }
+
+        [Test]
+        public void Configure_Attaches_ReadabilityMarker_ForHudAndTells()
+        {
+            var organism = CreateOrganism();
+
+            OrganismArchetypeConfigurator.Configure(organism, OrganismArchetype.Parasite);
+
+            var marker = organism.GetComponent<OrganismReadabilityMarker>();
+            Assert.IsNotNull(marker);
+            Assert.AreEqual(OrganismArchetype.Parasite, marker.Archetype);
+            Assert.AreEqual(CellStage.TrophicRole.Carnivore, marker.Diet);
+            Assert.AreEqual(CellThreatLevel.High, marker.ThreatLevel);
+            Assert.That(marker.BehaviorTell, Does.Contain("lunging"));
+        }
+
         private static Organism CreateOrganism()
         {
             var go = new GameObject("TestOrganism");

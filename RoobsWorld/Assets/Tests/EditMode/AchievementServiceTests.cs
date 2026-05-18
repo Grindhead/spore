@@ -50,7 +50,9 @@ namespace RoobsWorld.Tests.EditMode
 
             Assert.IsFalse(GameManager.Instance.Achievements.IsUnlocked("cell_all_parts"));
 
-            EventBus.Publish(new CellPartCollectedEvent { PartType = CellPartType.Jet });
+            foreach (CellPartType partType in System.Enum.GetValues(typeof(CellPartType)))
+                EventBus.Publish(new CellPartCollectedEvent { PartType = partType });
+
             Assert.IsTrue(GameManager.Instance.Achievements.IsUnlocked("cell_all_parts"));
         }
 
@@ -69,7 +71,11 @@ namespace RoobsWorld.Tests.EditMode
             EventBus.Publish(new CellPartCollectedEvent { PartType = CellPartType.Spike });
 
             EventBus.Publish(new StageTransitionEvent { FromStage = GameStageType.None, ToStage = GameStageType.Cell });
-            EventBus.Publish(new CellPartCollectedEvent { PartType = CellPartType.Jet });
+            foreach (CellPartType partType in System.Enum.GetValues(typeof(CellPartType)))
+            {
+                if (partType != CellPartType.Flagella)
+                    EventBus.Publish(new CellPartCollectedEvent { PartType = partType });
+            }
 
             Assert.IsFalse(GameManager.Instance.Achievements.IsUnlocked("cell_all_parts"));
         }

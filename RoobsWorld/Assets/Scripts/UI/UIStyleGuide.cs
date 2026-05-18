@@ -25,6 +25,26 @@ namespace RoobsWorld.UI
             public const float TightSpacing = 4f;
             public const float StandardSpacing = 8f;
             public const float LargeSpacing = 20f;
+            public const float MinimumTouchTarget = 44f;
+            public const float ComfortableTouchTarget = 52f;
+        }
+
+        public static class Accessibility
+        {
+            public const float ReducedMotionMultiplier = 0f;
+            public const float DefaultMotionMultiplier = 1f;
+            public const float MinimumReadableTextScale = 0.85f;
+            public const float MaximumReadableTextScale = 1.45f;
+
+            public static float ClampTextScale(float scale)
+            {
+                return Mathf.Clamp(scale <= 0f ? 1f : scale, MinimumReadableTextScale, MaximumReadableTextScale);
+            }
+
+            public static float ApplyMotionPreference(float durationSeconds, bool reducedMotion)
+            {
+                return Mathf.Max(0f, durationSeconds * (reducedMotion ? ReducedMotionMultiplier : DefaultMotionMultiplier));
+            }
         }
 
         public static class Typography
@@ -123,6 +143,17 @@ namespace RoobsWorld.UI
             scaler.referenceResolution = Layout.ReferenceResolution;
             scaler.matchWidthOrHeight = matchWidthOrHeight;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        }
+
+        public static void EnsureMinimumHitTarget(RectTransform rectTransform, float minimumSize = Layout.MinimumTouchTarget)
+        {
+            if (rectTransform == null)
+                return;
+
+            Vector2 size = rectTransform.sizeDelta;
+            size.x = Mathf.Max(size.x, minimumSize);
+            size.y = Mathf.Max(size.y, minimumSize);
+            rectTransform.sizeDelta = size;
         }
 
         public static Color GetButtonSurfaceColor(UIButtonVariant variant)

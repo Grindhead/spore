@@ -131,6 +131,14 @@ namespace RoobsWorld.Creature
             _currentHealth = Mathf.Min(_stats.Health, _currentHealth + amount);
         }
 
+        /// <summary>Applies server-owned health without emitting local combat/death side effects.</summary>
+        public void ApplyAuthoritativeHealth(float health, bool isAlive)
+        {
+            float max = Mathf.Max(1f, _stats.Health);
+            _currentHealth = isAlive ? Mathf.Clamp(health, 0.01f, max) : 0f;
+            _isDead = !isAlive || _currentHealth <= 0f;
+        }
+
         /// <summary>
         /// Grants temporary damage immunity for the given number of seconds.
         /// </summary>

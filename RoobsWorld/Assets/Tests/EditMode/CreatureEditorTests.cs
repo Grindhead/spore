@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using RoobsWorld.Creature;
 using RoobsWorld.Creature.Editor;
@@ -283,6 +284,101 @@ namespace RoobsWorld.Tests.EditMode
             state.SetSymmetry(false);
             state.AddPart("tail_basic", 99, new Vector3(0f, 0f, -0.5f));
             Assert.AreEqual(1, state.DNA.Parts[0].AttachBone);
+        }
+
+        [Test]
+        public void SetSymmetryMode_Radial_AddsUndoableFourWayPlacement()
+        {
+            var state = new CreatureEditorState(new CreatureDNA
+            {
+                Body = new BodyPlan { SpineSegments = 3, BodyScale = Vector3.one },
+                Parts = new System.Collections.Generic.List<PartPlacement>()
+            });
+            state.SetSymmetryMode(SymmetryType.Radial);
+
+            state.AddPart("spike_basic", 1, new Vector3(0.5f, 0.1f, 0f));
+
+            Assert.AreEqual(4, state.DNA.Parts.Count);
+            Assert.AreEqual(SymmetryType.Radial, state.SymmetryMode);
+            Assert.IsTrue(state.DNA.Parts.Any(p => p.Offset.z > 0.45f));
+
+            Assert.IsTrue(state.Undo());
+            Assert.AreEqual(0, state.DNA.Parts.Count);
+            Assert.IsTrue(state.Redo());
+            Assert.AreEqual(4, state.DNA.Parts.Count);
+        }
+
+        [Test]
+        public void SpineSegmentSculpting_IsClampedUndoableAndRedoable()
+        {
+            var state = new CreatureEditorState(new CreatureDNA
+            {
+                Body = new BodyPlan { SpineSegments = 2, BodyScale = Vector3.one },
+                Parts = new System.Collections.Generic.List<PartPlacement>()
+            });
+
+            Assert.IsTrue(state.SetSpineSegmentCount(4));
+            Assert.AreEqual(4, state.DNA.Body.Spine.Count);
+            Assert.IsTrue(state.MoveSpineSegment(2, new Vector3(9f, 9f, -9f)));
+
+            Assert.LessOrEqual(state.DNA.Body.Spine[2].Offset.x, 0.65f);
+            Assert.IsTrue(state.Undo());
+            Assert.AreEqual(Vector3.zero, state.DNA.Body.Spine[2].Offset);
+            Assert.IsTrue(state.Redo());
+            Assert.LessOrEqual(state.DNA.Body.Spine[2].Offset.x, 0.65f);
+        }
+
+        [Test]
+        public void PaintPatternMaterialAndPartOverrides_AreUndoable()
+        {
+            var state = new CreatureEditorState();
+
+            state.SetPaint(Color.red, Color.blue, Color.green, CreaturePaintPattern.Stripes, CreatureMaterialFinish.Iridescent, 0.8f);
+            state.SetPartPaintOverride(
+                "leg_basic",
+                Color.black,
+                Color.white,
+                Color.yellow,
+                overridePrimary: true,
+                overrideSecondary: false,
+                overrideAccent: true,
+                overrideMaterial: true,
+                material: CreatureMaterialFinish.Furred);
+
+            Assert.AreEqual(CreaturePaintPattern.Stripes, state.DNA.Colors.Pattern);
+            Assert.AreEqual(CreatureMaterialFinish.Iridescent, state.DNA.Colors.Material);
+            Assert.AreEqual(1, state.DNA.Colors.PartOverrides.Count);
+
+            Assert.IsTrue(state.Undo());
+            Assert.AreEqual(0, state.DNA.Colors.PartOverrides.Count);
+            Assert.IsTrue(state.Redo());
+            Assert.AreEqual(CreatureMaterialFinish.Furred, state.DNA.Colors.PartOverrides[0].Material);
+        }
+
+        [Test]
+        public void DefaultCatalog_HasMetadataForEveryCreatureVerb()
+        {
+            var catalog = CreaturePartCatalog.GetVisibleCatalog();
+            var errors = CreaturePartCatalog.ValidateCatalog(catalog);
+
+            Assert.IsEmpty(errors);
+            foreach (CreatureVerb verb in System.Enum.GetValues(typeof(CreatureVerb)))
+                Assert.IsTrue(catalog.Values.Any(def => CreaturePartCatalog.HasVerb(def, verb)), $"{verb} should be available from visible parts.");
+
+            Assert.IsTrue(catalog.Values.All(def => def.DNACost > 0));
+            Assert.IsTrue(catalog.Values.All(def => def.AllowedBones != null && def.AllowedBones.Length > 0));
+        }
+
+        [Test]
+        public void ValidatePlacement_ExplainsWrongAnchor()
+        {
+            var state = new CreatureEditorState();
+            var catalog = CreaturePartCatalog.GetDefaultCatalog();
+
+            bool valid = state.ValidatePlacement("tail_basic", 0, Vector3.zero, catalog, out string reason);
+
+            Assert.IsFalse(valid);
+            StringAssert.Contains("rear", reason);
         }
 
         [Test]

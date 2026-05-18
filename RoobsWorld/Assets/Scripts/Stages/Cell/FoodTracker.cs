@@ -32,6 +32,27 @@ namespace RoobsWorld.Stages.Cell
             return id;
         }
 
+        /// <summary>Add or update a food entry with an externally assigned id, such as a host network id.</summary>
+        public int AddWithId(int id, Vector3 position, FoodType type, float nutrition)
+        {
+            if (id <= 0)
+                return Add(position, type, nutrition);
+
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                if (_entries[i].Id == id)
+                {
+                    _entries[i] = (id, position, type, nutrition);
+                    return id;
+                }
+            }
+
+            _entries.Add((id, position, type, nutrition));
+            if (id >= _nextId)
+                _nextId = id + 1;
+            return id;
+        }
+
         /// <summary>Remove food by id. Returns true if found and removed.</summary>
         public bool Remove(int id)
         {
@@ -43,6 +64,17 @@ namespace RoobsWorld.Stages.Cell
                     return true;
                 }
             }
+            return false;
+        }
+
+        public bool Contains(int id)
+        {
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                if (_entries[i].Id == id)
+                    return true;
+            }
+
             return false;
         }
 

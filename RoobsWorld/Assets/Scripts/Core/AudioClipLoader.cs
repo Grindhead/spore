@@ -5,7 +5,7 @@ namespace RoobsWorld.Core
     /// <summary>
     /// Loads music and ambient clips from <c>Resources/Music</c> and SFX from <c>Resources/SFX</c> by catalog ID, registering with <see cref="AdaptiveMusicController"/> and <see cref="AudioManager"/>.
     /// Place music in <c>Assets/Resources/Music/</c> and SFX in <c>Assets/Resources/SFX/</c> with names matching <see cref="MusicTrackCatalog"/> IDs (e.g. cell_exploration, ui_click).
-    /// Missing clips are skipped; playback is no-op until clips are added.
+    /// Missing clips receive quiet procedural fallback cues so gameplay feedback never becomes a silent no-op.
     /// </summary>
     /// <remarks>
     /// Music/ambient: file names match track IDs (cell_exploration, ambient_underwater, etc.).
@@ -16,6 +16,7 @@ namespace RoobsWorld.Core
     {
         private const string MusicResourcesPath = "Music/";
         private const string SFXResourcesPath = "SFX/";
+        [SerializeField] private bool _generateFallbackClips = true;
 
         private void Start()
         {
@@ -38,6 +39,8 @@ namespace RoobsWorld.Core
             foreach (string trackId in catalog.GetAllMusicTrackIds())
             {
                 var clip = Resources.Load<AudioClip>(MusicResourcesPath + trackId);
+                if (clip == null && _generateFallbackClips)
+                    clip = ProceduralAudioFactory.CreateMusicFallback(trackId);
                 if (clip != null)
                 {
                     controller.RegisterClip(trackId, clip);
@@ -47,6 +50,8 @@ namespace RoobsWorld.Core
             foreach (string ambientId in catalog.GetAllAmbientIds())
             {
                 var clip = Resources.Load<AudioClip>(MusicResourcesPath + ambientId);
+                if (clip == null && _generateFallbackClips)
+                    clip = ProceduralAudioFactory.CreateMusicFallback(ambientId, ambient: true);
                 if (clip != null)
                 {
                     controller.RegisterClip(ambientId, clip);
@@ -65,6 +70,8 @@ namespace RoobsWorld.Core
                 string id = catalog.GetSFXId(sfx);
                 if (string.IsNullOrEmpty(id)) continue;
                 var clip = Resources.Load<AudioClip>(SFXResourcesPath + id);
+                if (clip == null && _generateFallbackClips)
+                    clip = ProceduralAudioFactory.CreateSfxFallback(sfx);
                 if (clip != null)
                 {
                     AudioManager.Instance.RegisterSFXClip(sfx, clip);

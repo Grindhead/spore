@@ -41,12 +41,15 @@ namespace RoobsWorld.Stages.Creature
         private const string FloorName = "Floor";
         private const string WallsName = "ArenaWalls";
         private const string LandmarksName = "ArenaLandmarks";
+        private const string WorldMarkersName = "CreatureWorldMarkers";
         private CreatureArenaLandmark[] _configuredLandmarks;
+        private CreatureWorldPlan _worldPlan;
         private bool _built;
 
         public int IslandSeed => _islandSeed;
         public float ArenaRadius => _arenaRadius;
         public int ConfiguredLandmarkCount => _configuredLandmarks?.Length ?? 0;
+        public CreatureWorldPlan WorldPlan => _worldPlan;
 
         public void ApplyMapDefinition(SessionMapDefinition map)
         {
@@ -67,6 +70,16 @@ namespace RoobsWorld.Stages.Creature
             }
         }
 
+        public void ApplyWorldPlan(CreatureWorldPlan plan)
+        {
+            _worldPlan = plan;
+            if (_built)
+            {
+                DestroyChild(WorldMarkersName);
+                EnsureWorldMarkers();
+            }
+        }
+
         public void EnsureBuilt()
         {
             if (_built)
@@ -75,6 +88,7 @@ namespace RoobsWorld.Stages.Creature
             EnsureFloor();
             EnsureWalls();
             EnsureLandmarks();
+            EnsureWorldMarkers();
             EnsureDirectionalLight();
             _built = true;
         }
@@ -167,6 +181,66 @@ namespace RoobsWorld.Stages.Creature
                     SnapToIslandSurface(landmark.Position),
                     landmark.Scale);
                 CreateLandmark(root.transform, i, landmark);
+            }
+        }
+
+        private void EnsureWorldMarkers()
+        {
+            Transform existing = transform.Find(WorldMarkersName);
+            if (existing != null)
+                return;
+
+            var plan = _worldPlan.Points != null && _worldPlan.Points.Length > 0
+                ? _worldPlan
+                : CreatureWorldPlanner.CreatePlan(null, Mathf.Max(10f, _arenaRadius));
+
+            var root = new GameObject(WorldMarkersName);
+            root.transform.SetParent(transform, false);
+            for (int i = 0; i < plan.Points.Length; i++)
+            {
+                var point = plan.Points[i];
+                CreateWorldMarker(root.transform, point, i);
+            }
+        }
+
+        private void CreateWorldMarker(Transform parent, CreatureWorldPoint point, int index)
+        {
+            PrimitiveType primitive = point.Type == CreatureWorldPointType.MigrationGate
+                ? PrimitiveType.Cube
+                : PrimitiveType.Cylinder;
+            var go = GameObject.CreatePrimitive(primitive);
+            go.name = $"{point.Type}_{index}_{point.Id}";
+            go.transform.SetParent(parent, false);
+            go.transform.position = SnapToIslandSurface(point.Position) + Vector3.up * 0.04f;
+            float radius = Mathf.Max(0.2f, point.Radius);
+            go.transform.localScale = point.Type == CreatureWorldPointType.MigrationGate
+                ? new Vector3(radius * 0.55f, 1.8f, radius * 1.2f)
+                : new Vector3(radius, 0.08f, radius);
+
+            var renderer = go.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.sharedMaterial.color = GetWorldPointColor(point.Type);
+            }
+
+            var collider = go.GetComponent<Collider>();
+            if (collider != null)
+                collider.isTrigger = true;
+        }
+
+        private static Color GetWorldPointColor(CreatureWorldPointType type)
+        {
+            switch (type)
+            {
+                case CreatureWorldPointType.HomeNest: return new Color(0.54f, 0.36f, 0.22f, 0.88f);
+                case CreatureWorldPointType.SpeciesNest: return new Color(0.42f, 0.34f, 0.20f, 0.82f);
+                case CreatureWorldPointType.FoodSource: return new Color(0.22f, 0.58f, 0.24f, 0.72f);
+                case CreatureWorldPointType.WaterSource: return new Color(0.18f, 0.42f, 0.68f, 0.68f);
+                case CreatureWorldPointType.TerritoryCenter: return new Color(0.62f, 0.46f, 0.18f, 0.42f);
+                case CreatureWorldPointType.MigrationGate: return new Color(0.56f, 0.52f, 0.84f, 0.82f);
+                default: return Color.white;
             }
         }
 
@@ -271,6 +345,7 @@ namespace RoobsWorld.Stages.Creature
             DestroyChild(FloorName);
             DestroyChild(WallsName);
             DestroyChild(LandmarksName);
+            DestroyChild(WorldMarkersName);
         }
 
         private void DestroyChild(string childName)

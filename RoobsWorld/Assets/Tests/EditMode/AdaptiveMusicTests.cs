@@ -176,5 +176,30 @@ namespace RoobsWorld.Tests
                 requestedMood: MusicMood.Combat);
             Assert.IsFalse(blocked);
         }
+
+        [Test]
+        public void ProceduralAudioFactory_CreatesFallbackClipForEverySfx()
+        {
+            foreach (SFXType type in System.Enum.GetValues(typeof(SFXType)))
+            {
+                var clip = ProceduralAudioFactory.CreateSfxFallback(type);
+
+                Assert.IsNotNull(clip, $"{type} should have a fallback clip.");
+                Assert.Greater(clip.samples, 64);
+                Assert.AreEqual(ProceduralAudioFactory.SampleRate, clip.frequency);
+            }
+        }
+
+        [Test]
+        public void ProceduralAudioFactory_CreatesMusicAndAmbientFallbacks()
+        {
+            var music = ProceduralAudioFactory.CreateMusicFallback("cell_combat");
+            var ambient = ProceduralAudioFactory.CreateMusicFallback("ambient_underwater", ambient: true);
+
+            Assert.IsNotNull(music);
+            Assert.IsNotNull(ambient);
+            Assert.Greater(ambient.length, music.length);
+            Assert.AreEqual(1, music.channels);
+        }
     }
 }

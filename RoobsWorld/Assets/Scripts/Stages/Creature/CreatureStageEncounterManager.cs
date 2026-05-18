@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using RoobsWorld.Core;
+using RoobsWorld.Multiplayer;
 using UnityEngine;
 
 namespace RoobsWorld.Stages.Creature
@@ -48,6 +49,7 @@ namespace RoobsWorld.Stages.Creature
         public int KillStreakCount => _killStreakCount;
         public float KillStreakSecondsRemaining => _killStreakTimerRemaining;
         public int TotalSpawnedRivals => _totalSpawnedRivals;
+        public bool IsInitialized => _initialized;
 
         public void Initialize(Transform player)
         {
@@ -72,6 +74,24 @@ namespace RoobsWorld.Stages.Creature
             _initialized = true;
         }
 
+        public void InitializeNetworkClient(Transform player)
+        {
+            if (_initialized)
+                EventBus.Unsubscribe<CreatureDiedEvent>(OnCreatureDied);
+
+            _player = player;
+            _trackedRivals.Clear();
+            _defeatedCount = 0;
+            _alphaDefeatedCount = 0;
+            _killStreakCount = 0;
+            _totalSpawnedRivals = 0;
+            _spawnSequence = 0;
+            _respawnCooldownTimer = 0f;
+            _killStreakTimerRemaining = 0f;
+            EventBus.Subscribe<CreatureDiedEvent>(OnCreatureDied);
+            _initialized = true;
+        }
+
         public void SetObjectiveFocus(CreatureStageObjective objective)
         {
             _objectiveType = objective.Type;
@@ -93,6 +113,77 @@ namespace RoobsWorld.Stages.Creature
         public void SetArena(CreatureStageArena arena)
         {
             _arena = arena;
+        }
+
+        public void AddOrUpdateNetworkRival(CreatureRivalNetState state, CreatureStageArena arena)
+        {
+            if (string.IsNullOrWhiteSpace(state.CreatureId))
+                return;
+
+            _arena = arena ?? _arena;
+            Vector3 target = SnapToArenaSurface(new Vector3(state.PosX, 0f, state.PosY));
+            Quaternion rotation = Quaternion.Euler(0f, state.RotY, 0f);
+
+            if (_trackedRivals.TryGetValue(state.CreatureId, out var existing) && existing != null)
+            {
+                existing.transform.SetPositionAndRotation(target, rotation);
+                var existingCreature = existing.GetComponent<RoobsWorld.Creature.CreatureInstance>();
+                existingCreature?.ApplyAuthoritativeHealth(state.Health, state.IsAlive);
+                existing.SetPlayerTarget(_player);
+                existing.enabled = false;
+                return;
+            }
+
+            var archetype = System.Enum.IsDefined(typeof(CreatureRivalArchetype), state.Archetype)
+                ? (CreatureRivalArchetype)state.Archetype
+                : CreatureRivalArchetype.Charger;
+            var dna = BuildNetworkRivalDNA(state.CreatureId, archetype, state.IsAlpha);
+            var rivalObject = RoobsWorld.Creature.CreatureFactory.Instance.SpawnCreature(dna, target, false);
+            if (rivalObject == null)
+                return;
+
+            rivalObject.transform.rotation = rotation;
+            var ai = rivalObject.GetComponent<CreatureRivalAI>() ?? rivalObject.AddComponent<CreatureRivalAI>();
+            ai.ConfigureArchetype(archetype);
+            if (state.IsAlpha)
+                ai.ConfigureAlphaRival();
+            ai.SetPlayerTarget(_player);
+            ai.enabled = false;
+
+            var rb = rivalObject.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.isKinematic = true;
+            }
+
+            var creature = rivalObject.GetComponent<RoobsWorld.Creature.CreatureInstance>();
+            creature?.ApplyAuthoritativeHealth(state.Health, state.IsAlive);
+            _trackedRivals[state.CreatureId] = ai;
+            _totalSpawnedRivals++;
+        }
+
+        public void RemoveNetworkRival(string creatureId)
+        {
+            if (string.IsNullOrWhiteSpace(creatureId))
+                return;
+            if (!_trackedRivals.TryGetValue(creatureId, out var rival))
+                return;
+
+            _trackedRivals.Remove(creatureId);
+            if (rival != null)
+                Destroy(rival.gameObject);
+        }
+
+        public void CopyTrackedRivalIds(List<string> target)
+        {
+            if (target == null)
+                return;
+
+            target.Clear();
+            foreach (var pair in _trackedRivals)
+                if (!string.IsNullOrWhiteSpace(pair.Key))
+                    target.Add(pair.Key);
         }
 
         public float GetNearestTrackedRivalDistance(bool alphaOnly = false)
@@ -421,6 +512,20 @@ namespace RoobsWorld.Stages.Creature
                     Scale = 1f
                 });
             }
+            return dna;
+        }
+
+        private static RoobsWorld.Creature.CreatureDNA BuildNetworkRivalDNA(
+            string creatureId,
+            CreatureRivalArchetype archetype,
+            bool isAlpha)
+        {
+            var dna = RoobsWorld.Creature.CreatureDNA.CreateDefault();
+            dna.CreatureId = creatureId;
+            dna.CreatureName = isAlpha ? $"Alpha {archetype}" : $"{archetype} Rival";
+            ApplyRivalArchetypeVisuals(dna, archetype);
+            if (isAlpha)
+                ApplyAlphaVisuals(dna);
             return dna;
         }
 

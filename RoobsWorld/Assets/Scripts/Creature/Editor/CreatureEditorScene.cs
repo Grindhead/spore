@@ -77,7 +77,7 @@ namespace RoobsWorld.Creature.Editor
         public void Initialize(CreatureDNA dna = null, Dictionary<string, CreaturePartDef> catalog = null)
         {
             _state = new CreatureEditorState(dna);
-            _partCatalog = catalog ?? CreaturePartCatalog.GetDefaultCatalog();
+            _partCatalog = catalog ?? CreaturePartCatalog.GetVisibleCatalog();
             _gallery = new CreatureGallery();
             _currentZoom = _orbitDistance;
             _partPreviewCache.Clear();
@@ -158,8 +158,8 @@ namespace RoobsWorld.Creature.Editor
         {
             if (_statText != null && _state != null)
             {
-                var stats = StatCalculator.Calculate(_state.DNA, _partCatalog);
-                _statText.text = stats.ToString();
+                var validation = _state.GetLiveValidation(_partCatalog);
+                _statText.text = $"{validation.Stats}\n{validation.Summary}";
             }
             if (_costText != null && _state != null)
             {
@@ -586,8 +586,11 @@ namespace RoobsWorld.Creature.Editor
             _partButtons.Add(card);
         }
 
-        private static string CompactPartLabel(string partId)
+        private string CompactPartLabel(string partId)
         {
+            if (_partCatalog != null && _partCatalog.TryGetValue(partId, out var def) && !string.IsNullOrWhiteSpace(def.DisplayName))
+                return def.DisplayName.Length <= 13 ? def.DisplayName : def.DisplayName.Substring(0, 13);
+
             if (string.IsNullOrWhiteSpace(partId))
                 return "part";
             string[] parts = partId.Split('_');
@@ -604,10 +607,19 @@ namespace RoobsWorld.Creature.Editor
 
             if (_partTooltipText != null)
             {
-                _partTooltipText.text = entering
-                    ? $"Preview: {partId.Replace("_", " ")}"
-                    : string.Empty;
+                _partTooltipText.text = entering ? BuildPartTooltip(partId) : string.Empty;
             }
+        }
+
+        private string BuildPartTooltip(string partId)
+        {
+            if (_partCatalog == null || !_partCatalog.TryGetValue(partId, out var def) || def == null)
+                return $"Preview: {partId.Replace("_", " ")}";
+
+            string verbs = def.Verbs != null && def.Verbs.Length > 0
+                ? string.Join(", ", def.Verbs.Select(v => v.ToString()))
+                : "none";
+            return $"{def.DisplayName} | {def.Rarity} | DNA {def.DNACost} | {verbs}";
         }
 
         private Sprite GetOrCreatePartPreviewSprite(string partId)
@@ -663,12 +675,45 @@ namespace RoobsWorld.Creature.Editor
             var bg = toolbar.AddComponent<Image>();
             bg.color = new Color(0, 0, 0, 0.7f);
 
-            CreateToolButton(toolbar.transform, "Undo", 0, () => { _state.Undo(); RefreshCreaturePreview(); });
-            CreateToolButton(toolbar.transform, "Redo", 60, () => { _state.Redo(); RefreshCreaturePreview(); });
-            CreateToolButton(toolbar.transform, "Sym", 120, () => _state.SetSymmetry(!_state.SymmetryEnabled));
-            CreateToolButton(toolbar.transform, "Delete", 180, DeleteSelectedPart);
-            CreateToolButton(toolbar.transform, "Save", 240, () => _gallery.Save(_state.DNA));
-            CreateToolButton(toolbar.transform, "Done", 300, OnDone);
+            CreateToolButton(toolbar.transform, "Body", 0, () => SelectEditorTab(CreatureEditorTab.Body));
+            CreateToolButton(toolbar.transform, "Parts", 60, () => SelectEditorTab(CreatureEditorTab.Parts));
+            CreateToolButton(toolbar.transform, "Paint", 120, () => SelectEditorTab(CreatureEditorTab.Paint));
+            CreateToolButton(toolbar.transform, "Test", 180, () => SelectEditorTab(CreatureEditorTab.TestDrive));
+            CreateToolButton(toolbar.transform, "Undo", 240, () => { _state.Undo(); RefreshCreaturePreview(); });
+            CreateToolButton(toolbar.transform, "Redo", 300, () => { _state.Redo(); RefreshCreaturePreview(); });
+            CreateToolButton(toolbar.transform, "Sym", 360, CycleSymmetryMode);
+            CreateToolButton(toolbar.transform, "Delete", 420, DeleteSelectedPart);
+            CreateToolButton(toolbar.transform, "Save", 480, () => _gallery.Save(_state.DNA));
+            CreateToolButton(toolbar.transform, "Done", 540, OnDone);
+        }
+
+        private void SelectEditorTab(CreatureEditorTab tab)
+        {
+            _state?.SetCurrentTab(tab);
+            SetStatus(tab switch
+            {
+                CreatureEditorTab.Body => "Body tab: drag the body or sculpt spine segments.",
+                CreatureEditorTab.Parts => "Parts tab: drag a part onto a valid body anchor.",
+                CreatureEditorTab.Paint => "Paint tab: edit base, accent, pattern, material, and part colors.",
+                CreatureEditorTab.TestDrive => "Test Drive: preview idle, walk, attack, social, and cooldown readiness.",
+                CreatureEditorTab.Save => "Save tab: review validation, save, or return to Creature stage.",
+                _ => "Editor tab selected."
+            });
+        }
+
+        private void CycleSymmetryMode()
+        {
+            if (_state == null)
+                return;
+
+            SymmetryType next = _state.SymmetryMode switch
+            {
+                SymmetryType.None => SymmetryType.Bilateral,
+                SymmetryType.Bilateral => SymmetryType.Radial,
+                _ => SymmetryType.None
+            };
+            _state.SetSymmetryMode(next);
+            SetStatus($"Symmetry: {next}");
         }
 
         private void CreatePartButton(Transform parent, string partId, float yOffset)
@@ -1502,6 +1547,8 @@ namespace RoobsWorld.Creature.Editor
             _gallery.Save(_state.DNA);
             if (GameManager.HasInstance)
                 GameManager.Instance.SetPlayerCreatureDNA(_state.DNA, persistToDisk: true);
+            if (StageManager.HasInstance)
+                StageManager.Instance.TransitionTo(GameStageType.Creature);
             Debug.Log("[CreatureEditor] Creature saved. Returning to game.");
         }
 

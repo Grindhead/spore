@@ -73,7 +73,7 @@ namespace RoobsWorld.Creature
             var accentMaterial = TempAssetBuilder.CreateTempMaterial(
                 Color.Lerp(accent, Color.white, 0.18f),
                 "CreatureAccentMat");
-            var anchors = BuildSpine(bodyRoot, segmentCount, bodyScale, frontPull, skinTexture, primary, secondary, accentMaterial, renderSegmentGeometry);
+            var anchors = BuildSpine(bodyRoot, segmentCount, bodyScale, frontPull, safeDna.Body, skinTexture, primary, secondary, accentMaterial, renderSegmentGeometry);
             BuildSkeleton(bodyRoot, safeDna, anchors, colors);
 
             var partsRoot = new GameObject(PartsRootName).transform;
@@ -118,6 +118,7 @@ namespace RoobsWorld.Creature
             int segmentCount,
             Vector3 bodyScale,
             float frontPull,
+            BodyPlan body,
             Texture2D skinTexture,
             Color primary,
             Color secondary,
@@ -132,7 +133,8 @@ namespace RoobsWorld.Creature
                 float t = segmentCount <= 1 ? 0.5f : i / (float)(segmentCount - 1);
                 var anchor = new GameObject($"{SpineAnchorPrefix}{i}").transform;
                 anchor.SetParent(bodyRoot, false);
-                anchor.localPosition = GetSpineAnchorLocalPosition(i, segmentCount);
+                var sculpt = GetSculptedSpineSegment(body, i);
+                anchor.localPosition = GetSpineAnchorLocalPosition(i, segmentCount) + sculpt.Offset + new Vector3(sculpt.Curve * 0.18f, 0f, 0f);
                 if (i == 0)
                     anchor.localPosition += Vector3.forward * frontPull;
                 anchors[i] = anchor;
@@ -141,7 +143,9 @@ namespace RoobsWorld.Creature
                 {
                     var segment = new GameObject($"Spine_{i}");
                     segment.transform.SetParent(anchor, false);
-                    segment.transform.localScale = GetSegmentScale(t, i, segmentCount, bodyScale, frontPull);
+                    Vector3 scale = GetSegmentScale(t, i, segmentCount, bodyScale, frontPull);
+                    segment.transform.localScale = new Vector3(scale.x * sculpt.Scale.x, scale.y * sculpt.Scale.y, scale.z);
+                    segment.transform.localRotation = Quaternion.Euler(0f, sculpt.Curve * 12f, 0f);
 
                     var mf = segment.AddComponent<MeshFilter>();
                     mf.mesh = CreaturePartMeshFactory.CreateSpineSegment(0.5f);
@@ -155,6 +159,25 @@ namespace RoobsWorld.Creature
             }
 
             return anchors;
+        }
+
+        private static SpineSegment GetSculptedSpineSegment(BodyPlan body, int index)
+        {
+            if (body?.Spine == null || index < 0 || index >= body.Spine.Count || body.Spine[index] == null)
+                return new SpineSegment { Scale = Vector2.one };
+
+            var segment = body.Spine[index];
+            return new SpineSegment
+            {
+                Offset = new Vector3(
+                    Mathf.Clamp(segment.Offset.x, -0.65f, 0.65f),
+                    Mathf.Clamp(segment.Offset.y, -0.45f, 0.65f),
+                    Mathf.Clamp(segment.Offset.z, -0.9f, 0.9f)),
+                Scale = new Vector2(
+                    Mathf.Clamp(segment.Scale.x <= 0f ? 1f : segment.Scale.x, 0.35f, 2.2f),
+                    Mathf.Clamp(segment.Scale.y <= 0f ? 1f : segment.Scale.y, 0.35f, 2.2f)),
+                Curve = Mathf.Clamp(segment.Curve, -1f, 1f)
+            };
         }
 
         private static void CreateUnifiedBodyCore(
@@ -389,7 +412,7 @@ namespace RoobsWorld.Creature
             Color tint = GetPartTint(partId, category, colors);
             var mat = TempAssetBuilder.CreateTempMaterial(tint, $"{partId}_Mat");
             if (mat.HasProperty("_Smoothness"))
-                mat.SetFloat("_Smoothness", category == PartCategory.Eye ? 0.72f : 0.38f);
+                mat.SetFloat("_Smoothness", GetMaterialSmoothness(colors, partId, category));
             return mat;
         }
 
@@ -398,6 +421,16 @@ namespace RoobsWorld.Creature
             Color primary = ProceduralTextureFactory.Opaque(colors.PrimaryColor);
             Color secondary = ProceduralTextureFactory.Opaque(colors.SecondaryColor);
             Color accent = ProceduralTextureFactory.Opaque(colors.AccentColor);
+            var paintOverride = FindPartPaintOverride(colors, partId);
+            if (paintOverride != null)
+            {
+                if (paintOverride.OverridePrimary)
+                    primary = ProceduralTextureFactory.Opaque(paintOverride.PrimaryColor);
+                if (paintOverride.OverrideSecondary)
+                    secondary = ProceduralTextureFactory.Opaque(paintOverride.SecondaryColor);
+                if (paintOverride.OverrideAccent)
+                    accent = ProceduralTextureFactory.Opaque(paintOverride.AccentColor);
+            }
 
             switch (category)
             {
@@ -416,6 +449,40 @@ namespace RoobsWorld.Creature
                 default:
                     return Color.Lerp(primary, secondary, 0.38f);
             }
+        }
+
+        private static float GetMaterialSmoothness(CreatureColors colors, string partId, PartCategory category)
+        {
+            var material = colors.Material;
+            var paintOverride = FindPartPaintOverride(colors, partId);
+            if (paintOverride != null && paintOverride.OverrideMaterial)
+                material = paintOverride.Material;
+
+            return material switch
+            {
+                CreatureMaterialFinish.Gloss => 0.78f,
+                CreatureMaterialFinish.Iridescent => 0.88f,
+                CreatureMaterialFinish.Furred => 0.18f,
+                CreatureMaterialFinish.Armored => 0.46f,
+                _ => category == PartCategory.Eye ? 0.72f : 0.38f
+            };
+        }
+
+        private static CreaturePartPaintOverride FindPartPaintOverride(CreatureColors colors, string partId)
+        {
+            if (colors?.PartOverrides == null || string.IsNullOrWhiteSpace(partId))
+                return null;
+
+            for (int i = 0; i < colors.PartOverrides.Count; i++)
+            {
+                var candidate = colors.PartOverrides[i];
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.PartId))
+                    continue;
+
+                if (candidate.PartId == partId || partId.StartsWith(candidate.PartId, System.StringComparison.OrdinalIgnoreCase))
+                    return candidate;
+            }
+            return null;
         }
 
         private static PartCategory ResolveCategory(string partId, CreaturePartDef partDef)
