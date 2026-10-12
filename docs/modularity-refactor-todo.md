@@ -69,7 +69,7 @@ Last updated: 2026-05-13 (post-refactor rescan)
 - [ ] P3. Add architecture tests that fail on new direct singleton access in non-root modules (`GameManager.Instance`, `StageManager.Instance`, `CameraManager.Instance`) unless explicitly allowlisted.
 - [ ] P3. Add architecture tests that fail on new `FindAnyObjectByType` usage in gameplay/runtime loops.
 - [ ] P3. Add smoke tests for extracted directors (spawn/goal/hud/lobby/settings) to preserve behavior during future splits.
-- [ ] P3. Add a short migration playbook per large class documenting extraction order, acceptance checks, and rollback points.
+- [x] P3. Add a short migration playbook per large class documenting extraction order, acceptance checks, and rollback points. See [the class migration playbooks](modularity-migration-playbooks.md).
 
 ### Rescan Notes
 

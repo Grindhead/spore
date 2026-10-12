@@ -269,3 +269,11 @@ module.exports = {
     validateAuthToken,
     extractQueryParam,
 };
+
+function progressIdentity(token, configuredPlayers) {
+    if (typeof token !== 'string' || token.length < 32 || !configuredPlayers || typeof configuredPlayers !== 'object' || Array.isArray(configuredPlayers)) return null;
+    const entries = Object.entries(configuredPlayers);
+    const matching = entries.filter(([id, expected]) => /^[A-Za-z0-9_-]{1,128}$/.test(id) && typeof expected === 'string' && expected.length >= 32 && validateAuthToken(token, expected));
+    return matching.length === 1 ? matching[0][0] : null;
+}
+module.exports.progressIdentity = progressIdentity;
