@@ -52,6 +52,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const {
     RateLimiter,
+    progressIdentity,
     validateCode,
     validateClanName,
     validateServerName,
@@ -92,6 +93,7 @@ const CFG = {
     JOIN_RATE_MAX:      parseInt(process.env.JOIN_RATE_MAX      ?? '10'),   // 10 join attempts/min per IP
     MAX_CHAT_CHARS:     parseInt(process.env.MAX_CHAT_CHARS     ?? '160'),
     CHAT_PROFANITY_WORDS:     process.env.CHAT_PROFANITY_WORDS  ?? '',
+    PROGRESS_PLAYER_TOKENS: process.env.PROGRESS_PLAYER_TOKENS ?? "{}",
     MAX_AUTOSAVE_BYTES: parseInt(process.env.MAX_AUTOSAVE_BYTES ?? String(256 * 1024)),
     AUTOSAVE_DIR:             process.env.AUTOSAVE_DIR          ?? path.join(process.cwd(), 'player-progress'),
     CREATURE_MAP_SEED:         process.env.CREATURE_MAP_SEED    ?? '',
@@ -105,7 +107,7 @@ const CFG = {
 // ---- rate limiters ----
 
 const connRateLimiter = new RateLimiter({ windowMs: CFG.CONN_RATE_WINDOW_MS, max: CFG.CONN_RATE_MAX });
-const msgRateLimiter  = new RateLimiter({ windowMs: CFG.MSG_RATE_WINDOW_MS,  max: CFG.MSG_RATE_MAX  });
+
 const chatRateLimiter = new RateLimiter({ windowMs: CFG.CHAT_RATE_WINDOW_MS, max: CFG.CHAT_RATE_MAX });
 const joinRateLimiter = new RateLimiter({ windowMs: CFG.JOIN_RATE_WINDOW_MS, max: CFG.JOIN_RATE_MAX });
 
@@ -556,96 +558,67 @@ function sendJson(res, statusCode, body) {
     res.end(JSON.stringify(body));
 }
 
-function handleAutosaveRequest(req, res) {
-    if (req.method !== 'POST') {
-        return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
-    }
-
-    const authHeader = req.headers['authorization'];
-    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice('Bearer '.length).trim()
-        : '';
-    if (!validateAuthToken(token, CFG.GAME_TOKEN || null)) {
-        return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
-    }
-
-    const playerHeader = req.headers['x-player-id'];
-    const playerId = sanitizePlayerKey(Array.isArray(playerHeader) ? playerHeader[0] : playerHeader);
-    if (!playerId) {
-        return sendJson(res, 400, { ok: false, reason: 'missing_player_id' });
-    }
-
-    let body = '';
-    req.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > CFG.MAX_AUTOSAVE_BYTES) {
-            req.destroy();
-        }
-    });
-
-    req.on('end', () => {
-        try {
-            const parsed = JSON.parse(body);
-            if (!parsed || typeof parsed !== 'object') {
-                return sendJson(res, 400, { ok: false, reason: 'invalid_payload' });
-            }
-
-            fs.mkdirSync(CFG.AUTOSAVE_DIR, { recursive: true });
-            const outputPath = path.join(CFG.AUTOSAVE_DIR, `${playerId}.json`);
-            fs.writeFileSync(outputPath, JSON.stringify(parsed, null, 2), 'utf8');
-            return sendJson(res, 200, { ok: true });
-        } catch {
-            return sendJson(res, 400, { ok: false, reason: 'invalid_json' });
-        }
-    });
-
-    req.on('error', () => {
-        sendJson(res, 500, { ok: false, reason: 'request_error' });
-    });
+function authenticatedProgressPlayer(req) {
+    const header = req.headers.authorization;
+    const token = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    if (!token || (CFG.GAME_TOKEN && validateAuthToken(token, CFG.GAME_TOKEN))) return null;
+    try { return progressIdentity(token, JSON.parse(CFG.PROGRESS_PLAYER_TOKENS)); }
+    catch { return null; }
 }
 
-function handleAutosaveLookupRequest(req, res) {
-    if (req.method !== 'GET') {
-        return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
+function handleProgressRequest(req, res) {
+    const playerId = authenticatedProgressPlayer(req);
+    if (!playerId) return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
+    let requested;
+    try { requested = decodeURIComponent((req.url || '').split('?')[0]); }
+    catch { return sendJson(res, 400, { ok: false, reason: 'invalid_path' }); }
+    const slotMatch = /^\/api\/progress\/autosave\/slots\/(\d{1,2})$/.exec(requested);
+    const slot = slotMatch ? Number(slotMatch[1]) : 0;
+    const basePath = '/api/progress/autosave';
+    const isList = requested === basePath + '/slots';
+    const legacyOwnPath = requested === basePath + '/' + playerId;
+    if (!isList && !slotMatch && requested !== basePath && !legacyOwnPath) return sendJson(res, 403, {ok:false, reason:'player_mismatch'});
+    if (slot > 9) return sendJson(res, 400, {ok:false, reason:'invalid_slot'});
+    const directory = path.join(CFG.AUTOSAVE_DIR, playerId);
+    const file = path.join(directory, `${slot}.json`);
+    if (req.method === 'GET' && isList) {
+        try { const slots = fs.existsSync(directory) ? fs.readdirSync(directory).filter(name => /^[0-9]\.json$/.test(name)).map(name => Number(name[0])).sort((a,b)=>a-b) : []; return sendJson(res, 200, {ok:true,slots}); }
+        catch { return sendJson(res,500,{ok:false,reason:'read_failed'}); }
     }
-
-    const authHeader = req.headers['authorization'];
-    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice('Bearer '.length).trim()
-        : '';
-    if (!validateAuthToken(token, CFG.GAME_TOKEN || null)) {
-        return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
+    if (isList) return sendJson(res,405,{ok:false,reason:'method_not_allowed'});
+    if (req.method === 'GET') {
+        try { if (!fs.existsSync(file)) return sendJson(res,404,{ok:false,reason:'not_found'}); return sendJson(res,200,{ok:true,data:JSON.parse(fs.readFileSync(file,'utf8'))}); }
+        catch { return sendJson(res,500,{ok:false,reason:'read_failed'}); }
     }
-
-    const match = /^\/api\/progress\/autosave\/([^/?#]+)$/.exec(req.url || '');
-    const playerId = sanitizePlayerKey(match ? decodeURIComponent(match[1]) : '');
-    if (!playerId) {
-        return sendJson(res, 400, { ok: false, reason: 'missing_player_id' });
+    if (req.method === 'DELETE') {
+        try { fs.rmSync(file,{force:true}); return sendJson(res,200,{ok:true}); }
+        catch { return sendJson(res,500,{ok:false,reason:'delete_failed'}); }
     }
-
-    try {
-        const inputPath = path.join(CFG.AUTOSAVE_DIR, `${playerId}.json`);
-        if (!fs.existsSync(inputPath)) {
-            return sendJson(res, 404, { ok: false, reason: 'not_found' });
-        }
-
-        const json = fs.readFileSync(inputPath, 'utf8');
-        const parsed = JSON.parse(json);
-        return sendJson(res, 200, { ok: true, data: parsed });
-    } catch {
-        return sendJson(res, 500, { ok: false, reason: 'read_failed' });
-    }
+    if (req.method !== 'POST') return sendJson(res,405,{ok:false,reason:'method_not_allowed'});
+    let body = '', oversized = false;
+    req.on('data', chunk => { if (oversized) return; body += chunk; if (Buffer.byteLength(body) > CFG.MAX_AUTOSAVE_BYTES) {oversized=true;body='';sendJson(res,413,{ok:false,reason:'payload_too_large'});} });
+    req.on('end', () => {
+        if (oversized) return;
+        let parsed;
+        try { parsed = JSON.parse(body); }
+        catch { return sendJson(res,400,{ok:false,reason:'invalid_json'}); }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Number.isInteger(parsed.slot) || parsed.slot !== slot) return sendJson(res,400,{ok:false,reason:'invalid_payload'});
+        const temporary = file + '.' + require('crypto').randomUUID() + '.tmp';
+        try { fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(temporary,JSON.stringify(parsed),'utf8');fs.renameSync(temporary,file);return sendJson(res,200,{ok:true}); }
+        catch { try {fs.rmSync(temporary,{force:true});} catch {} return sendJson(res,500,{ok:false,reason:'write_failed'}); }
+    });
+    req.on('error', () => {if (!res.writableEnded)sendJson(res,500,{ok:false,reason:'request_error'});});
 }
 
 // ---- WebSocket server ----
 
 const server = http.createServer((req, res) => {
     if (req.url === '/api/progress/autosave') {
-        handleAutosaveRequest(req, res);
+        handleProgressRequest(req, res);
         return;
     }
     if ((req.url || '').startsWith('/api/progress/autosave/')) {
-        handleAutosaveLookupRequest(req, res);
+        handleProgressRequest(req, res);
         return;
     }
 
@@ -711,7 +684,7 @@ function startHousekeeping() {
 
     // Rate limiter memory
     connRateLimiter.cleanup();
-    msgRateLimiter.cleanup();
+
     chatRateLimiter.cleanup();
     joinRateLimiter.cleanup();
     }, CFG.PING_MS);
@@ -754,12 +727,15 @@ wss.on('connection', (ws, req) => {
     trackConn(ip, ws);
     log('info', `connect ip=${ip} total=${wss.clients.size}`);
 
+    const messageLimiter = new RateLimiter({ windowMs: CFG.MSG_RATE_WINDOW_MS, max: CFG.MSG_RATE_MAX });
+
     // ---- message handler ----
     ws.on('message', (raw) => {
+        if (ws.readyState !== OPEN) return;
         ws._lastActivity = Date.now();
 
         // Per-client message rate limit
-        if (!msgRateLimiter.check(ip)) {
+        if (!messageLimiter.check('messages')) {
             log('warn', `message rate exceeded ip=${ip}`);
             ws.close(1008, 'Rate limited');
             return;
@@ -769,7 +745,7 @@ wss.on('connection', (ws, req) => {
         try { msg = JSON.parse(raw); } catch { return; } // drop malformed JSON silently
 
         // type must be a non-empty string from a known set
-        if (typeof msg.type !== 'string') return;
+        if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.type !== 'string') return;
 
         switch (msg.type) {
 
