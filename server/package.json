@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node relay-server.js",
     "dev": "node --watch relay-server.js",
-    "test": "node --test relay-server.test.js",
+    "test": "node --test relay-server.test.js relay-progress.test.js",
     "start:unity-mcp": "node unity-mcp-adapter.js",
     "dev:unity-mcp": "node --watch unity-mcp-adapter.js"
   },

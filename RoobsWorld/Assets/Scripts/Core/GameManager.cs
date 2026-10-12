@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using RoobsWorld.Multiplayer;
 
@@ -104,7 +106,53 @@ namespace RoobsWorld.Core
         /// <param name="slotName">Optional named save slot.</param>
         public void LoadGame(string slotName = null)
         {
-            var save = SaveManager.Instance.Load(slotName);
+            // Local-only and synchronous: never waits on the network.
+            ApplyLoadedSave(SaveManager.Instance.Load(slotName));
+        }
+
+        private CancellationTokenSource _loadCts;
+
+        /// <summary>True while <see cref="LoadGameAsync"/> is waiting for the cloud.</summary>
+        public bool IsLoadingSave => _loadCts != null;
+
+        /// <summary>
+        /// Loads a slot, consulting the cloud copy without blocking the main thread.
+        /// Shows a cancellable loading overlay; cancelling, a timeout or a network error
+        /// fall back to the newest valid local save (or a new game when none exists).
+        /// </summary>
+        public async Task LoadGameAsync(string slotName = null)
+        {
+            if (_loadCts != null)
+                return;
+
+            var cts = new CancellationTokenSource();
+            _loadCts = cts;
+            EventBus.Publish(new SaveLoadStateEvent { IsLoading = true });
+            SaveData save;
+            try
+            {
+                save = await SaveManager.Instance.LoadAsync(slotName, cts.Token);
+            }
+            finally
+            {
+                _loadCts = null;
+                cts.Dispose();
+                EventBus.Publish(new SaveLoadStateEvent { IsLoading = false });
+            }
+
+            if (this == null)
+                return; // destroyed while awaiting
+            ApplyLoadedSave(save);
+        }
+
+        /// <summary>Cancels an in-flight <see cref="LoadGameAsync"/>; it then continues with local data.</summary>
+        public void CancelLoadGame()
+        {
+            _loadCts?.Cancel();
+        }
+
+        private void ApplyLoadedSave(SaveData save)
+        {
             if (save == null)
             {
                 Debug.LogWarning("[GameManager] No save data found, starting new game.");

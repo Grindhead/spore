@@ -188,6 +188,12 @@ namespace RoobsWorld.Core
         public string SavePath;
     }
 
+    /// <summary>Fired when an asynchronous save load starts or finishes.</summary>
+    public struct SaveLoadStateEvent : IGameEvent
+    {
+        public bool IsLoading;
+    }
+
     /// <summary>Fired when the game is paused or unpaused.</summary>
     public struct PauseEvent : IGameEvent
     {

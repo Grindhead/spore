@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY relay-server.js security.js ./
+COPY relay-server.js security.js progress-store.js ./
 
 EXPOSE 7788
 CMD ["node", "relay-server.js"]
