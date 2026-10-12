@@ -11,7 +11,9 @@
  *   - GAME_TOKEN auth   : clients must send ?token=<GAME_TOKEN>; reject without it
  *   - Connection rate   : max CONN_RATE_MAX new connections per IP per minute
  *   - Per-IP cap        : max MAX_CONNS_PER_IP simultaneous sockets per IP
- *   - Message rate      : max MSG_RATE_MAX messages per client per second window
+ *   - Message rate      : max MSG_RATE_MAX messages per connection per window
+ *   - IP message rate   : max MSG_IP_RATE_MAX messages per IP per window (abuse cap,
+ *                         sized for several players sharing one NAT/household)
  *   - Join rate         : separate limiter prevents brute-forcing session codes
  *   - Payload size      : ws maxPayload hard cap + base64 field validation
  *   - Input validation  : all fields validated before use (allowlist approach)
@@ -65,6 +67,7 @@ const {
     validateAuthToken,
     extractQueryParam,
 } = require('./security');
+const { ProgressStore, normalizeSlot } = require('./progress-store');
 
 // ---- configuration (all overridable via environment variables) ----
 
@@ -85,7 +88,8 @@ const CFG = {
     CONN_RATE_MAX:      parseInt(process.env.CONN_RATE_MAX      ?? '20'),   // 20 new conn/min per IP
     MAX_CONNS_PER_IP:   parseInt(process.env.MAX_CONNS_PER_IP   ?? '0'),    // 0 or less = unlimited
     MSG_RATE_WINDOW_MS: parseInt(process.env.MSG_RATE_WINDOW    ?? '1000'), // 1-second window
-    MSG_RATE_MAX:       parseInt(process.env.MSG_RATE_MAX       ?? '120'),  // gameplay input + voice chunks
+    MSG_RATE_MAX:       parseInt(process.env.MSG_RATE_MAX       ?? '120'),  // per connection: gameplay input + voice chunks
+    MSG_IP_RATE_MAX:    parseInt(process.env.MSG_IP_RATE_MAX    ?? '1200'), // per IP across all its connections (abuse cap)
     CHAT_RATE_WINDOW_MS:parseInt(process.env.CHAT_RATE_WINDOW   ?? '5000'),
     CHAT_RATE_MAX:      parseInt(process.env.CHAT_RATE_MAX      ?? '5'),
     JOIN_RATE_WINDOW_MS:parseInt(process.env.JOIN_RATE_WINDOW   ?? '60000'),
@@ -93,6 +97,9 @@ const CFG = {
     MAX_CHAT_CHARS:     parseInt(process.env.MAX_CHAT_CHARS     ?? '160'),
     CHAT_PROFANITY_WORDS:     process.env.CHAT_PROFANITY_WORDS  ?? '',
     MAX_AUTOSAVE_BYTES: parseInt(process.env.MAX_AUTOSAVE_BYTES ?? String(256 * 1024)),
+    MAX_SAVE_SLOTS:     parseInt(process.env.MAX_SAVE_SLOTS     ?? '16'),
+    PROGRESS_REGISTER_WINDOW_MS: parseInt(process.env.PROGRESS_REGISTER_WINDOW ?? String(60 * 60 * 1000)),
+    PROGRESS_REGISTER_MAX:       parseInt(process.env.PROGRESS_REGISTER_MAX    ?? '10'), // new identities/hour per IP
     AUTOSAVE_DIR:             process.env.AUTOSAVE_DIR          ?? path.join(process.cwd(), 'player-progress'),
     CREATURE_MAP_SEED:         process.env.CREATURE_MAP_SEED    ?? '',
     CREATURE_MAP_RADIUS: parseFloat(process.env.CREATURE_MAP_RADIUS ?? '48'),
@@ -105,7 +112,9 @@ const CFG = {
 // ---- rate limiters ----
 
 const connRateLimiter = new RateLimiter({ windowMs: CFG.CONN_RATE_WINDOW_MS, max: CFG.CONN_RATE_MAX });
-const msgRateLimiter  = new RateLimiter({ windowMs: CFG.MSG_RATE_WINDOW_MS,  max: CFG.MSG_RATE_MAX  });
+// Per-IP abuse cap; each connection additionally owns a MSG_RATE_MAX budget (see connection handler).
+const ipMsgRateLimiter = new RateLimiter({ windowMs: CFG.MSG_RATE_WINDOW_MS, max: CFG.MSG_IP_RATE_MAX });
+const progressRegisterLimiter = new RateLimiter({ windowMs: CFG.PROGRESS_REGISTER_WINDOW_MS, max: CFG.PROGRESS_REGISTER_MAX });
 const chatRateLimiter = new RateLimiter({ windowMs: CFG.CHAT_RATE_WINDOW_MS, max: CFG.CHAT_RATE_MAX });
 const joinRateLimiter = new RateLimiter({ windowMs: CFG.JOIN_RATE_WINDOW_MS, max: CFG.JOIN_RATE_MAX });
 
@@ -540,15 +549,8 @@ function encodePublicLobbies(lobbies = getPublicLobbies()) {
         .join(';');
 }
 
-function sanitizePlayerKey(value) {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const safe = trimmed.replace(/[^A-Za-z0-9_.-]/g, '_');
-    return safe.length > 0 ? safe.slice(0, 128) : null;
-}
-
 function sendJson(res, statusCode, body) {
+    if (res.headersSent || res.writableEnded) return;
     res.writeHead(statusCode, {
         'content-type': 'application/json',
         'cache-control': 'no-store',
@@ -556,96 +558,160 @@ function sendJson(res, statusCode, body) {
     res.end(JSON.stringify(body));
 }
 
-function handleAutosaveRequest(req, res) {
-    if (req.method !== 'POST') {
-        return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
-    }
-
-    const authHeader = req.headers['authorization'];
-    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice('Bearer '.length).trim()
+function bearerToken(req) {
+    const header = req.headers['authorization'];
+    return typeof header === 'string' && header.startsWith('Bearer ')
+        ? header.slice('Bearer '.length).trim()
         : '';
-    if (!validateAuthToken(token, CFG.GAME_TOKEN || null)) {
-        return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
-    }
+}
 
-    const playerHeader = req.headers['x-player-id'];
-    const playerId = sanitizePlayerKey(Array.isArray(playerHeader) ? playerHeader[0] : playerHeader);
-    if (!playerId) {
-        return sendJson(res, 400, { ok: false, reason: 'missing_player_id' });
-    }
+function progressStore() {
+    return new ProgressStore(CFG.AUTOSAVE_DIR, { maxSlots: CFG.MAX_SAVE_SLOTS });
+}
 
-    let body = '';
+/** Reads a JSON request body up to MAX_AUTOSAVE_BYTES. Calls back with (error, value). */
+function readJsonBody(req, res, callback) {
+    const chunks = [];
+    let size = 0;
+    let aborted = false;
     req.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > CFG.MAX_AUTOSAVE_BYTES) {
-            req.destroy();
+        if (aborted) return;
+        size += chunk.length;
+        if (size > CFG.MAX_AUTOSAVE_BYTES) {
+            aborted = true;
+            sendJson(res, 413, { ok: false, reason: 'payload_too_large' });
+            req.resume();
+            return;
         }
+        chunks.push(chunk);
     });
-
     req.on('end', () => {
+        if (aborted) return;
+        let value;
         try {
-            const parsed = JSON.parse(body);
-            if (!parsed || typeof parsed !== 'object') {
-                return sendJson(res, 400, { ok: false, reason: 'invalid_payload' });
-            }
-
-            fs.mkdirSync(CFG.AUTOSAVE_DIR, { recursive: true });
-            const outputPath = path.join(CFG.AUTOSAVE_DIR, `${playerId}.json`);
-            fs.writeFileSync(outputPath, JSON.stringify(parsed, null, 2), 'utf8');
-            return sendJson(res, 200, { ok: true });
+            value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         } catch {
             return sendJson(res, 400, { ok: false, reason: 'invalid_json' });
         }
+        callback(value);
     });
-
-    req.on('error', () => {
-        sendJson(res, 500, { ok: false, reason: 'request_error' });
-    });
+    req.on('error', () => sendJson(res, 400, { ok: false, reason: 'request_error' }));
 }
 
-function handleAutosaveLookupRequest(req, res) {
-    if (req.method !== 'GET') {
-        return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
-    }
-
-    const authHeader = req.headers['authorization'];
-    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice('Bearer '.length).trim()
-        : '';
-    if (!validateAuthToken(token, CFG.GAME_TOKEN || null)) {
-        return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
-    }
-
-    const match = /^\/api\/progress\/autosave\/([^/?#]+)$/.exec(req.url || '');
-    const playerId = sanitizePlayerKey(match ? decodeURIComponent(match[1]) : '');
-    if (!playerId) {
-        return sendJson(res, 400, { ok: false, reason: 'missing_player_id' });
-    }
-
+/**
+ * Progress API. Player identity comes only from a server-minted credential
+ * (see progress-store.js); GAME_TOKEN only gates minting a fresh identity.
+ *
+ *   POST   /api/progress/register        Authorization: Bearer <GAME_TOKEN> → { playerId, credential }
+ *   GET    /api/progress/slots           Authorization: Bearer <credential> → { slots: [{slot, savedAt|deletedAt}] }
+ *   GET    /api/progress/slots/<slot>    → { data: { slot, savedAt, save } } | 404 not_found|deleted
+ *   PUT    /api/progress/slots/<slot>    body { slot, save } → { savedAt }
+ *   DELETE /api/progress/slots/<slot>    → { deletedAt } (tombstoned; it cannot resurrect)
+ */
+function handleProgressRequest(req, res) {
+    let pathname;
     try {
-        const inputPath = path.join(CFG.AUTOSAVE_DIR, `${playerId}.json`);
-        if (!fs.existsSync(inputPath)) {
-            return sendJson(res, 404, { ok: false, reason: 'not_found' });
-        }
-
-        const json = fs.readFileSync(inputPath, 'utf8');
-        const parsed = JSON.parse(json);
-        return sendJson(res, 200, { ok: true, data: parsed });
+        pathname = new URL(req.url || '/', 'http://localhost').pathname;
     } catch {
-        return sendJson(res, 500, { ok: false, reason: 'read_failed' });
+        return sendJson(res, 400, { ok: false, reason: 'invalid_path' });
     }
+
+    if (pathname === '/api/progress/autosave' || pathname.startsWith('/api/progress/autosave/')) {
+        // Retired: these routes trusted a caller-supplied player id.
+        return sendJson(res, 410, { ok: false, reason: 'endpoint_retired' });
+    }
+
+    const store = progressStore();
+
+    if (pathname === '/api/progress/register') {
+        if (req.method !== 'POST') return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
+        if (!validateAuthToken(bearerToken(req), CFG.GAME_TOKEN || null)) {
+            return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
+        }
+        const ip = req.socket.remoteAddress ?? 'unknown';
+        if (!progressRegisterLimiter.check(ip)) {
+            return sendJson(res, 429, { ok: false, reason: 'rate_limited' });
+        }
+        try {
+            const { playerId, credential } = store.register();
+            return sendJson(res, 200, { ok: true, playerId, credential });
+        } catch {
+            return sendJson(res, 500, { ok: false, reason: 'register_failed' });
+        }
+    }
+
+    const playerId = store.authenticate(bearerToken(req));
+    if (!playerId) return sendJson(res, 401, { ok: false, reason: 'unauthorized' });
+
+    if (pathname === '/api/progress/slots') {
+        if (req.method !== 'GET') return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
+        try {
+            return sendJson(res, 200, { ok: true, slots: store.listSlots(playerId) });
+        } catch {
+            return sendJson(res, 500, { ok: false, reason: 'read_failed' });
+        }
+    }
+
+    const match = /^\/api\/progress\/slots\/([^/]+)$/.exec(pathname);
+    if (!match) return sendJson(res, 404, { ok: false, reason: 'not_found' });
+
+    let rawSlot;
+    try {
+        rawSlot = decodeURIComponent(match[1]);
+    } catch {
+        return sendJson(res, 400, { ok: false, reason: 'invalid_slot' });
+    }
+    const slot = normalizeSlot(rawSlot);
+    if (!slot) return sendJson(res, 400, { ok: false, reason: 'invalid_slot' });
+
+    if (req.method === 'GET') {
+        try {
+            const state = store.readSlot(playerId, slot);
+            if (state.status === 'ok') return sendJson(res, 200, { ok: true, data: state.data });
+            if (state.status === 'deleted') {
+                return sendJson(res, 404, { ok: false, reason: 'deleted', deletedAt: state.deletedAt });
+            }
+            return sendJson(res, 404, { ok: false, reason: 'not_found' });
+        } catch {
+            return sendJson(res, 500, { ok: false, reason: 'read_failed' });
+        }
+    }
+
+    if (req.method === 'DELETE') {
+        try {
+            return sendJson(res, 200, { ok: true, deletedAt: store.deleteSlot(playerId, slot) });
+        } catch {
+            return sendJson(res, 500, { ok: false, reason: 'delete_failed' });
+        }
+    }
+
+    if (req.method === 'PUT' || req.method === 'POST') {
+        return readJsonBody(req, res, (body) => {
+            if (!body || typeof body !== 'object' || Array.isArray(body)
+                || !body.save || typeof body.save !== 'object' || Array.isArray(body.save)
+                || (body.slot != null && normalizeSlot(String(body.slot)) !== slot)) {
+                return sendJson(res, 400, { ok: false, reason: 'invalid_payload' });
+            }
+            try {
+                if (!store.writeSlot(playerId, slot, body.save)) {
+                    return sendJson(res, 409, { ok: false, reason: 'slot_limit' });
+                }
+                const state = store.readSlot(playerId, slot);
+                return sendJson(res, 200, { ok: true, savedAt: state.data?.savedAt ?? null });
+            } catch {
+                return sendJson(res, 500, { ok: false, reason: 'write_failed' });
+            }
+        });
+    }
+
+    return sendJson(res, 405, { ok: false, reason: 'method_not_allowed' });
 }
 
 // ---- WebSocket server ----
 
 const server = http.createServer((req, res) => {
-    if (req.url === '/api/progress/autosave') {
-        handleAutosaveRequest(req, res);
-        return;
-    }
-    if ((req.url || '').startsWith('/api/progress/autosave/')) {
-        handleAutosaveLookupRequest(req, res);
+    if ((req.url || '').startsWith('/api/progress/')) {
+        handleProgressRequest(req, res);
         return;
     }
 
@@ -711,7 +777,8 @@ function startHousekeeping() {
 
     // Rate limiter memory
     connRateLimiter.cleanup();
-    msgRateLimiter.cleanup();
+    ipMsgRateLimiter.cleanup();
+    progressRegisterLimiter.cleanup();
     chatRateLimiter.cleanup();
     joinRateLimiter.cleanup();
     }, CFG.PING_MS);
@@ -754,13 +821,25 @@ wss.on('connection', (ws, req) => {
     trackConn(ip, ws);
     log('info', `connect ip=${ip} total=${wss.clients.size}`);
 
+    // Each connection owns its gameplay message budget, so players sharing an IP
+    // (household / NAT) do not consume one another's allowance.
+    const connMsgRateLimiter = new RateLimiter({ windowMs: CFG.MSG_RATE_WINDOW_MS, max: CFG.MSG_RATE_MAX });
+
     // ---- message handler ----
     ws.on('message', (raw) => {
+        if (ws.readyState !== OPEN) return;
         ws._lastActivity = Date.now();
 
-        // Per-client message rate limit
-        if (!msgRateLimiter.check(ip)) {
-            log('warn', `message rate exceeded ip=${ip}`);
+        // Per-connection message rate limit
+        if (!connMsgRateLimiter.check('msg')) {
+            log('warn', `connection message rate exceeded ip=${ip} player=${ws._playerId}`);
+            ws.close(1008, 'Rate limited');
+            return;
+        }
+
+        // Per-IP abuse cap (well above a single connection's budget)
+        if (!ipMsgRateLimiter.check(ip)) {
+            log('warn', `ip message rate exceeded ip=${ip}`);
             ws.close(1008, 'Rate limited');
             return;
         }
@@ -768,7 +847,8 @@ wss.on('connection', (ws, req) => {
         let msg;
         try { msg = JSON.parse(raw); } catch { return; } // drop malformed JSON silently
 
-        // type must be a non-empty string from a known set
+        // must be a plain object whose type is a string from a known set
+        if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) return;
         if (typeof msg.type !== 'string') return;
 
         switch (msg.type) {
@@ -1063,4 +1143,5 @@ module.exports = {
     generateCreatureMap,
     encodeCreatureMap,
     normalizeCreatureMapSeed,
+    handleProgressRequest,
 };

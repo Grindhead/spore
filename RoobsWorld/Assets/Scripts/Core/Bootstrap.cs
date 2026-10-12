@@ -35,6 +35,7 @@ namespace RoobsWorld.Core
             CreateTutorialOverlay();
             CreateAchievementToast();
             CreateAchievementService();
+            CreateSaveLoadingOverlay();
 
             if (_showMainMenuOnStart)
             {
@@ -56,7 +57,7 @@ namespace RoobsWorld.Core
             else
             {
                 Debug.Log("[Bootstrap] Auto-start disabled; loading saved Cell run.");
-                GameManager.Instance.LoadGame();
+                _ = GameManager.Instance.LoadGameAsync();
             }
         }
 
@@ -166,6 +167,16 @@ namespace RoobsWorld.Core
             DontDestroyOnLoad(pauseObj);
             pauseObj.AddComponent<PauseMenuUI>();
             Debug.Log("[Bootstrap] Pause menu created");
+        }
+
+        private void CreateSaveLoadingOverlay()
+        {
+            if (FindAnyObjectByType<SaveLoadingOverlay>() != null)
+                return;
+
+            var overlayObj = new GameObject("SaveLoadingOverlay");
+            DontDestroyOnLoad(overlayObj);
+            overlayObj.AddComponent<SaveLoadingOverlay>();
         }
 
         private void CreateMainMenu()
